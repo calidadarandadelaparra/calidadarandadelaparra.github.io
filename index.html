@@ -1,0 +1,3460 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Sistema de Indicadores · Macro Style</title>
+
+  <!-- Tailwind CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Font -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+
+  <style>
+    :root{
+      --navy:#0B2A4A;
+      --sky:#3BA9E6;
+      --mint:#2DD4BF;
+      --red:#DC2626;
+      --yellow:#FACC15;
+      --green:#16A34A;
+      --slate:#334155;
+      --grid:#E2E8F0;
+    }
+    html,body{ font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+    .bg-navy{ background: var(--navy); }
+    .text-navy{ color: var(--navy); }
+
+    .card{ border:1px solid #e2e8f0; border-radius: 1rem; background:#fff; box-shadow: 0 1px 2px rgba(0,0,0,.05); }
+    .card-h{ padding: 14px 16px; border-bottom:1px solid #e2e8f0; background:#f8fafc; border-top-left-radius:1rem; border-top-right-radius:1rem; }
+    .card-b{ padding: 16px; }
+
+    .btn{ padding:.55rem .95rem; border-radius: 1rem; font-weight: 800; font-size:.875rem; }
+    .btn-primary{ background: var(--navy); color:#fff; box-shadow: 0 1px 2px rgba(0,0,0,.10); }
+    .btn-primary:hover{ opacity:.95; }
+    .btn-soft{ background:#f1f5f9; color:#334155; }
+    .btn-soft:hover{ background:#e2e8f0; }
+    .btn-danger{ background:#fee2e2; color:#991b1b; }
+    .btn-danger:hover{ background:#fecaca; }
+
+    .input{
+      width:100%; border-radius: .95rem; border:1px solid #cbd5e1;
+      padding:.55rem .75rem; outline:none; background:#fff;
+    }
+    .input:focus{ box-shadow: 0 0 0 3px rgba(11,42,74,.15); border-color: rgba(11,42,74,.45); }
+    .textarea{
+      width:100%; border-radius: .95rem; border:1px solid #cbd5e1;
+      padding:.75rem; outline:none; background:#fff; font-family: inherit; font-size: .875rem;
+      resize: vertical;
+    }
+    .textarea:focus{ box-shadow: 0 0 0 3px rgba(11,42,74,.15); border-color: rgba(11,42,74,.45); }
+    .err{ border-color: rgba(220,38,38,.8) !important; box-shadow: 0 0 0 3px rgba(220,38,38,.15) !important; }
+
+    .badge{ display:inline-flex; align-items:center; gap:.5rem; padding:.22rem .6rem; border-radius:9999px; font-weight:900; font-size:.74rem; }
+    .badge-ok{ background: rgba(22,163,74,.10); color: #166534; border:1px solid rgba(22,163,74,.25); }
+    .badge-warn{ background: rgba(250,204,21,.16); color: #854d0e; border:1px solid rgba(250,204,21,.35); }
+    .badge-bad{ background: rgba(220,38,38,.10); color: #991b1b; border:1px solid rgba(220,38,38,.25); }
+    .badge-gray{ background:#f1f5f9; color:#475569; border:1px solid #e2e8f0; }
+
+    .light-dot{ width:16px;height:16px;border-radius:9999px;display:inline-block; box-shadow: 0 0 10px rgba(0,0,0,.12); }
+    .dot-green{ background: var(--green); box-shadow: 0 0 10px rgba(22,163,74,.40); }
+    .dot-red{ background: var(--red); box-shadow: 0 0 10px rgba(220,38,38,.40); }
+    .dot-yellow{ background: var(--yellow); box-shadow: 0 0 10px rgba(250,204,21,.35); }
+
+    .toast{ position:fixed; top:16px; left:50%; transform:translateX(-50%); z-index:9999; width: calc(100% - 24px); max-width: 900px; }
+    .modal-backdrop{ position:fixed; inset:0; background: rgba(15,23,42,.55); display:flex; align-items:center; justify-content:center; padding:16px; z-index:9998; }
+
+    .navBtn{ padding:.5rem .8rem; border-radius: .9rem; font-weight:800; font-size:.85rem; }
+    .navBtn.active{ background: var(--navy); color:#fff; }
+    .navBtn:not(.active){ background:#f1f5f9; color:#334155; }
+    .navBtn:not(.active):hover{ background:#e2e8f0; }
+
+    @media print{
+      header, nav, #toastRoot, .no-print { display:none !important; }
+      .print-card{ border: 1px solid #e5e7eb !important; box-shadow:none !important; }
+    }
+  </style>
+</head>
+
+<body class="bg-slate-50 text-slate-800">
+
+<script>
+/* ===========================
+   CONFIG
+=========================== */
+const SHEETS_WEBAPP_URL = "PON_AQUI_TU_URL"; // pega tu /exec
+const USE_DEMO = SHEETS_WEBAPP_URL.includes("PON_AQUI");
+
+const QUALITY_USER = "calidad";
+const QUALITY_PASS = "Aranda2026!";
+const SESSION_HOURS = 8;
+
+const LS_KEYS = {
+  FICHAS: "HAP_BD_FICHAS",
+  ANALISIS: "HAP_BD_ANALISIS",
+  PROP: "HAP_BD_PROPUESTAS",
+  DOCS: "HAP_BD_DOCUMENTOS",
+  SEG: "HAP_BD_SEGUIMIENTO",
+  SESSION: "HAP_SESSION",
+};
+
+const MESES = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
+
+/* ===========================
+   CATÁLOGO ÁREAS (COMPLETO)
+   value = prefijo, label = nombre (SIN mostrar prefijo)
+=========================== */
+const AREAS_CATALOGO = [
+  { Area:"ADM-IND-", NombreArea:"Admisión" },
+  { Area:"ALM-IND-", NombreArea:"Almacenes" },
+  { Area:"AMB-IND-", NombreArea:"Ambulancia" },
+  { Area:"ARC-IND-", NombreArea:"Archivo Clínico" },
+  { Area:"BCO-IND-", NombreArea:"Banco de Sangre" },
+  { Area:"BIO-IND-", NombreArea:"Biomedicina" },
+  { Area:"CAJ-IND-", NombreArea:"Caja" },
+  { Area:"CAM-IND-", NombreArea:"Camilleros" },
+  { Area:"CSL-IND-", NombreArea:"Capacitación y Seguridad Laboral" },
+  { Area:"CEY-IND-", NombreArea:"Ceye" },
+  { Area:"COB-IND-", NombreArea:"Cobranza" },
+  { Area:"CAL-IND-", NombreArea:"Calidad" },
+  { Area:"MPR-IND-", NombreArea:"Mejora de Procesos" },
+  { Area:"COM-IND-", NombreArea:"Compras" },
+  { Area:"CON-IND-", NombreArea:"Contabilidad" },
+  { Area:"CUN-IND-", NombreArea:"Cunas" },
+  { Area:"ENZ-IND-", NombreArea:"Enseñanza (medicos)" },
+  { Area:"EEN-IND-", NombreArea:"Enseñanza enfermería" },
+  { Area:"EPI-IND-", NombreArea:"Epidemiología" },
+  { Area:"ERP-IND-", NombreArea:"Eventos y Relaciones Públicas" },
+  { Area:"FAR-IND-", NombreArea:"Farmacia" },
+  { Area:"FCA-IND-", NombreArea:"Farmacovigilancia" },
+  { Area:"GEM-IND-", NombreArea:"Gestión Médica" },
+  { Area:"HSI-IND-", NombreArea:"Hemodiálisis" },
+  { Area:"HDM-IND-", NombreArea:"Hemodinamia" },
+  { Area:"HOS-IND-", NombreArea:"Hospitalización" },
+  { Area:"IMG-IND-", NombreArea:"Imagenología" },
+  { Area:"INH-IND-", NombreArea:"Inhaloterapia" },
+  { Area:"INT-IND-", NombreArea:"Intendencia" },
+  { Area:"CML-IND-", NombreArea:"Comercial" },
+  { Area:"JUR-IND-", NombreArea:"Jurídico" },
+  { Area:"LAB-IND-", NombreArea:"Laboratorio" },
+  { Area:"MTO-IND-", NombreArea:"Mantenimiento" },
+  { Area:"MAT-IND-", NombreArea:"Maternidad" },
+  { Area:"NOM-IND-", NombreArea:"Nóminas" },
+  { Area:"NUT-IND-", NombreArea:"Nutrición" },
+  { Area:"ONC-IND-", NombreArea:"Oncología" },
+  { Area:"PRP-IND-", NombreArea:"Prestaciones al Personal" },
+  { Area:"PUB-IND-", NombreArea:"Publicidad y Medios" },
+  { Area:"QUI-IND-", NombreArea:"Quirófano" },
+  { Area:"RYS-IND-", NombreArea:"Reproducción y Selección" },
+  { Area:"REP-IND-", NombreArea:"Reproducción (CREHAP)" },
+  { Area:"RPA-IND-", NombreArea:"Ropería" },
+  { Area:"MLO-IND-", NombreArea:"Monitero y Logística" },
+  { Area:"SAC-IND-", NombreArea:"Servicio al Cliente" },
+  { Area:"SIS-IND-", NombreArea:"Sistemas" },
+  { Area:"TES-IND-", NombreArea:"Tesorería" },
+  { Area:"TRA-IND-", NombreArea:"Trasplante" },
+  { Area:"UCN-IND-", NombreArea:"UCIN  (Unidad de cuidados intensivos neonatales)" },
+  { Area:"UCI-IND-", NombreArea:"Unidad de Terapia Intensiva" },
+  { Area:"UTI-IND-", NombreArea:"Unidad de Terapia Intermedia" },
+  { Area:"URG-IND-", NombreArea:"Urgencias" },
+  { Area:"DGL-IND-", NombreArea:"Dirección General" },
+  { Area:"DME-IND-", NombreArea:"Dirección Médica" },
+  { Area:"GCO-IND-", NombreArea:"Gerencia Comercial" },
+  { Area:"GDP-IND-", NombreArea:"Gerencia Desarrollo de Personal" },
+  { Area:"GEN-IND-", NombreArea:"Gerencia Financiera" },
+  { Area:"GFI-IND-", NombreArea:"Gerencia de Finanzas" },
+  { Area:"GCA-IND-", NombreArea:"Gerencia de Calidad" },
+  { Area:"GME-IND-", NombreArea:"Gerencia Médica" },
+  { Area:"GAB-IND-", NombreArea:"Gerencia de Abastecimientos" },
+  { Area:"JSA-IND-", NombreArea:"Jefatura de Servicios Auxiliares" },
+  { Area:"LEX-IND-", NombreArea:"Laser Eximer" },
+  { Area:"CLS-IND-", NombreArea:"Clinica del Sueño" },
+  { Area:"NUC-IND-", NombreArea:"Medicina Nuclear" },
+  { Area:"NEU-IND-", NombreArea:"Neurofisiología" },
+  { Area:"OFT-IND-", NombreArea:"Oftalmología" },
+  { Area:"OST-IND-", NombreArea:"Osteoporosis" },
+  { Area:"PET-IND-", NombreArea:"Pet/Ct" },
+  { Area:"REC-IND-", NombreArea:"Recepción" },
+  { Area:"RMG-IND-", NombreArea:"Resonancia Magnética" },
+  { Area:"MISP-IND-", NombreArea:"Metas Internacionales de Seguridad de Paciente" },
+  { Area:"MMU-IND-", NombreArea:"Manejo y Uso de Medicamentos" },
+  { Area:"PCI-IND-", NombreArea:"Prevención y Control de Infecciones" },
+  { Area:"FMS-IND-", NombreArea:"Gestión y Seguridad de las Instalaciones" },
+  { Area:"SQE-IND-", NombreArea:"Competencias y Capacitación del Personal" },
+  { Area:"QPS-IND-", NombreArea:"Mejora de Calidad y Seguridad del Paciente" },
+  { Area:"ACC-IND-", NombreArea:"Acceso y Continuidad de la Atención" },
+  { Area:"PFR-IND-", NombreArea:"Derechos del Paciente y su Familia" },
+  { Area:"AOP-IND-", NombreArea:"Evaluación de Pacientes" },
+  { Area:"SAD-IND-", NombreArea:"Servicios Auxiliares de Diagnóstico" },
+  { Area:"COP-IND-", NombreArea:"Atención de Pacientes" },
+  { Area:"ASC-IND-", NombreArea:"Anestesia y Atención Quirurgica" },
+  { Area:"PFE-IND-", NombreArea:"Educación al Paciente y a su Familia" },
+  { Area:"MCI-IND-", NombreArea:"Gestión de la Cominicación  y la Información" },
+  { Area:"GLD-IND-", NombreArea:"Gobierno, Liderazgo y Dirección" },
+  { Area:"CTO-IND-", NombreArea:"Proveedores" },
+  { Area:"AI-IND-", NombreArea:"Auditorías Internas" },
+  { Area:"AE-IND-", NombreArea:"Auditorías Externas" },
+  { Area:"OM-IND-", NombreArea:"Oportunidad de Mejora" },
+  { Area:"AC-IND-", NombreArea:"Acción Correctiva" },
+  { Area:"POL-IND-", NombreArea:"Política" },
+  { Area:"MCA-IND-", NombreArea:"Manual de Calidad" },
+  { Area:"PRO-IND-", NombreArea:"Procedimientos" },
+  { Area:"PLN-IND-", NombreArea:"Plan" },
+  { Area:"PRG-IND-", NombreArea:"Programa" },
+  { Area:"PNO-IND-", NombreArea:"Procedimientos normalizados de operación" },
+  { Area:"MAN-IND-", NombreArea:"Manual" },
+  { Area:"PRT-IND-", NombreArea:"Protocolo" },
+  { Area:"GUI-IND-", NombreArea:"Guía" },
+  { Area:"INS-IND-", NombreArea:"Instructivo" },
+  { Area:"FOR-IND-", NombreArea:"Formatos" },
+  { Area:"S/C-IND-", NombreArea:"Externo" },
+  { Area:"EXC-IND-", NombreArea:"Expediente clinico" },
+  { Area:"ANE-IND-", NombreArea:"Anexos" },
+  { Area:"CPC-IND-", NombreArea:"Cipoc" }
+];
+
+/* ===========================
+   UTILIDADES BASE (PARTE 1)
+=========================== */
+const $ = (id)=>document.getElementById(id);
+
+function escapeHtml(s){
+  return (s??"").toString().replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+function toast(type, title, msg){
+  const root = $("toastRoot");
+  const cls = type==="ok" ? "border-emerald-200 bg-emerald-50 text-emerald-900"
+            : type==="warn" ? "border-yellow-200 bg-yellow-50 text-yellow-900"
+            : "border-red-200 bg-red-50 text-red-900";
+  root.innerHTML = `
+    <div class="rounded-2xl border ${cls} shadow-sm p-4">
+      <div class="font-extrabold">${escapeHtml(title)}</div>
+      <div class="text-sm">${escapeHtml(msg||"")}</div>
+    </div>`;
+  root.classList.remove("hidden");
+  setTimeout(()=>root.classList.add("hidden"), 4200);
+}
+function periodoHuman(ym){
+  if(!ym || !/^\d{4}-\d{2}$/.test(ym)) return "—";
+  const [y,m]=ym.split("-").map(Number);
+  return `${MESES[m-1]} ${y}`;
+}
+function scrollTopSmooth(){ window.scrollTo({top:0, behavior:"smooth"}); }
+</script>
+
+<!-- HEADER / NAV -->
+<header class="sticky top-0 z-50 bg-white/80 backdrop-blur border-b border-slate-200 no-print">
+  <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-2xl bg-navy text-white flex items-center justify-center shadow-sm">
+        <span class="font-extrabold">IQ</span>
+      </div>
+      <div>
+        <div class="font-extrabold text-navy leading-tight">Sistema de Indicadores</div>
+        <div class="text-xs text-slate-500 -mt-0.5">
+          Macro Style · <span id="modeTag" class="font-semibold"></span>
+        </div>
+      </div>
+    </div>
+
+    <nav class="flex flex-wrap items-center gap-2">
+      <button class="navBtn active" data-target="secInicio">Inicio</button>
+      <button class="navBtn" data-target="secFicha">Ficha Técnica</button>
+      <button class="navBtn" data-target="secAnalisis">Análisis</button>
+      <button class="navBtn" data-target="secDashboard" data-protected="1">Dashboard</button>
+      <button class="navBtn" data-target="secExplorador" data-protected="1">Explorador</button>
+      <button class="navBtn" data-target="secSeguimiento" data-protected="1">Seguimiento</button>
+
+      <button id="btnSync" class="btn btn-primary">Sincronizar</button>
+      <button id="btnLogout" class="btn btn-soft">Cerrar sesión</button>
+    </nav>
+  </div>
+</header>
+
+<!-- TOAST -->
+<div id="toastRoot" class="toast hidden no-print"></div>
+
+<!-- LOGIN MODAL (CALIDAD) -->
+<div id="loginModal" class="hidden modal-backdrop no-print">
+  <div class="w-full max-w-md rounded-2xl bg-white shadow-xl border border-slate-200 overflow-hidden">
+    <div class="px-5 py-4 bg-slate-50 border-b border-slate-200">
+      <div class="font-extrabold text-navy text-lg">Acceso restringido</div>
+      <div class="text-sm text-slate-500">Solo Calidad</div>
+    </div>
+    <div class="p-5 space-y-4">
+      <div>
+        <label class="text-xs font-extrabold text-slate-600">Nombre *</label>
+        <input id="loginName" class="input mt-1" placeholder="Ej. Luis Ángel"/>
+      </div>
+      <div>
+        <label class="text-xs font-extrabold text-slate-600">Usuario *</label>
+        <input id="loginUser" class="input mt-1" placeholder="calidad"/>
+      </div>
+      <div>
+        <label class="text-xs font-extrabold text-slate-600">Contraseña *</label>
+        <input id="loginPass" type="password" class="input mt-1" placeholder="••••••••"/>
+      </div>
+
+      <div id="loginMsg" class="hidden rounded-2xl border border-red-200 bg-red-50 text-red-900 p-3 text-sm">
+        Datos incorrectos o incompletos.
+      </div>
+
+      <div class="flex gap-2">
+        <button id="btnLogin" class="flex-1 btn btn-primary">Entrar</button>
+        <button id="btnLoginCancel" class="btn btn-soft">Cancelar</button>
+      </div>
+
+      <div class="text-xs text-slate-500">Sesión válida por 8 horas.</div>
+    </div>
+  </div>
+</div>
+
+<!-- PDF MODAL (Vista previa) -->
+<div id="pdfModal" class="hidden modal-backdrop no-print">
+  <div class="w-full max-w-5xl rounded-2xl bg-white shadow-xl border border-slate-200 overflow-hidden">
+    <div class="px-5 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+      <div>
+        <div class="font-extrabold text-navy">Vista previa del documento</div>
+        <div id="pdfSub" class="text-xs text-slate-500"></div>
+      </div>
+      <div class="flex gap-2">
+        <button id="btnPrint" class="btn btn-primary">Imprimir / Guardar PDF</button>
+        <button id="btnPdfClose" class="btn btn-soft">Cerrar</button>
+      </div>
+    </div>
+    <div id="pdfContent" class="p-6 bg-white"></div>
+  </div>
+</div>
+
+<main class="max-w-7xl mx-auto px-4 py-6 space-y-6">
+
+  <!-- HERO -->
+  <section class="rounded-2xl bg-navy text-white shadow-sm overflow-hidden">
+    <div class="px-6 py-5 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+      <div>
+        <div class="text-lg font-extrabold">Dashboard corporativo · Semáforo estilo macro</div>
+        <div class="text-sm text-white/80">DEMO/Sheets · Fórmula live · Evidencias (Figuras) · Seguimiento (Calidad)</div>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="badge badge-gray bg-white/10 text-white border border-white/20">
+          <span class="light-dot dot-green"></span> CUMPLE
+        </span>
+        <span class="badge badge-gray bg-white/10 text-white border border-white/20">
+          <span class="light-dot dot-yellow"></span> MONITOREO
+        </span>
+        <span class="badge badge-gray bg-white/10 text-white border border-white/20">
+          <span class="light-dot dot-red"></span> NO CUMPLE
+        </span>
+      </div>
+    </div>
+  </section>
+
+  <!-- INICIO -->
+  <section id="secInicio" class="spaSection space-y-6">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div class="card">
+        <div class="card-b">
+          <div class="text-xs font-extrabold text-slate-500">ACCESO RÁPIDO</div>
+          <div class="text-xl font-extrabold text-navy mt-2">Ficha Técnica</div>
+          <div class="text-sm text-slate-600 mt-1">Captura o actualiza datos del indicador.</div>
+          <button id="goFicha" class="mt-4 btn btn-primary w-full">Capturar ficha</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-b">
+          <div class="text-xs font-extrabold text-slate-500">ACCESO RÁPIDO</div>
+          <div class="text-xl font-extrabold text-navy mt-2">Análisis</div>
+          <div class="text-sm text-slate-600 mt-1">Captura N/D, resultado, propuestas y evidencias.</div>
+          <button id="goAnalisis" class="mt-4 btn btn-primary w-full">Capturar análisis</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-b">
+          <div class="text-xs font-extrabold text-slate-500">CALIDAD</div>
+          <div class="text-xl font-extrabold text-navy mt-2">Paneles</div>
+          <div class="text-sm text-slate-600 mt-1">Dashboard / Explorador / Seguimiento</div>
+          <div class="mt-4 grid grid-cols-3 gap-2">
+            <button id="goDashboard" class="btn btn-soft">Dashboard</button>
+            <button id="goExplorador" class="btn btn-soft">Explorador</button>
+            <button id="goSeguimiento" class="btn btn-soft">Seguimiento</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-b">
+        <div class="font-extrabold text-navy">Modo actual</div>
+        <div class="text-sm text-slate-600 mt-1">
+          Estás en: <span class="font-extrabold text-navy" id="homeMode"></span>.
+          <span class="text-slate-500">Pega tu URL /exec para Sheets cuando estés listo.</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FICHA TÉCNICA (placeholder en PARTE 1) -->
+  <section id="secFicha" class="spaSection hidden">
+    <div class="card">
+      <div class="card-h">
+        <div class="font-extrabold text-navy text-lg">Ficha Técnica</div>
+        <div class="text-sm text-slate-500">Selects + fórmula live (Ej. (N/D)*100)</div>
+      </div>
+      <div class="card-b">
+        <div class="text-sm text-slate-500">
+          (La forma completa de Ficha viene en PARTE 2/4 para no reventar el chat)
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ANÁLISIS (placeholder en PARTE 1) -->
+  <section id="secAnalisis" class="spaSection hidden">
+    <div class="card">
+      <div class="card-h">
+        <div class="font-extrabold text-navy text-lg">Análisis del Indicador (estilo macro)</div>
+        <div class="text-sm text-slate-500">Filtra códigos por área · periodos registrados · evidencias</div>
+      </div>
+      <div class="card-b">
+        <div class="text-sm text-slate-500">
+          (El módulo completo de Análisis + gráfica tipo tu imagen viene en PARTE 3/4)
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- DASHBOARD (placeholder en PARTE 1) -->
+  <section id="secDashboard" class="spaSection hidden">
+    <div class="card">
+      <div class="card-h">
+        <div class="font-extrabold text-navy text-lg">Dashboard (Calidad)</div>
+        <div class="text-sm text-slate-500">KPI cards + pastel + barras + tabla resumen</div>
+      </div>
+      <div class="card-b">
+        <div class="text-sm text-slate-500">
+          (Dashboard completo + charts viene en PARTE 3/4)
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- EXPLORADOR (placeholder en PARTE 1) -->
+  <section id="secExplorador" class="spaSection hidden">
+    <div class="card">
+      <div class="card-h">
+        <div class="font-extrabold text-navy text-lg">Explorador Documental (Calidad)</div>
+        <div class="text-sm text-slate-500">Filtros + listado + editar registros</div>
+      </div>
+      <div class="card-b">
+        <div class="text-sm text-slate-500">
+          (Explorador PRO completo viene en PARTE 4/4)
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SEGUIMIENTO (placeholder en PARTE 1) -->
+  <section id="secSeguimiento" class="spaSection hidden">
+    <div class="card">
+      <div class="card-h">
+        <div class="font-extrabold text-navy text-lg">Seguimiento de acciones (Calidad)</div>
+        <div class="text-sm text-slate-500">Lista NO CUMPLEN + captura de tabla (1..5) + verificador</div>
+      </div>
+      <div class="card-b">
+        <div class="text-sm text-slate-500">
+          (Seguimiento completo viene en PARTE 4/4)
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="max-w-7xl mx-auto px-4 pb-10">
+  <div class="text-xs text-slate-500 text-center mt-6">
+    © Sistema interno · <span id="footerMode" class="font-semibold"></span> ·
+    Desarrollado por <span class="font-semibold">I.I. Luis Angel Guillen Medina & I.I. Alejandra García Cerda</span>
+  </div>
+</footer>
+
+<!-- PARTE 2/4 incluye: Ficha Técnica completa + storage/api + generación de código + validaciones -->
+<script>
+/* =========================================================
+   STORAGE / API (DEMO o Sheets)
+========================================================= */
+function lsRead(key, fallback){
+  try{ return JSON.parse(localStorage.getItem(key) || "null") ?? fallback; }
+  catch{ return fallback; }
+}
+function lsWrite(key, val){ localStorage.setItem(key, JSON.stringify(val)); }
+
+function seedDemo(){
+  if(!localStorage.getItem(LS_KEYS.FICHAS)) lsWrite(LS_KEYS.FICHAS, []);
+  if(!localStorage.getItem(LS_KEYS.ANALISIS)) lsWrite(LS_KEYS.ANALISIS, []);
+  if(!localStorage.getItem(LS_KEYS.PROP)) lsWrite(LS_KEYS.PROP, []);
+  if(!localStorage.getItem(LS_KEYS.DOCS)) lsWrite(LS_KEYS.DOCS, []);
+  if(!localStorage.getItem(LS_KEYS.SEG)) lsWrite(LS_KEYS.SEG, []);
+}
+
+async function apiFetch(action, payload={}){
+  if(USE_DEMO) return demoApi(action, payload);
+  const res = await fetch(SHEETS_WEBAPP_URL, {
+    method:"POST",
+    headers: { "Content-Type":"application/json" },
+    body: JSON.stringify({ action, payload })
+  });
+  return await res.json();
+}
+
+function ok_(data, message="OK"){ return { ok:true, data, message }; }
+function fail_(message="ERROR"){ return { ok:false, data:null, message }; }
+
+function demoApi(action, payload){
+  seedDemo();
+  const fichas = lsRead(LS_KEYS.FICHAS, []);
+  const analisis = lsRead(LS_KEYS.ANALISIS, []);
+  const prop = lsRead(LS_KEYS.PROP, []);
+  const docs = lsRead(LS_KEYS.DOCS, []);
+  const seg = lsRead(LS_KEYS.SEG, []);
+
+  // fichas
+  if(action==="fichas.list") return ok_(fichas);
+  if(action==="fichas.upsert"){
+    if(!payload?.CodigoIndicador) return fail_("Falta CodigoIndicador");
+    const idx = fichas.findIndex(x=>x.CodigoIndicador===payload.CodigoIndicador);
+    if(idx>=0) fichas[idx] = payload; else fichas.push(payload);
+    lsWrite(LS_KEYS.FICHAS, fichas);
+    return ok_(payload, "Ficha guardada");
+  }
+
+  // analisis
+  if(action==="analisis.list") return ok_(analisis);
+  if(action==="analisis.insert"){
+    if(!payload?.CodigoIndicador || !payload?.PeriodoYM) return fail_("Falta CodigoIndicador/PeriodoYM");
+    const dup = analisis.some(x=>x.CodigoIndicador===payload.CodigoIndicador && x.PeriodoYM===payload.PeriodoYM);
+    if(dup) return fail_("DUPLICADO");
+    analisis.push(payload);
+    lsWrite(LS_KEYS.ANALISIS, analisis);
+    return ok_(payload, "Análisis guardado");
+  }
+  if(action==="analisis.delete"){
+    const { CodigoIndicador, PeriodoYM } = payload || {};
+    if(!CodigoIndicador || !PeriodoYM) return fail_("Falta codigo/periodo");
+    const idx = analisis.findIndex(x=>x.CodigoIndicador===CodigoIndicador && x.PeriodoYM===PeriodoYM);
+    if(idx>=0) analisis.splice(idx,1);
+    // también borrar propuestas asociadas
+    const keepProp = prop.filter(p=>!(p.CodigoIndicador===CodigoIndicador && p.PeriodoYM===PeriodoYM));
+    lsWrite(LS_KEYS.ANALISIS, analisis);
+    lsWrite(LS_KEYS.PROP, keepProp);
+    return ok_(true, "Análisis eliminado");
+  }
+
+  // propuestas
+  if(action==="prop.upsertMany"){
+    const { CodigoIndicador, PeriodoYM, Items } = payload || {};
+    if(!CodigoIndicador || !PeriodoYM) return fail_("Falta clave propuestas");
+    const keep = prop.filter(p=>!(p.CodigoIndicador===CodigoIndicador && p.PeriodoYM===PeriodoYM));
+    const merged = keep.concat((Items||[]).map((it,i)=>({
+      CodigoIndicador, PeriodoYM,
+      Index:i+1,
+      Accion: it.Accion||"",
+      Responsable: it.Responsable||"",
+      FechaCompromiso: it.FechaCompromiso||"",
+      EvidenciaDesc: it.EvidenciaDesc||"",
+      EvidenciaLink: it.EvidenciaLink||"",
+      UpdatedAt: new Date().toISOString()
+    })));
+    lsWrite(LS_KEYS.PROP, merged);
+    return ok_(true, "Propuestas guardadas");
+  }
+
+  // docs
+  if(action==="docs.list") return ok_(docs);
+  if(action==="docs.upsert"){
+    if(!payload?.Key) return fail_("Falta Key");
+    const idx = docs.findIndex(d=>d.Key===payload.Key);
+    if(idx>=0) docs[idx]=payload; else docs.push(payload);
+    lsWrite(LS_KEYS.DOCS, docs);
+    return ok_(payload, "Doc guardado");
+  }
+  if(action==="docs.delete"){
+    const { Key, CodigoIndicador } = payload || {};
+    // if key provided, remove specific doc; if CodigoIndicador provided, remove all docs related
+    if(Key){
+      const idx = docs.findIndex(d=>d.Key===Key);
+      if(idx>=0) docs.splice(idx,1);
+    }
+    if(CodigoIndicador){
+      docs = docs.filter(d=>d.CodigoIndicador!==CodigoIndicador);
+    }
+    lsWrite(LS_KEYS.DOCS, docs);
+    return ok_(true, "Documento(s) eliminado(s)");
+  }
+
+  // fichas (with cascade delete)
+  if(action==="fichas.delete"){
+    const { CodigoIndicador } = payload || {};
+    if(!CodigoIndicador) return fail_("Falta CodigoIndicador");
+    const idx = fichas.findIndex(x=>x.CodigoIndicador===CodigoIndicador);
+    if(idx>=0) fichas.splice(idx,1);
+    // cascade remove from analisis/docs/seg
+    const remainAnal = analisis.filter(x=>x.CodigoIndicador!==CodigoIndicador);
+    const remainDocs = docs.filter(d=>d.CodigoIndicador!==CodigoIndicador);
+    lsWrite(LS_KEYS.FICHAS, fichas);
+    lsWrite(LS_KEYS.ANALISIS, remainAnal);
+    lsWrite(LS_KEYS.DOCS, remainDocs);
+    return ok_(true, "Ficha eliminada");
+  }
+
+  // seguimiento
+  if(action==="seg.list") return ok_(seg);
+  if(action==="seg.upsert"){
+    if(!payload?.Key) return fail_("Falta Key");
+    const idx = seg.findIndex(s=>s.Key===payload.Key);
+    if(idx>=0) seg[idx]=payload; else seg.push(payload);
+    lsWrite(LS_KEYS.SEG, seg);
+    return ok_(payload, "Seguimiento guardado");
+  }
+
+  return fail_("Acción no soportada: "+action);
+}
+
+/* =========================================================
+   MODELOS DE DATOS (Estructura EXACTA)
+========================================================= */
+function nowISO(){ return new Date().toISOString(); }
+
+function modelFicha(){
+  return {
+    CodigoIndicador:"",
+    NombreIndicador:"",
+    AreaResponsable:"",
+    TipoIndicador:"",              // select
+    ObjetivoIndicador:"",
+    PeriodicidadMedicion:"",       // select
+    MetaObjetivo:null,
+
+    // Fórmula
+    FormulaTipo:"",                // Porcentaje | Tasa | Otro
+    FormulaEtiqueta:"",            // texto libre (ej "%", "tasa", etc.)
+    FormulaNumerador:"",
+    FormulaDenominador:"",
+    FormulaFactor:1,               // auto: 100/1000/1
+    ResponsableIndicador:"",
+
+    // Campos extra que pediste
+    FuentesRecoleccion:[],         // lista
+    Terminos:[],                   // lista
+    Observaciones:[],              // lista
+
+    UpdatedAt: nowISO()
+  };
+}
+
+/* =========================================================
+   SESIÓN (Calidad)
+========================================================= */
+function getSession(){
+  try{ return JSON.parse(localStorage.getItem(LS_KEYS.SESSION) || "null"); } catch { return null; }
+}
+function setSession(obj){ localStorage.setItem(LS_KEYS.SESSION, JSON.stringify(obj)); }
+function clearSession(){ localStorage.removeItem(LS_KEYS.SESSION); }
+function isQuality(){
+  const s = getSession();
+  if(!s) return false;
+  const exp = new Date(s.expiresAt).getTime();
+  return s.user===QUALITY_USER && Date.now() < exp;
+}
+let pendingTarget = null;
+
+function requireQuality(target){
+  if(isQuality()) return true;
+  pendingTarget = target;
+  $("loginMsg").classList.add("hidden");
+  $("loginModal").classList.remove("hidden");
+  return false;
+}
+
+/* =========================================================
+   SPA NAV
+========================================================= */
+function setActiveNav(target){
+  document.querySelectorAll(".navBtn").forEach(b=>{
+    const t = b.getAttribute("data-target");
+    if(t===target) b.classList.add("active");
+    else b.classList.remove("active");
+  });
+}
+
+function showSection(id){
+  document.querySelectorAll(".spaSection").forEach(s=>s.classList.add("hidden"));
+  $(id).classList.remove("hidden");
+  setActiveNav(id);
+  scrollTopSmooth();
+}
+
+/* =========================================================
+   CACHE GLOBAL
+========================================================= */
+const CACHE = {
+  fichas: [],
+  analisis: [],
+  prop: [],
+  docs: [],
+  seg: []
+};
+
+async function loadAll(){
+  const f = await apiFetch("fichas.list");
+  const a = await apiFetch("analisis.list");
+  const d = await apiFetch("docs.list");
+  const s = await apiFetch("seg.list");
+
+  CACHE.fichas = f.ok ? f.data : [];
+  CACHE.analisis = a.ok ? a.data : [];
+  CACHE.docs = d.ok ? d.data : [];
+  CACHE.seg = s.ok ? s.data : [];
+
+  fillAreaSelects();
+}
+
+/* =========================================================
+   SELECTS ÁREAS
+========================================================= */
+function fillAreaSelects(){
+  const opts = AREAS_CATALOGO.map(o=>`<option value="${escapeHtml(o.Area)}">${escapeHtml(o.NombreArea)}</option>`).join("");
+  // Ficha
+  const fa = $("f_AreaResponsable");
+  if(fa) fa.innerHTML = `<option value="">Selecciona...</option>${opts}`;
+
+  // (Análisis/Dashboard/Explorador se llenan en PARTE 3/4)
+}
+
+/* =========================================================
+   AUTOGENERAR CÓDIGO POR ÁREA (FIX DEL BUG)
+   - Cada cambio de área recalcula desde CACHE.fichas
+========================================================= */
+function nextNumberForPrefix(prefix){
+  const nums = (CACHE.fichas||[])
+    .map(f => (f.CodigoIndicador||""))
+    .filter(code => code.startsWith(prefix))
+    .map(code => {
+      const m = String(code).match(/(\d{3})$/);
+      return m ? Number(m[1]) : null;
+    })
+    .filter(n => Number.isFinite(n));
+  const last = nums.length ? Math.max(...nums) : 0;
+  return String(last + 1).padStart(3, "0");
+}
+function updateCodigoFromArea(){
+  const sel = $("f_AreaResponsable");
+  const out = $("f_CodigoIndicador");
+  if(!sel || !out) return;
+
+  const prefix = (sel.value||"").trim();
+  if(!prefix){ out.value=""; return; }
+
+  const nnn = nextNumberForPrefix(prefix);
+  out.value = `${prefix}${nnn}`;
+}
+
+/* =========================================================
+   FICHA TÉCNICA UI (COMPLETA)
+========================================================= */
+function renderFichaForm(){
+  const sec = $("secFicha");
+  sec.innerHTML = `
+    <div class="card">
+      <div class="card-h">
+        <div class="font-extrabold text-navy text-lg">Ficha Técnica</div>
+        <div class="text-sm text-slate-500">
+          Campos obligatorios · Fórmula live · Etiqueta (Porcentaje/Tasa/Otro)
+        </div>
+      </div>
+
+      <div class="card-b space-y-5">
+
+        <!-- GRID TOP -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label class="text-xs font-extrabold text-slate-600">Área responsable *</label>
+            <select id="f_AreaResponsable" class="input mt-1"></select>
+          </div>
+
+          <div>
+            <label class="text-xs font-extrabold text-slate-600">Código (auto) *</label>
+            <input id="f_CodigoIndicador" class="input mt-1" placeholder="Se genera al elegir el área" readonly />
+          </div>
+
+          <div>
+            <label class="text-xs font-extrabold text-slate-600">Responsable del indicador *</label>
+            <input id="f_ResponsableIndicador" class="input mt-1" placeholder="Nombre del responsable" />
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label class="text-xs font-extrabold text-slate-600">Nombre del indicador *</label>
+            <input id="f_NombreIndicador" class="input mt-1" placeholder="Ej. Tiempo de respuesta..." />
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label class="text-xs font-extrabold text-slate-600">Tipo de indicador *</label>
+              <select id="f_TipoIndicador" class="input mt-1">
+                <option value="">Selecciona...</option>
+                <option>Estadístico</option>
+                <option>Proceso</option>
+                <option>Resultado</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-xs font-extrabold text-slate-600">Periodicidad de medición *</label>
+              <select id="f_Periodicidad" class="input mt-1">
+                <option value="">Selecciona...</option>
+                <option>Mensual</option>
+                <option>Bimestral</option>
+                <option>Trimestral</option>
+                <option>Semestral</option>
+                <option>Anual</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <label class="text-xs font-extrabold text-slate-600">Objetivo del indicador *</label>
+          <textarea id="f_Objetivo" class="input mt-1" rows="3" placeholder="Describe el objetivo..."></textarea>
+          <div id="f_ObjetivoSug" class="hidden mt-2 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+            <div class="font-extrabold text-navy text-xs mb-1">Sugerencia de redacción (propuesta)</div>
+            <div id="f_ObjetivoSugTxt"></div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label class="text-xs font-extrabold text-slate-600">Meta objetivo *</label>
+            <input id="f_Meta" class="input mt-1" type="number" step="0.01" placeholder="Ej. 95" />
+          </div>
+
+          <div>
+            <label class="text-xs font-extrabold text-slate-600">Etiqueta (presentación) *</label>
+            <select id="f_FormulaTipo" class="input mt-1">
+              <option value="">Selecciona...</option>
+              <option value="Porcentaje">Porcentaje</option>
+              <option value="Tasa">Tasa</option>
+              <option value="Otro">Otro</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="text-xs font-extrabold text-slate-600">Texto de etiqueta *</label>
+            <input id="f_FormulaEtiqueta" class="input mt-1" placeholder="Ej. %, tasa, etc." disabled />
+          </div>
+        </div>
+
+        <!-- FÓRMULA -->
+        <div class="card">
+          <div class="card-h">
+            <div class="font-extrabold text-navy">Fórmula</div>
+            <div class="text-xs text-slate-500">Se arma en vivo: Ej. (N/D)*100</div>
+          </div>
+          <div class="card-b space-y-4">
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label class="text-xs font-extrabold text-slate-600">Numerador (texto) *</label>
+                <input id="f_NumTxt" class="input mt-1" placeholder="Ej. No. pacientes..." />
+              </div>
+              <div>
+                <label class="text-xs font-extrabold text-slate-600">Denominador (texto) *</label>
+                <input id="f_DenTxt" class="input mt-1" placeholder="Ej. Total de..." />
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+              <div>
+                <label class="text-xs font-extrabold text-slate-600">Factor (auto) *</label>
+                <input id="f_Factor" class="input mt-1" type="number" step="1" disabled />
+              </div>
+
+              <div class="md:col-span-2">
+                <label class="text-xs font-extrabold text-slate-600">Vista de fórmula</label>
+                <div class="mt-1 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  <div class="text-sm text-slate-700 font-extrabold" id="f_FormulaPreview">(N/D)*1</div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- LISTAS NUMERADAS -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          ${renderListBlock("Fuentes de recolección *", "f_Fuentes", "f_FuentesList", "Ej. Sistema HIS, Bitácora, etc.")}
+          ${renderListBlock("Términos / Definiciones *", "f_Terminos", "f_TerminosList", "Ej. Definición de evento...")}
+          ${renderListBlock("Observaciones *", "f_Observaciones", "f_ObservacionesList", "Ej. Consideraciones...", true, true)}
+        </div>
+
+        <div class="flex flex-wrap gap-2">
+          <button id="btnFichaSave" class="btn btn-primary">Guardar ficha</button>
+          <button id="btnFichaDoc" class="btn btn-soft">Generar documento (Vista PDF)</button>
+          <button id="btnFichaClear" class="btn btn-soft">Limpiar</button>
+        </div>
+
+        <div id="f_SaveMsg" class="hidden rounded-2xl border border-emerald-200 bg-emerald-50 text-emerald-900 p-3 text-sm">
+          <div class="font-extrabold">Ficha guardada correctamente</div>
+          <div>Redirigiendo al inicio…</div>
+        </div>
+
+      </div>
+    </div>
+  `;
+
+  // llenar select área
+  fillAreaSelects();
+
+  // eventos
+  $("f_AreaResponsable").addEventListener("change", ()=>{
+    updateCodigoFromArea();
+    clearErrorsFicha();
+  });
+
+  $("f_FormulaTipo").addEventListener("change", ()=>updateFactorEtiqueta());
+  $("f_FormulaEtiqueta").addEventListener("input", ()=>updateFormulaPreview());
+  $("f_Factor").addEventListener("change", ()=>updateFormulaPreview());
+  $("f_NumTxt").addEventListener("input", ()=>updateFormulaPreview());
+  $("f_DenTxt").addEventListener("input", ()=>updateFormulaPreview());
+
+  $("f_Objetivo").addEventListener("blur", ()=>suggestRedaction("f_Objetivo","f_ObjetivoSug","f_ObjetivoSugTxt"));
+
+  // listas
+  wireListBlock("f_Fuentes","f_FuentesList");
+  wireListBlock("f_Terminos","f_TerminosList");
+  wireListBlock("f_Observaciones","f_ObservacionesList", true);
+
+  $("btnFichaClear").addEventListener("click", clearFichaForm);
+  $("btnFichaSave").addEventListener("click", saveFicha);
+  $("btnFichaDoc").addEventListener("click", ()=>openFichaPreviewPDF());
+
+  // init defaults
+  updateFactorEtiqueta();
+  updateFormulaPreview();
+}
+
+function renderListBlock(title, inputId, listId, placeholder, maxOne=false, useTextarea=false){
+  const inputElement = useTextarea 
+    ? `<textarea id="${inputId}" class="textarea mt-1 min-h-24" placeholder="${escapeHtml(placeholder)}"></textarea>`
+    : `<input id="${inputId}" class="input" placeholder="${escapeHtml(placeholder)}"/>`;
+  
+  return `
+  <div class="card">
+    <div class="card-h">
+      <div class="font-extrabold text-navy">${escapeHtml(title)}</div>
+      <div class="text-xs text-slate-500">${maxOne ? "Máximo una entrada." : "Agrega ítems, se enumeran automáticamente."}</div>
+    </div>
+    <div class="card-b space-y-2">
+      <div class="flex gap-2">
+        ${inputElement}
+        <button class="btn btn-soft h-fit mt-1" type="button" data-add="${inputId}" data-list="${listId}" data-maxone="${maxOne}">+</button>
+      </div>
+      <div id="${listId}" class="text-sm text-slate-700 space-y-1"></div>
+    </div>
+  </div>
+  `;
+}
+
+function wireListBlock(inputId, listId, maxOne=false){
+  const input = $(inputId);
+  const list = $(listId);
+  const btn = document.querySelector(`[data-add="${inputId}"]`);
+  const numbered = !maxOne; // No numeración si es maxOne (observaciones)
+  
+  btn.addEventListener("click", ()=>{
+    const txt = (input.value||"").trim();
+    if(!txt) return;
+    let items = getListState(listId);
+    if(maxOne){
+      items = [txt]; // Si es maxOne, solo permite una entrada
+    } else {
+      items.push(txt);
+    }
+    setListState(listId, items);
+    input.value="";
+    renderNumbered(listId, numbered, maxOne);
+  });
+  input.addEventListener("keydown", (e)=>{
+    if(e.key==="Enter"){
+      e.preventDefault();
+      btn.click();
+    }
+  });
+  renderNumbered(listId, numbered, maxOne);
+}
+
+function getListState(listId){
+  try{ return JSON.parse($(listId).dataset.items || "[]"); } catch { return []; }
+}
+function setListState(listId, arr){
+  $(listId).dataset.items = JSON.stringify(arr || []);
+}
+
+function renderNumbered(listId, numbered=true, maxOne=false){
+  const list = $(listId);
+  const items = getListState(listId);
+  const btn = document.querySelector(`[data-add][data-list="${listId}"]`);
+  
+  if(!items.length){
+    list.innerHTML = `<div class="text-slate-400 text-xs">Sin registros.</div>`;
+    if(btn) btn.disabled = false;
+    return;
+  }
+  
+  // Desactivar botón + si es maxOne y hay items
+  if(btn && maxOne && items.length > 0){
+    btn.disabled = true;
+  }
+  
+  if(!numbered){
+    // Para observaciones: textarea editable
+    list.innerHTML = items.map((t,i)=>`
+      <div class="flex gap-2 items-start">
+        <textarea class="input flex-1 text-sm" data-edit="${listId}" data-idx="${i}" style="min-height: 80px;">${escapeHtml(t)}</textarea>
+        <button class="text-xs font-extrabold text-red-700 hover:underline flex-shrink-0 mt-1" data-del="${listId}" data-idx="${i}">Eliminar</button>
+      </div>
+    `).join("");
+  } else {
+    // Para listas normales: con input editable
+    list.innerHTML = items.map((t,i)=>`
+      <div class="flex gap-2 items-center">
+        <span class="font-extrabold text-slate-500 flex-shrink-0">${i+1}.</span>
+        <input class="input flex-1 text-sm" data-edit="${listId}" data-idx="${i}" value="${escapeHtml(t)}" />
+        <button class="text-xs font-extrabold text-red-700 hover:underline flex-shrink-0" data-del="${listId}" data-idx="${i}">Eliminar</button>
+      </div>
+    `).join("");
+  }
+
+  // Event listeners para editar
+  list.querySelectorAll("[data-edit]").forEach(el=>{
+    el.addEventListener("input", ()=>{
+      const idx = Number(el.getAttribute("data-idx"));
+      const arr = getListState(listId);
+      arr[idx] = el.value;
+      setListState(listId, arr);
+    });
+  });
+
+  // Event listeners para eliminar
+  list.querySelectorAll("[data-del]").forEach(b=>{
+    b.addEventListener("click", ()=>{
+      const idx = Number(b.getAttribute("data-idx"));
+      const arr = getListState(listId);
+      arr.splice(idx,1);
+      setListState(listId, arr);
+      renderNumbered(listId, numbered, maxOne);
+      // Re-habilitar botón si se eliminó el último item
+      if(btn && maxOne && arr.length === 0){
+        btn.disabled = false;
+      }
+    });
+  });
+}
+
+/* =========================================================
+   FACTOR + ETIQUETA + PREVIEW (Ej. (N/D)*100)
+========================================================= */
+function updateFactorEtiqueta(){
+  const tipo = $("f_FormulaTipo").value;
+  const etiqueta = $("f_FormulaEtiqueta");
+  const factor = $("f_Factor");
+
+  // Solo habilitar campos si es "Otro"
+  const isOtro = tipo === "Otro";
+  etiqueta.disabled = !isOtro;
+  factor.disabled = !isOtro;
+
+  if(tipo==="Porcentaje"){
+    etiqueta.value = "%";
+    factor.value = 100;
+  }else if(tipo==="Tasa"){
+    etiqueta.value = "tasa";
+    factor.value = 1000;
+  }else if(tipo==="Otro"){
+    if(!etiqueta.value) etiqueta.value = "";
+    if(!factor.value) factor.value = 1;
+  }else{
+    factor.value = 1;
+  }
+  updateFormulaPreview();
+}
+
+function updateFormulaPreview(){
+  const numT = ($("f_NumTxt")?.value||"N").trim() || "N";
+  const denT = ($("f_DenTxt")?.value||"D").trim() || "D";
+  const factor = Number($("f_Factor")?.value||1) || 1;
+  const prev = $("f_FormulaPreview");
+  if(prev) prev.textContent = `(${numT}/${denT})*${factor}`;
+}
+
+/* =========================================================
+   SUGERENCIA REDACCIÓN (ligera, local, sin IA externa)
+   - NO modifica texto, solo muestra propuesta abajo
+========================================================= */
+function suggestRedaction(textareaId, boxId, outId){
+  const txt = ($(textareaId).value||"").trim();
+  if(!txt){ $(boxId).classList.add("hidden"); return; }
+
+  // “mejorita” básica (mayúscula inicial, quitar dobles espacios, punto final)
+  let s = txt.replace(/\s+/g," ").trim();
+  s = s.charAt(0).toUpperCase() + s.slice(1);
+  if(!/[.!?]$/.test(s)) s += ".";
+
+  // si empieza con verbos comunes, lo dejamos. Si no, sugerimos “Asegurar/Incrementar/Reducir”
+  const starters = ["Asegurar","Incrementar","Reducir","Mejorar","Garantizar","Evaluar","Monitorear","Disminuir"];
+  if(!starters.some(v=>s.startsWith(v))){
+    s = "Asegurar " + s.charAt(0).toLowerCase() + s.slice(1);
+  }
+
+  $(outId).textContent = s;
+  $(boxId).classList.remove("hidden");
+}
+
+/* =========================================================
+   VALIDACIÓN FICHA (todo obligatorio)
+========================================================= */
+function clearErrorsFicha(){
+  ["f_AreaResponsable","f_CodigoIndicador","f_ResponsableIndicador","f_NombreIndicador","f_TipoIndicador","f_Periodicidad","f_Objetivo","f_Meta",
+   "f_FormulaTipo","f_FormulaEtiqueta","f_NumTxt","f_DenTxt"
+  ].forEach(id=>{
+    const el = $(id); if(el) el.classList.remove("err");
+  });
+}
+
+function validateFicha(){
+  clearErrorsFicha();
+  let ok = true;
+
+  const must = (id)=>{
+    const el = $(id);
+    const v = (el?.value||"").trim();
+    if(!v){ el.classList.add("err"); ok=false; }
+    return v;
+  };
+
+  const area = must("f_AreaResponsable");
+  const cod = must("f_CodigoIndicador");
+  const resp = must("f_ResponsableIndicador");
+  const nom = must("f_NombreIndicador");
+  const tipo = must("f_TipoIndicador");
+  const per = must("f_Periodicidad");
+  const obj = must("f_Objetivo");
+  const metaStr = must("f_Meta");
+  const ft = must("f_FormulaTipo");
+  const fe = must("f_FormulaEtiqueta");
+  const nTxt = must("f_NumTxt");
+  const dTxt = must("f_DenTxt");
+
+  // listas obligatorias
+  const fuentes = getListState("f_FuentesList");
+  const term = getListState("f_TerminosList");
+  const obs = getListState("f_ObservacionesList");
+
+  if(!fuentes.length) ok=false;
+  if(!term.length) ok=false;
+  if(!obs.length) ok=false;
+
+  const meta = Number(metaStr);
+  if(!Number.isFinite(meta)){
+    $("f_Meta").classList.add("err");
+    ok=false;
+  }
+
+  if(!ok){
+    toast("err","Faltan campos","Completa todos los obligatorios (listas incluidas).");
+  }
+
+  return ok;
+}
+
+function clearFichaForm(){
+  renderFichaForm();
+  fillAreaSelects();
+  $("f_SaveMsg").classList.add("hidden");
+  toast("ok","Listo","Formulario limpio.");
+}
+
+/* =========================================================
+   GUARDAR FICHA
+========================================================= */
+async function saveFicha(){
+  if(!validateFicha()) return;
+
+  const row = modelFicha();
+
+  row.AreaResponsable = $("f_AreaResponsable").value;
+  row.CodigoIndicador = ($("f_CodigoIndicador").value||"").trim();
+  row.ResponsableIndicador = ($("f_ResponsableIndicador").value||"").trim();
+  row.NombreIndicador = ($("f_NombreIndicador").value||"").trim();
+  row.TipoIndicador = $("f_TipoIndicador").value;
+  row.PeriodicidadMedicion = $("f_Periodicidad").value;
+  row.ObjetivoIndicador = ($("f_Objetivo").value||"").trim();
+  row.MetaObjetivo = Number($("f_Meta").value);
+
+  row.FormulaTipo = $("f_FormulaTipo").value;
+  row.FormulaEtiqueta = ($("f_FormulaEtiqueta").value||"").trim();
+  row.FormulaNumerador = ($("f_NumTxt").value||"").trim();
+  row.FormulaDenominador = ($("f_DenTxt").value||"").trim();
+  row.FormulaFactor = Number($("f_Factor").value||1);
+  row.FuentesRecoleccion = getListState("f_FuentesList");
+  row.Terminos = getListState("f_TerminosList");
+  row.Observaciones = getListState("f_ObservacionesList");
+  row.UpdatedAt = nowISO();
+
+  const r = await apiFetch("fichas.upsert", row);
+  if(!r.ok){
+    toast("err","No se guardó", r.message || "Error");
+    return;
+  }
+
+  await loadAll();
+
+  $("f_SaveMsg").classList.remove("hidden");
+  scrollTopSmooth();
+
+  setTimeout(()=>{
+    $("f_SaveMsg").classList.add("hidden");
+    showSection("secInicio");
+  }, 1800);
+}
+
+/* =========================================================
+   GENERAR DOCUMENTO FICHA (Vista previa PDF)
+   - MVP: estructura lista (luego link a Word/Drive)
+========================================================= */
+function openFichaPreviewPDF(){
+  if(!validateFicha()) return;
+
+  const codigo = $("f_CodigoIndicador").value;
+  const nombre = $("f_NombreIndicador").value;
+  const areaLabel = getAreaLabel($("f_AreaResponsable").value);
+
+  $("pdfSub").textContent = `Ficha Técnica · ${codigo}`;
+  $("pdfContent").innerHTML = `
+    <div class="space-y-4 print-card">
+      <div class="text-2xl font-extrabold text-navy">${escapeHtml(nombre)}</div>
+      <div class="text-sm text-slate-600">
+        <span class="font-extrabold">Código:</span> ${escapeHtml(codigo)} ·
+        <span class="font-extrabold">Área:</span> ${escapeHtml(areaLabel)} ·
+        <span class="font-extrabold">Periodicidad:</span> ${escapeHtml($("f_Periodicidad").value)}
+      </div>
+
+      <div class="card">
+        <div class="card-h"><div class="font-extrabold text-navy">Objetivo</div></div>
+        <div class="card-b text-sm text-slate-700">${escapeHtml($("f_Objetivo").value)}</div>
+      </div>
+
+      <div class="card">
+        <div class="card-h"><div class="font-extrabold text-navy">Fórmula</div></div>
+        <div class="card-b text-sm text-slate-700 space-y-2">
+          <div><span class="font-extrabold">Numerador:</span> ${escapeHtml($("f_NumTxt").value)}</div>
+          <div><span class="font-extrabold">Denominador:</span> ${escapeHtml($("f_DenTxt").value)}</div>
+          <div><span class="font-extrabold">Factor:</span> ${escapeHtml($("f_Factor").value)}</div>
+          <div class="mt-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 font-extrabold">
+            ${escapeHtml($("f_FormulaPreview").textContent)}
+          </div>
+        </div>
+      </div>
+
+      ${renderListCard("Fuentes de recolección", getListState("f_FuentesList"))}
+      ${renderListCard("Términos / definiciones", getListState("f_TerminosList"))}
+      ${renderListCard("Observaciones", getListState("f_ObservacionesList"))}
+    </div>
+  `;
+  $("pdfModal").classList.remove("hidden");
+}
+
+function renderListCard(title, items){
+  const lis = (items||[]).map((t,i)=>`<div><span class="font-extrabold text-slate-500">${i+1}.</span> ${escapeHtml(t)}.</div>`).join("");
+  return `
+  <div class="card">
+    <div class="card-h"><div class="font-extrabold text-navy">${escapeHtml(title)}</div></div>
+    <div class="card-b text-sm text-slate-700 space-y-1">
+      ${items?.length ? lis : `<div class="text-slate-400">Sin registros.</div>`}
+    </div>
+  </div>
+  `;
+}
+
+/* =========================================================
+   HELPERS
+========================================================= */
+function getAreaLabel(prefix){
+  const f = AREAS_CATALOGO.find(x=>x.Area===prefix);
+  return f ? f.NombreArea : (prefix||"");
+}
+
+/* =========================================================
+   WIRES PRINCIPALES (PARTE 2)
+========================================================= */
+function setModeTags(){
+  $("modeTag").textContent = USE_DEMO ? "DEMO localStorage" : "Google Sheets";
+  $("homeMode").textContent = USE_DEMO ? "DEMO (localStorage)" : "Google Sheets (WebApp)";
+  $("footerMode").textContent = USE_DEMO ? "DEMO localStorage" : "Google Sheets";
+}
+
+function wireHeaderNav(){
+  document.querySelectorAll(".navBtn").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      const target = btn.getAttribute("data-target");
+      const prot = btn.getAttribute("data-protected")==="1";
+      if(prot){
+        if(requireQuality(target)) showSection(target);
+      }else{
+        showSection(target);
+      }
+    });
+  });
+
+  $("btnSync").addEventListener("click", async ()=>{
+    await loadAll();
+    toast("ok","Sincronizado", USE_DEMO ? "DEMO actualizado" : "Cargado desde Sheets");
+  });
+
+  $("btnLogout").addEventListener("click", ()=>{
+    clearSession();
+    toast("ok","Sesión cerrada","Acceso de Calidad removido.");
+    showSection("secInicio");
+  });
+
+  // accesos rápidos en Inicio
+  $("goFicha").addEventListener("click", ()=>{
+    showSection("secFicha");
+    renderFichaForm();
+  });
+  $("goAnalisis").addEventListener("click", ()=>showSection("secAnalisis"));
+
+  $("goDashboard").addEventListener("click", ()=>{
+    if(requireQuality("secDashboard")) showSection("secDashboard");
+  });
+  $("goExplorador").addEventListener("click", ()=>{
+    if(requireQuality("secExplorador")) showSection("secExplorador");
+  });
+  $("goSeguimiento").addEventListener("click", ()=>{
+    if(requireQuality("secSeguimiento")) showSection("secSeguimiento");
+  });
+
+  // login modal
+  $("btnLogin").addEventListener("click", ()=>{
+    const name = ($("loginName").value||"").trim();
+    const u = ($("loginUser").value||"").trim().toLowerCase();
+    const p = ($("loginPass").value||"").trim();
+
+    if(name && u===QUALITY_USER && p===QUALITY_PASS){
+      setSession({ name, user: QUALITY_USER, expiresAt: new Date(Date.now()+SESSION_HOURS*3600*1000).toISOString() });
+      $("loginModal").classList.add("hidden");
+      toast("ok","Acceso autorizado", `Bienvenido, ${name}.`);
+
+      if(pendingTarget){
+        const t=pendingTarget; pendingTarget=null;
+        showSection(t);
+      }
+    }else{
+      $("loginMsg").classList.remove("hidden");
+    }
+  });
+  $("btnLoginCancel").addEventListener("click", ()=>{
+    pendingTarget=null;
+    $("loginModal").classList.add("hidden");
+  });
+
+  // PDF modal
+  $("btnPdfClose").addEventListener("click", ()=>$("pdfModal").classList.add("hidden"));
+  $("btnPrint").addEventListener("click", ()=>window.print());
+}
+
+/* =========================================================
+   INIT PARTE 2
+========================================================= */
+document.addEventListener("DOMContentLoaded", async ()=>{
+  seedDemo();
+  setModeTags();
+  wireHeaderNav();
+  await loadAll();
+  showSection("secInicio");
+});
+</script>
+
+<script>
+/* =========================================================
+   COMPONENTES UI: SEMÁFORO MACRO
+========================================================= */
+function getSemaforo(cumple, mode="auto"){
+  // cumple: true/false, mode: auto|warn (si quieres monitoreo)
+  if(mode==="warn"){
+    return `
+      <span class="badge badge-warn">
+        <span class="light-dot dot-yellow"></span>
+        MONITOREO
+      </span>`;
+  }
+  if(cumple){
+    return `
+      <span class="badge badge-ok">
+        <span class="light-dot dot-green"></span>
+        CUMPLE
+      </span>`;
+  }
+  return `
+    <span class="badge badge-bad">
+      <span class="light-dot dot-red"></span>
+      NO CUMPLE
+    </span>`;
+}
+
+/* =========================================================
+   HELPERS: FICHA/ANÁLISIS lookup
+========================================================= */
+function fichaByCodigo(codigo){
+  return (CACHE.fichas||[]).find(f=>f.CodigoIndicador===codigo) || null;
+}
+function fichasByArea(prefix){
+  return (CACHE.fichas||[]).filter(f=>f.AreaResponsable===prefix);
+}
+function analisisByCodigo(codigo){
+  return (CACHE.analisis||[]).filter(a=>a.CodigoIndicador===codigo);
+}
+function findAnalisis(codigo, periodoYM){
+  return (CACHE.analisis||[]).find(a=>a.CodigoIndicador===codigo && a.PeriodoYM===periodoYM) || null;
+}
+function cumpleFrom(meta, resultado){
+  if(!Number.isFinite(meta) || !Number.isFinite(resultado)) return null;
+  return resultado >= meta;
+}
+function fmtNum(n){
+  if(n===null || n===undefined || n==="") return "—";
+  const x = Number(n);
+  if(!Number.isFinite(x)) return String(n);
+  return x.toLocaleString("es-MX", { maximumFractionDigits: 2 });
+}
+
+/* =========================================================
+   ANÁLISIS: Render completo
+========================================================= */
+function renderAnalisis(){
+  const sec = $("secAnalisis");
+  sec.innerHTML = `
+    <div class="card">
+      <div class="card-h">
+        <div class="font-extrabold text-navy text-lg">Análisis del Indicador (Estilo Macro)</div>
+        <div class="text-sm text-slate-500">
+          Filtra códigos por área · Cálculo automático · Propuestas (+) · Evidencias opcionales (Figuras)
+        </div>
+      </div>
+
+      <div class="card-b space-y-6">
+
+        <!-- SELECTOR -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+          <div>
+            <label class="text-xs font-extrabold text-slate-600">Área *</label>
+            <select id="a_Area" class="input mt-1"></select>
+          </div>
+          <div>
+            <label class="text-xs font-extrabold text-slate-600">Código (solo del área) *</label>
+            <select id="a_Codigo" class="input mt-1">
+              <option value="">Selecciona área primero…</option>
+            </select>
+          </div>
+          <div class="flex gap-2">
+            <button id="btnACargar" class="btn btn-primary flex-1">Cargar indicador</button>
+            <button id="btnAReset" class="btn btn-soft">Limpiar</button>
+          </div>
+        </div>
+
+        <!-- PERIODOS REGISTRADOS -->
+        <div class="card">
+          <div class="card-h">
+            <div class="font-extrabold text-navy">Periodos ya registrados</div>
+            <div class="text-xs text-slate-500">Para evitar confusiones al capturar.</div>
+          </div>
+          <div class="card-b">
+            <div id="a_PeriodosRegistrados" class="text-sm text-slate-700">
+              Selecciona un código para ver periodos.
+            </div>
+          </div>
+        </div>
+
+        <!-- BLOQUE DATOS INDICADOR -->
+        <div id="a_InfoBlock" class="hidden rounded-2xl bg-navy text-white p-5">
+          <div class="grid grid-cols-1 md:grid-cols-5 gap-3">
+            <div class="md:col-span-2">
+              <div class="text-xs text-white/70 font-extrabold">Nombre</div>
+              <div id="a_Nombre" class="font-extrabold text-lg"></div>
+            </div>
+            <div>
+              <div class="text-xs text-white/70 font-extrabold">Tipo</div>
+              <div id="a_Tipo" class="font-extrabold"></div>
+            </div>
+            <div>
+              <div class="text-xs text-white/70 font-extrabold">Periodicidad</div>
+              <div id="a_Periodicidad" class="font-extrabold"></div>
+            </div>
+            <div>
+              <div class="text-xs text-white/70 font-extrabold">Meta</div>
+              <div id="a_Meta" class="font-extrabold"></div>
+            </div>
+            <div class="md:col-span-5">
+              <div class="text-xs text-white/70 font-extrabold">Objetivo</div>
+              <div id="a_Objetivo" class="text-sm text-white/90"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- FORMULARIO ANÁLISIS -->
+        <div id="a_FormBlock" class="hidden space-y-6">
+
+          <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div>
+              <label class="text-xs font-extrabold text-slate-600">Periodo (mes) *</label>
+              <input id="a_PeriodoYM" type="month" class="input mt-1"/>
+              <div id="a_DupMsg" class="hidden mt-2 rounded-2xl border border-red-200 bg-red-50 text-red-900 p-3 text-sm">
+                ⚠️ Este periodo ya fue registrado.
+              </div>
+            </div>
+
+            <div>
+              <label class="text-xs font-extrabold text-slate-600">Numerador (valor) *</label>
+              <input id="a_Num" type="number" step="0.01" class="input mt-1" placeholder="N"/>
+            </div>
+
+            <div>
+              <label class="text-xs font-extrabold text-slate-600">Denominador (valor) *</label>
+              <input id="a_Den" type="number" step="0.01" class="input mt-1" placeholder="D"/>
+            </div>
+
+            <div>
+              <label class="text-xs font-extrabold text-slate-600">Resultado (auto) *</label>
+              <input id="a_Resultado" class="input mt-1" readonly/>
+              <div class="text-xs text-slate-500 mt-1" id="a_FormulaHint"></div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
+            <div class="md:col-span-2">
+              <label class="text-xs font-extrabold text-slate-600">Análisis e interpretación del resultado *</label>
+              <textarea id="a_Analisis" class="input mt-1" rows="5" placeholder="Redacta el análisis…"></textarea>
+              <div id="a_AnalisisSug" class="hidden mt-2 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+                <div class="font-extrabold text-navy text-xs mb-1">Sugerencia de redacción (propuesta)</div>
+                <div id="a_AnalisisSugTxt"></div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-h">
+                <div class="font-extrabold text-navy">Cumplimiento</div>
+                <div class="text-xs text-slate-500">Auto según meta.</div>
+              </div>
+              <div class="card-b space-y-3">
+                <div class="text-sm text-slate-600">Estado:</div>
+                <div id="a_Semaforo"></div>
+                <div class="text-xs text-slate-500">
+                  Regla: si Resultado ≥ Meta → CUMPLE
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- GRÁFICA TIPO TU IMAGEN -->
+          <div class="card">
+            <div class="card-h">
+              <div class="font-extrabold text-navy">Gráfica (Resultado vs Meta)</div>
+              <div class="text-xs text-slate-500">Se actualiza en cuanto existe un resultado.</div>
+            </div>
+            <div class="card-b flex justify-center">
+              <canvas id="aChart" height="220" class="w-full max-w-xs mx-auto"></canvas>
+              <div class="text-xs text-slate-500 mt-2">
+                Tip: al cargar periodos previos, se grafican automáticamente.
+              </div>
+            </div>
+          </div>
+
+          <!-- PROPUESTAS (solo NO CUMPLE) -->
+          <div class="card">
+            <div class="card-h">
+              <div class="font-extrabold text-navy">Propuestas de mejora (solo si NO CUMPLE)</div>
+              <div class="text-xs text-slate-500">Empieza con Acción 1 y agrega con +</div>
+            </div>
+
+            <div class="card-b space-y-3">
+              <div id="propBlock"></div>
+
+              <div class="flex gap-2">
+                <button id="btnPropAdd" class="btn btn-soft">+ Agregar acción</button>
+                <div class="text-xs text-slate-500 self-center">Máximo 5.</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- EVIDENCIAS (OPCIONAL) -->
+          <div class="card">
+            <div class="card-h">
+              <div class="font-extrabold text-navy">Evidencias (opcional)</div>
+              <div class="text-xs text-slate-500">Sube imágenes · se enumeran como Figura 1..N</div>
+            </div>
+
+            <div class="card-b space-y-3">
+              <input id="a_Evidencias" type="file" accept="image/*" multiple class="input"/>
+              <div id="a_EvidList" class="grid grid-cols-1 md:grid-cols-3 gap-3"></div>
+            </div>
+          </div>
+
+          <div class="flex flex-wrap gap-2">
+            <button id="btnABorrador" class="btn btn-soft">Guardar borrador</button>
+            <button id="btnAGuardar" class="btn btn-primary">Guardar y generar reporte (MVP: guarda)</button>
+            <button id="btnAPDF" class="btn btn-soft">Generar documento (Vista PDF)</button>
+            <button id="btnACancelar" class="btn btn-soft">Cancelar</button>
+          </div>
+
+          <div id="a_SaveMsg" class="hidden rounded-2xl border border-emerald-200 bg-emerald-50 text-emerald-900 p-3 text-sm">
+            <div class="font-extrabold">Guardado correctamente</div>
+            <div>Regresando al Dashboard/Inicio…</div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  `;
+
+  // llenar select área
+  const aArea = $("a_Area");
+  aArea.innerHTML = `<option value="">Selecciona...</option>` + AREAS_CATALOGO
+    .map(o=>`<option value="${escapeHtml(o.Area)}">${escapeHtml(o.NombreArea)}</option>`).join("");
+
+  // eventos
+  $("btnAReset").addEventListener("click", ()=>resetAnalisisUI(true));
+
+  aArea.addEventListener("change", ()=>{
+    fillCodigoByArea();
+    resetAnalisisUI(false);
+  });
+
+  $("a_Codigo").addEventListener("change", ()=>{
+    updatePeriodosRegistrados();
+  });
+
+  $("btnACargar").addEventListener("click", ()=>cargarIndicadorAnalisis());
+
+  $("a_Num").addEventListener("input", ()=>recalcResultadoAndUI());
+  $("a_Den").addEventListener("input", ()=>recalcResultadoAndUI());
+  $("a_PeriodoYM").addEventListener("input", ()=>checkDuplicadoPeriodo());
+
+  $("a_Analisis").addEventListener("blur", ()=>suggestRedaction("a_Analisis","a_AnalisisSug","a_AnalisisSugTxt"));
+
+  $("btnPropAdd").addEventListener("click", ()=>addPropRow());
+
+  $("a_Evidencias").addEventListener("change", (e)=>handleEvidenceFiles(e));
+
+  $("btnABorrador").addEventListener("click", ()=>guardarAnalisis("BORRADOR"));
+  $("btnAGuardar").addEventListener("click", ()=>guardarAnalisis("FINAL"));
+  $("btnAPDF").addEventListener("click", ()=>openAnalisisPreviewPDF());
+  $("btnACancelar").addEventListener("click", ()=>{
+    resetAnalisisUI(true);
+    showSection("secInicio");
+  });
+
+  // init: props starts with 1 row
+  resetAnalisisUI(true);
+}
+
+function fillCodigoByArea(){
+  const prefix = $("a_Area").value;
+  const dd = $("a_Codigo");
+  if(!prefix){
+    dd.innerHTML = `<option value="">Selecciona área primero…</option>`;
+    return;
+  }
+  const fichas = fichasByArea(prefix);
+  if(!fichas.length){
+    dd.innerHTML = `<option value="">Sin fichas en esta área</option>`;
+    return;
+  }
+  dd.innerHTML = `<option value="">Selecciona…</option>` + fichas
+    .sort((a,b)=>(a.CodigoIndicador||"").localeCompare(b.CodigoIndicador||""))
+    .map(f=>`<option value="${escapeHtml(f.CodigoIndicador)}">${escapeHtml(f.CodigoIndicador)} · ${escapeHtml(f.NombreIndicador)}</option>`).join("");
+}
+
+function resetAnalisisUI(full){
+  $("a_InfoBlock").classList.add("hidden");
+  $("a_FormBlock").classList.add("hidden");
+  $("a_DupMsg").classList.add("hidden");
+  $("a_SaveMsg").classList.add("hidden");
+  // hide proposals when resetting
+  togglePropSection(false);
+
+  if(full){
+    $("a_Area").value = "";
+    $("a_Codigo").innerHTML = `<option value="">Selecciona área primero…</option>`;
+    $("a_PeriodosRegistrados").innerHTML = `Selecciona un código para ver periodos.`;
+  }
+
+  $("a_PeriodoYM").value = "";
+  $("a_Num").value = "";
+  $("a_Den").value = "";
+  $("a_Resultado").value = "";
+  $("a_Analisis").value = "";
+  $("a_AnalisisSug").classList.add("hidden");
+
+  // props
+  window.__PROP_ROWS = [];
+  renderPropRows();
+  addPropRow(); // acción 1
+
+  // evidencias
+  window.__EVID = [];
+  renderEvidenceList();
+
+  // chart clear
+  drawAnalisisChart([], 0);
+}
+
+function cargarIndicadorAnalisis(){
+  const area = $("a_Area").value;
+  const codigo = $("a_Codigo").value;
+
+  if(!area || !codigo){
+    toast("err","Faltan datos","Selecciona Área y Código.");
+    return;
+  }
+
+  const ficha = fichaByCodigo(codigo);
+  if(!ficha){
+    toast("err","No encontrado","No existe ficha para este código.");
+    return;
+  }
+
+  // Mostrar bloque info
+  $("a_InfoBlock").classList.remove("hidden");
+  $("a_FormBlock").classList.remove("hidden");
+
+  $("a_Nombre").textContent = ficha.NombreIndicador || "";
+  $("a_Tipo").textContent = ficha.TipoIndicador || "";
+  $("a_Periodicidad").textContent = ficha.PeriodicidadMedicion || "";
+  $("a_Meta").textContent = fmtNum(ficha.MetaObjetivo);
+  $("a_Objetivo").textContent = ficha.ObjetivoIndicador || "";
+
+  // hint fórmula
+  const f = Number(ficha.FormulaFactor||1) || 1;
+  $("a_FormulaHint").textContent = `Fórmula: (${ficha.FormulaNumerador||"N"}/${ficha.FormulaDenominador||"D"})*${f}  · Etiqueta: ${ficha.FormulaEtiqueta||""}`;
+
+  updatePeriodosRegistrados();
+  recalcResultadoAndUI();
+  // chart con históricos al cargar indicador
+  const series = buildSeriesForCodigo(codigo);
+  drawAnalisisChart(series, Number(ficha.MetaObjetivo||0));
+}
+
+function updatePeriodosRegistrados(){
+  const codigo = $("a_Codigo").value;
+  if(!codigo){
+    $("a_PeriodosRegistrados").innerHTML = `Selecciona un código para ver periodos.`;
+    return;
+  }
+  const arr = analisisByCodigo(codigo)
+    .map(x=>x.PeriodoYM)
+    .filter(Boolean)
+    .sort();
+
+  if(!arr.length){
+    $("a_PeriodosRegistrados").innerHTML = `<span class="badge badge-gray">Sin periodos registrados</span>`;
+    return;
+  }
+
+  const chips = arr.map(p=>`<span class="badge badge-gray">${escapeHtml(periodoHuman(p))}</span>`).join(" ");
+  $("a_PeriodosRegistrados").innerHTML = `<div class="flex flex-wrap gap-2">${chips}</div>`;
+}
+
+function checkDuplicadoPeriodo(){
+  const codigo = $("a_Codigo").value;
+  const per = $("a_PeriodoYM").value;
+  if(!codigo || !per){
+    $("a_DupMsg").classList.add("hidden");
+    return false;
+  }
+  const dup = !!findAnalisis(codigo, per);
+  if(dup) $("a_DupMsg").classList.remove("hidden");
+  else $("a_DupMsg").classList.add("hidden");
+  return dup;
+}
+
+function recalcResultadoAndUI(){
+  const codigo = $("a_Codigo").value;
+  const ficha = codigo ? fichaByCodigo(codigo) : null;
+
+  const n = Number($("a_Num").value);
+  const d = Number($("a_Den").value);
+
+  let res = null;
+  if(Number.isFinite(n) && Number.isFinite(d) && d !== 0 && ficha){
+    const factor = Number(ficha.FormulaFactor||1) || 1;
+    res = (n / d) * factor;
+  }
+
+  $("a_Resultado").value = res===null ? "" : res.toFixed(2);
+
+  // semáforo
+  let c=false;
+  if(ficha && res!==null){
+    const meta = Number(ficha.MetaObjetivo);
+    c = cumpleFrom(meta, res);
+    $("a_Semaforo").innerHTML = getSemaforo(c===true);
+  }else{
+    $("a_Semaforo").innerHTML = `<span class="badge badge-gray">—</span>`;
+  }
+  // show/hide propuestas section
+  togglePropSection(!c);
+
+  // chart: si ya hay resultado y periodo seleccionado, grafica instantánea (incluye el punto actual aunque no esté guardado)
+  if(ficha){
+    const meta = Number(ficha.MetaObjetivo||0);
+    const series = buildSeriesForCodigo(codigo);
+    const per = $("a_PeriodoYM").value;
+    if(per && res!==null){
+      // agrega/override temporal
+      const idx = series.findIndex(x=>x.PeriodoYM===per);
+      const point = { PeriodoYM: per, PeriodoLabel: periodoHuman(per), Resultado: res };
+      if(idx>=0) series[idx] = point; else series.push(point);
+      series.sort((a,b)=>a.PeriodoYM.localeCompare(b.PeriodoYM));
+    }
+    drawAnalisisChart(series, meta);
+  }
+}
+
+function buildSeriesForCodigo(codigo){
+  return analisisByCodigo(codigo)
+    .filter(x=>Number.isFinite(Number(x.ResultadoObtenido)))
+    .map(x=>({
+      PeriodoYM: x.PeriodoYM,
+      PeriodoLabel: periodoHuman(x.PeriodoYM),
+      Resultado: Number(x.ResultadoObtenido)
+    }))
+    .sort((a,b)=>a.PeriodoYM.localeCompare(b.PeriodoYM));
+}
+
+// muestra/oculta el bloque de propuestas; el contenedor principal es la carta completa
+function togglePropSection(show){
+  const card = document.querySelector("#propBlock")?.closest(".card");
+  if(card) card.style.display = show ? "block" : "none";
+}
+
+/* =========================================================
+   PROPUESTAS (+) max 5
+========================================================= */
+function addPropRow(){
+  window.__PROP_ROWS = window.__PROP_ROWS || [];
+  if(window.__PROP_ROWS.length >= 5) return toast("warn","Límite","Máximo 5 acciones.");
+  window.__PROP_ROWS.push({ Accion:"", Responsable:"", FechaCompromiso:"" });
+  renderPropRows();
+}
+
+function renderPropRows(){
+  window.__PROP_ROWS = window.__PROP_ROWS || [];
+  const wrap = $("propBlock");
+  if(!wrap) return;
+
+  wrap.innerHTML = window.__PROP_ROWS.map((r,i)=>`
+    <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+      <div class="flex items-center justify-between">
+        <div class="font-extrabold text-navy">Acción ${i+1}</div>
+        <button class="text-xs font-extrabold text-red-700 hover:underline" data-prop-del="${i}">Eliminar</button>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3">
+        <div class="md:col-span-2">
+          <label class="text-xs font-extrabold text-slate-600">Acción *</label>
+          <input class="input mt-1" data-prop="Accion" data-idx="${i}" value="${escapeHtml(r.Accion)}" placeholder="Describe la acción..."/>
+        </div>
+        <div>
+          <label class="text-xs font-extrabold text-slate-600">Responsable *</label>
+          <input class="input mt-1" data-prop="Responsable" data-idx="${i}" value="${escapeHtml(r.Responsable)}" placeholder="Nombre..."/>
+        </div>
+        <div>
+          <label class="text-xs font-extrabold text-slate-600">Fecha compromiso *</label>
+          <input class="input mt-1" type="date" data-prop="FechaCompromiso" data-idx="${i}" value="${escapeHtml(r.FechaCompromiso)}"/>
+        </div>
+      </div>
+    </div>
+  `).join("");
+
+  wrap.querySelectorAll("[data-prop]").forEach(inp=>{
+    inp.addEventListener("input", ()=>{
+      const idx = Number(inp.getAttribute("data-idx"));
+      const key = inp.getAttribute("data-prop");
+      window.__PROP_ROWS[idx][key] = inp.value;
+    });
+  });
+
+  wrap.querySelectorAll("[data-prop-del]").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      const idx = Number(btn.getAttribute("data-prop-del"));
+      window.__PROP_ROWS.splice(idx,1);
+      renderPropRows();
+    });
+  });
+}
+
+/* =========================================================
+   EVIDENCIAS (imágenes) -> Figuras
+========================================================= */
+async function fileToDataURL(file){
+  return new Promise((resolve,reject)=>{
+    const r = new FileReader();
+    r.onload = ()=>resolve(String(r.result));
+    r.onerror = reject;
+    r.readAsDataURL(file);
+  });
+}
+async function handleEvidenceFiles(e){
+  const files = Array.from(e.target.files||[]);
+  if(!files.length) return;
+
+  window.__EVID = window.__EVID || [];
+  for(const f of files){
+    const dataUrl = await fileToDataURL(f);
+    window.__EVID.push({
+      Figura: window.__EVID.length + 1,
+      FileName: f.name,
+      DataUrl: dataUrl
+    });
+  }
+  renderEvidenceList();
+}
+function renderEvidenceList(){
+  const wrap = $("a_EvidList");
+  if(!wrap) return;
+  window.__EVID = window.__EVID || [];
+
+  if(!window.__EVID.length){
+    wrap.innerHTML = `<div class="text-xs text-slate-400">Sin evidencias.</div>`;
+    return;
+  }
+
+  wrap.innerHTML = window.__EVID.map((x,i)=>`
+    <div class="rounded-2xl border border-slate-200 bg-white p-3">
+      <div class="text-xs font-extrabold text-slate-600 mb-2">Figura ${i+1}</div>
+      <img src="${x.DataUrl}" class="w-full h-40 object-cover rounded-xl border border-slate-100"/>
+      <div class="text-xs text-slate-500 mt-2 truncate">${escapeHtml(x.FileName)}</div>
+      <button class="text-xs font-extrabold text-red-700 hover:underline mt-2" data-evid-del="${i}">Eliminar</button>
+    </div>
+  `).join("");
+
+  wrap.querySelectorAll("[data-evid-del]").forEach(b=>{
+    b.addEventListener("click", ()=>{
+      const idx = Number(b.getAttribute("data-evid-del"));
+      window.__EVID.splice(idx,1);
+      // reindex figuras
+      window.__EVID.forEach((it,k)=>it.Figura = k+1);
+      renderEvidenceList();
+    });
+  });
+}
+
+/* =========================================================
+   VALIDACIÓN + GUARDAR ANÁLISIS
+========================================================= */
+function validateAnalisis(){
+  // obligatorios: area, codigo, periodo, n, d, analisis, resultado (auto)
+  const area = $("a_Area").value;
+  const codigo = $("a_Codigo").value;
+  const per = $("a_PeriodoYM").value;
+  const n = $("a_Num").value;
+  const d = $("a_Den").value;
+  const anal = ($("a_Analisis").value||"").trim();
+  const res = $("a_Resultado").value;
+
+  if(!area || !codigo) return fail_("Selecciona Área y Código.");
+  if(!per) return fail_("Selecciona el periodo.");
+  if(n==="" || d==="") return fail_("Captura Numerador y Denominador.");
+  if(!anal) return fail_("Captura el análisis e interpretación.");
+  if(res==="") return fail_("Resultado no calculado (revisa N/D).");
+  if(checkDuplicadoPeriodo()) return fail_("DUPLICADO");
+
+  // si NO cumple -> validar propuestas (al menos 1 completa)
+  const ficha = fichaByCodigo(codigo);
+  const meta = Number(ficha?.MetaObjetivo);
+  const resultado = Number(res);
+  const c = cumpleFrom(meta, resultado);
+
+  if(c===false){
+    const rows = (window.__PROP_ROWS||[]);
+    const any = rows.some(r => (r.Accion||"").trim() && (r.Responsable||"").trim() && (r.FechaCompromiso||"").trim());
+    if(!any) return fail_("Si NO CUMPLE, captura al menos 1 propuesta completa.");
+  }
+
+  return ok_(true);
+}
+
+async function guardarAnalisis(status){
+  const v = validateAnalisis();
+  if(!v.ok){
+    toast("err","No se puede guardar", v.message);
+    return;
+  }
+
+  const codigo = $("a_Codigo").value;
+  const ficha = fichaByCodigo(codigo);
+
+  const row = {
+    CodigoIndicador: codigo,
+    AreaResponsable: $("a_Area").value,
+    PeriodoYM: $("a_PeriodoYM").value,
+    PeriodoLabel: periodoHuman($("a_PeriodoYM").value), // enero 2026
+    NumValor: Number($("a_Num").value),
+    DenValor: Number($("a_Den").value),
+    ResultadoObtenido: Number($("a_Resultado").value),
+    MetaObjetivo: Number(ficha?.MetaObjetivo ?? null),
+    Cumple: (Number($("a_Resultado").value) >= Number(ficha?.MetaObjetivo)),
+    AnalisisInterpretacion: ($("a_Analisis").value||"").trim(),
+    Status: status, // BORRADOR/FINAL
+    Evidencias: (window.__EVID||[]), // opcional
+    UpdatedAt: nowISO()
+  };
+
+  const r = await apiFetch("analisis.insert", row);
+  if(!r.ok){
+    if(r.message==="DUPLICADO" || r.message==="DUPLICADO"){
+      $("a_DupMsg").classList.remove("hidden");
+      toast("err","Duplicado","⚠️ Este periodo ya fue registrado.");
+      return;
+    }
+    toast("err","Error", r.message || "No se guardó.");
+    return;
+  }
+
+  // Propuestas (si hay)
+  const meta = Number(ficha?.MetaObjetivo);
+  const resultado = Number(row.ResultadoObtenido);
+  const c = cumpleFrom(meta, resultado);
+
+  if(c===false){
+    const rows = (window.__PROP_ROWS||[])
+      .filter(r => (r.Accion||"").trim() || (r.Responsable||"").trim() || (r.FechaCompromiso||"").trim())
+      .slice(0,5)
+      .map(r=>({
+        Accion:(r.Accion||"").trim(),
+        Responsable:(r.Responsable||"").trim(),
+        FechaCompromiso:(r.FechaCompromiso||"").trim(),
+        EvidenciaDesc:"",
+        EvidenciaLink:""
+      }));
+
+    await apiFetch("prop.upsertMany", {
+      CodigoIndicador: codigo,
+      PeriodoYM: row.PeriodoYM,
+      Items: rows
+    });
+  }
+
+  await loadAll();
+
+  $("a_SaveMsg").classList.remove("hidden");
+  scrollTopSmooth();
+
+  setTimeout(()=>{
+    $("a_SaveMsg").classList.add("hidden");
+    // si ya tienes acceso calidad, te mando al dashboard. si no, al inicio
+    if(isQuality()) showSection("secDashboard");
+    else showSection("secInicio");
+  }, 1600);
+}
+
+/* =========================================================
+   PDF PREVIEW ANÁLISIS
+========================================================= */
+function openAnalisisPreviewPDF(){
+  const v = validateAnalisis();
+  if(!v.ok){
+    toast("err","Faltan datos", v.message);
+    return;
+  }
+  const codigo = $("a_Codigo").value;
+  const ficha = fichaByCodigo(codigo);
+  const perYM = $("a_PeriodoYM").value;
+
+  const meta = Number(ficha?.MetaObjetivo);
+  const res = Number($("a_Resultado").value);
+  const c = cumpleFrom(meta, res);
+
+  $("pdfSub").textContent = `Análisis · ${codigo} · ${periodoHuman(perYM)}`;
+
+  const evidHtml = (window.__EVID||[]).map((x,i)=>`
+    <div class="card">
+      <div class="card-h"><div class="font-extrabold text-navy">Figura ${i+1}</div></div>
+      <div class="card-b">
+        <img src="${x.DataUrl}" class="w-full rounded-2xl border border-slate-200"/>
+        <div class="text-xs text-slate-500 mt-2">${escapeHtml(x.FileName)}</div>
+      </div>
+    </div>
+  `).join("");
+
+  $("pdfContent").innerHTML = `
+    <div class="space-y-4 print-card">
+      <div class="text-2xl font-extrabold text-navy">${escapeHtml(ficha?.NombreIndicador||"")}</div>
+      <div class="text-sm text-slate-600">
+        <span class="font-extrabold">Código:</span> ${escapeHtml(codigo)} ·
+        <span class="font-extrabold">Área:</span> ${escapeHtml(getAreaLabel(ficha?.AreaResponsable||""))} ·
+        <span class="font-extrabold">Periodo:</span> ${escapeHtml(periodoHuman(perYM))}
+      </div>
+
+      <div class="flex items-center gap-3">
+        <div class="text-sm font-extrabold text-slate-700">Semáforo:</div>
+        ${getSemaforo(c===true)}
+      </div>
+
+      <div class="card">
+        <div class="card-h"><div class="font-extrabold text-navy">Resultado</div></div>
+        <div class="card-b text-sm text-slate-700 space-y-1">
+          <div><span class="font-extrabold">Meta:</span> ${fmtNum(meta)}</div>
+          <div><span class="font-extrabold">Resultado:</span> ${fmtNum(res)}</div>
+          <div class="text-xs text-slate-500">Fórmula: ${escapeHtml($("a_FormulaHint").textContent)}</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-h"><div class="font-extrabold text-navy">Análisis e interpretación</div></div>
+        <div class="card-b text-sm text-slate-700">${escapeHtml(($("a_Analisis").value||"").trim())}</div>
+      </div>
+
+      ${c===false ? renderPropsPDF() : ""}
+
+      ${window.__EVID?.length ? `<div class="text-sm font-extrabold text-navy mt-2">Evidencias</div>${evidHtml}` : ""}
+    </div>
+  `;
+  $("pdfModal").classList.remove("hidden");
+}
+
+function renderPropsPDF(){
+  const rows = (window.__PROP_ROWS||[])
+    .filter(r => (r.Accion||"").trim() && (r.Responsable||"").trim() && (r.FechaCompromiso||"").trim())
+    .slice(0,5);
+
+  if(!rows.length) return "";
+
+  const trs = rows.map((r,i)=>`
+    <tr class="border-b border-slate-200">
+      <td class="p-2 font-extrabold">${i+1}</td>
+      <td class="p-2">${escapeHtml(r.Accion)}</td>
+      <td class="p-2">${escapeHtml(r.Responsable)}</td>
+      <td class="p-2">${escapeHtml(r.FechaCompromiso)}</td>
+    </tr>
+  `).join("");
+
+  return `
+    <div class="card">
+      <div class="card-h"><div class="font-extrabold text-navy">Propuestas de mejora</div></div>
+      <div class="card-b">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="text-left text-xs text-slate-500 border-b border-slate-200">
+              <th class="p-2">#</th><th class="p-2">Acción</th><th class="p-2">Responsable</th><th class="p-2">Fecha</th>
+            </tr>
+          </thead>
+          <tbody>${trs}</tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+/* =========================================================
+   CHART: Análisis (barras + línea meta)
+   - Sin librerías (canvas)
+========================================================= */
+function drawAnalisisChart(series, meta){
+  const c = $("aChart");
+  if(!c) return;
+  const ctx = c.getContext("2d");
+
+  // resize canvas to match CSS width
+  let w = c.clientWidth || 900;
+  w = Math.min(w, 280);  // Ancho más compacto
+  c.width = w;
+  const h = c.height;
+
+  ctx.clearRect(0,0,w,h);
+
+  // background
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0,0,w,h);
+
+  // axes padding
+  const padL = 46, padR=18, padT=18, padB=38;
+  const gw = w - padL - padR;
+  const gh = h - padT - padB;
+
+  // if no data:
+  if(!series || !series.length){
+    ctx.fillStyle = "#94a3b8";
+    ctx.font = "800 13px Inter, system-ui";
+    ctx.fillText("Sin datos para graficar (captura un resultado).", padL, padT+24);
+    // grid
+    drawGrid(ctx, padL, padT, gw, gh);
+    return;
+  }
+
+  // values
+  const vals = series.map(s=>Number(s.Resultado));
+  const maxV = Math.max(meta || 0, ...vals);
+  const minV = Math.min(0, ...vals);
+  const top = maxV * 1.15;
+  const bottom = minV;
+
+  // grid
+  drawGrid(ctx, padL, padT, gw, gh);
+
+  // y labels
+  ctx.fillStyle = "#64748b";
+  ctx.font = "700 11px Inter, system-ui";
+  for(let i=0;i<=4;i++){
+    const yv = bottom + (top-bottom)*(1 - i/4);
+    const yy = padT + gh*(i/4);
+    ctx.fillText(fmtNum(yv), 6, yy+4);
+  }
+
+  // bars
+  const n = series.length;
+  const gap = Math.max(8, gw * 0.02);
+  const barW = Math.max(18, (gw - gap*(n+1))/n);
+  const xs = [];
+  for(let i=0;i<n;i++){
+    const x = padL + gap + i*(barW+gap);
+    xs.push(x + barW/2);
+
+    const v = Number(series[i].Resultado);
+    const y = valueToY(v, bottom, top, padT, gh);
+    const barH = (padT+gh) - y;
+
+    // bar style (navy-ish)
+    ctx.fillStyle = "rgba(11,42,74,.90)";
+    roundRect(ctx, x, y, barW, barH, 10, true, false);
+
+    // value label
+    ctx.fillStyle = "#0b2a4a";
+    ctx.font = "800 11px Inter, system-ui";
+    ctx.fillText(fmtNum(v), x, y-6);
+  }
+
+  // meta line
+  if(Number.isFinite(meta)){
+    const yM = valueToY(meta, bottom, top, padT, gh);
+    ctx.strokeStyle = "rgba(59,169,230,.95)"; // sky
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(padL, yM);
+    ctx.lineTo(padL+gw, yM);
+    ctx.stroke();
+
+    ctx.fillStyle = "rgba(59,169,230,.15)";
+    ctx.fillRect(padL, yM-10, gw, 20);
+
+    ctx.fillStyle = "rgba(59,169,230,.95)";
+    ctx.font = "900 11px Inter, system-ui";
+    ctx.fillText("META", padL+6, yM-6);
+  }
+
+  // x labels
+  ctx.fillStyle = "#64748b";
+  ctx.font = "700 11px Inter, system-ui";
+  for(let i=0;i<n;i++){
+    const label = (series[i].PeriodoLabel||"").replace(" ", "\n");
+    // show month only (enero 2026 -> ene)
+    const parts = (series[i].PeriodoLabel||"").split(" ");
+    const m = parts[0]?.slice(0,3) || "";
+    const y = parts[1] || "";
+    const x = padL + gap + i*(barW+gap);
+    ctx.fillText(`${m} ${y}`, x, padT+gh+22);
+  }
+}
+
+function drawGrid(ctx, x, y, w, h){
+  ctx.strokeStyle = "#e2e8f0";
+  ctx.lineWidth = 1;
+  // horizontal lines
+  for(let i=0;i<=4;i++){
+    const yy = y + h*(i/4);
+    ctx.beginPath();
+    ctx.moveTo(x, yy);
+    ctx.lineTo(x+w, yy);
+    ctx.stroke();
+  }
+}
+
+function valueToY(v, minV, maxV, padT, gh){
+  if(maxV===minV) return padT + gh/2;
+  const t = (v - minV) / (maxV - minV);
+  return padT + gh*(1 - t);
+}
+
+function roundRect(ctx, x, y, w, h, r, fill, stroke){
+  const radius = Math.min(r, w/2, h/2);
+  ctx.beginPath();
+  ctx.moveTo(x+radius, y);
+  ctx.arcTo(x+w, y, x+w, y+h, radius);
+  ctx.arcTo(x+w, y+h, x, y+h, radius);
+  ctx.arcTo(x, y+h, x, y, radius);
+  ctx.arcTo(x, y, x+w, y, radius);
+  ctx.closePath();
+  if(fill) ctx.fill();
+  if(stroke) ctx.stroke();
+}
+
+/* =========================================================
+   DASHBOARD: Render completo + charts + tabla
+   (solo calidad por nav)
+========================================================= */
+function renderDashboard(){
+  const sec = $("secDashboard");
+  sec.innerHTML = `
+    <div class="card">
+      <div class="card-h">
+        <div class="font-extrabold text-navy text-lg">Dashboard</div>
+        <div class="text-sm text-slate-500">KPIs · Pastel Cumple/No Cumple · Barras por indicador · Tabla resumen</div>
+      </div>
+
+      <div class="card-b space-y-6">
+
+        <!-- FILTROS -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+          <div>
+            <label class="text-xs font-extrabold text-slate-600">Área</label>
+            <select id="d_Area" class="input mt-1"></select>
+          </div>
+          <div>
+            <label class="text-xs font-extrabold text-slate-600">Periodo (mes)</label>
+            <input id="d_PeriodoYM" type="month" class="input mt-1"/>
+          </div>
+          <div class="md:col-span-2 flex gap-2">
+            <button id="btnDApply" class="btn btn-primary flex-1">Aplicar</button>
+            <button id="btnDClear" class="btn btn-soft">Limpiar</button>
+          </div>
+        </div>
+
+        <!-- KPIS -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+          ${kpiCard("Total indicadores registrados", "kpiTotal", "text-navy")}
+          ${kpiCard("% Cumple", "kpiCumple", "text-emerald-700")}
+          ${kpiCard("% No Cumple", "kpiNo", "text-red-700")}
+          ${kpiCard("Top 5 en ROJO", "kpiTop5", "text-red-700")}
+        </div>
+
+        <!-- CHARTS -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="card">
+            <div class="card-h">
+              <div class="font-extrabold text-navy">Cumplimiento (pastel)</div>
+              <div class="text-xs text-slate-500">Por filtro aplicado.</div>
+            </div>
+            <div class="card-b">
+              <canvas id="pieChart" height="260" class="w-full"></canvas>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-h">
+              <div class="font-extrabold text-navy">Barras por indicador</div>
+              <div class="text-xs text-slate-500">Resultado vs Meta (último periodo filtrado)</div>
+            </div>
+            <div class="card-b flex justify-center">
+              <canvas id="barChart" height="260" class="w-full max-w-xs mx-auto"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <!-- TABLA RESUMEN -->
+        <div class="card">
+          <div class="card-h">
+            <div class="font-extrabold text-navy">Resumen</div>
+            <div class="text-xs text-slate-500">Código · Nombre · Área · Periodo · Resultado · Meta · Cumplimiento · Semáforo · Acción</div>
+          </div>
+          <div class="card-b overflow-auto">
+            <table class="min-w-[980px] w-full text-sm">
+              <thead>
+                <tr class="text-left text-xs text-slate-500 border-b border-slate-200">
+                  <th class="p-2">Código</th>
+                  <th class="p-2">Nombre</th>
+                  <th class="p-2">Área</th>
+                  <th class="p-2">Periodo</th>
+                  <th class="p-2">Resultado</th>
+                  <th class="p-2">Meta</th>
+                  <th class="p-2">Cumplimiento</th>
+                  <th class="p-2">Semáforo</th>
+                  <th class="p-2">Acción</th>
+                </tr>
+              </thead>
+              <tbody id="d_Table"></tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  `;
+
+  // fill area
+  $("d_Area").innerHTML =
+    `<option value="">Todas</option>` +
+    AREAS_CATALOGO.map(o=>`<option value="${escapeHtml(o.Area)}">${escapeHtml(o.NombreArea)}</option>`).join("");
+
+  $("btnDApply").addEventListener("click", ()=>refreshDashboard());
+  $("btnDClear").addEventListener("click", ()=>{
+    $("d_Area").value="";
+    $("d_PeriodoYM").value="";
+    refreshDashboard();
+  });
+
+  refreshDashboard();
+}
+
+function kpiCard(title, id, valueCls){
+  return `
+  <div class="card">
+    <div class="card-b">
+      <div class="text-xs font-extrabold text-slate-500">${escapeHtml(title)}</div>
+      <div id="${id}" class="text-2xl font-extrabold ${valueCls} mt-2">—</div>
+    </div>
+  </div>`;
+}
+
+function refreshDashboard(){
+  const area = $("d_Area")?.value || "";
+  const per = $("d_PeriodoYM")?.value || "";
+
+  // analisis filtrado
+  let rows = [...(CACHE.analisis||[])];
+
+  if(area) rows = rows.filter(r=>r.AreaResponsable===area);
+  if(per) rows = rows.filter(r=>r.PeriodoYM===per);
+
+  // total indicadores = fichas (filtradas por area)
+  let fichas = [...(CACHE.fichas||[])];
+  if(area) fichas = fichas.filter(f=>f.AreaResponsable===area);
+
+  // para tabla: usar fichas+analisis, pero si no hay periodo seleccionado, usar último por código
+  const tableRows = buildDashboardTableRows(area, per);
+
+  // KPIs
+  const total = fichas.length;
+  const valid = tableRows.filter(x=>x.Resultado!==null && x.Meta!==null);
+  const cumpleN = valid.filter(x=>x.Cumple===true).length;
+  const noN = valid.filter(x=>x.Cumple===false).length;
+  const pctCum = valid.length ? (cumpleN/valid.length)*100 : 0;
+  const pctNo = valid.length ? (noN/valid.length)*100 : 0;
+
+  $("kpiTotal").textContent = total.toLocaleString("es-MX");
+  $("kpiCumple").textContent = `${pctCum.toFixed(0)}%`;
+  $("kpiNo").textContent = `${pctNo.toFixed(0)}%`;
+
+  const top5 = valid.filter(x=>x.Cumple===false).slice(0,5);
+  $("kpiTop5").textContent = top5.length ? top5.map(x=>x.Codigo).join(", ") : "—";
+
+  // render table
+  const tb = $("d_Table");
+  tb.innerHTML = tableRows.map(r=>`
+    <tr class="border-b border-slate-200">
+      <td class="p-2 font-extrabold text-navy">${escapeHtml(r.Codigo)}</td>
+      <td class="p-2">${escapeHtml(r.Nombre)}</td>
+      <td class="p-2">${escapeHtml(r.AreaLabel)}</td>
+      <td class="p-2">${escapeHtml(r.PeriodoLabel||"—")}</td>
+      <td class="p-2">${r.Resultado===null ? "—" : fmtNum(r.Resultado)}</td>
+      <td class="p-2">${r.Meta===null ? "—" : fmtNum(r.Meta)}</td>
+      <td class="p-2">${r.Cumple===null ? "—" : (r.Cumple ? "CUMPLE" : "NO CUMPLE")}</td>
+      <td class="p-2">${r.Cumple===null ? `<span class="badge badge-gray">—</span>` : getSemaforo(r.Cumple===true)}</td>
+      <td class="p-2">
+        <button class="btn btn-soft" data-open-anal="${escapeHtml(r.Codigo)}">Abrir análisis</button>
+      </td>
+    </tr>
+  `).join("");
+
+  tb.querySelectorAll("[data-open-anal]").forEach(b=>{
+    b.addEventListener("click", ()=>{
+      // manda a análisis con area/codigo precargados
+      showSection("secAnalisis");
+      renderAnalisis();
+      // set values after render
+      setTimeout(()=>{
+        $("a_Area").value = area || (fichaByCodigo(b.getAttribute("data-open-anal"))?.AreaResponsable || "");
+        fillCodigoByArea();
+        $("a_Codigo").value = b.getAttribute("data-open-anal");
+        updatePeriodosRegistrados();
+        cargarIndicadorAnalisis();
+      }, 50);
+    });
+  });
+
+  // charts
+  drawPie("pieChart", cumpleN, noN);
+  drawBars("barChart", tableRows.slice(0,10)); // top 10 for readability
+}
+
+function buildDashboardTableRows(area, per){
+  let fichas = [...(CACHE.fichas||[])];
+  if(area) fichas = fichas.filter(f=>f.AreaResponsable===area);
+
+  // map code => last analysis (by period)
+  const a = [...(CACHE.analisis||[])];
+  const lastByCode = new Map();
+  for(const row of a){
+    if(area && row.AreaResponsable!==area) continue;
+    if(per && row.PeriodoYM!==per) continue;
+
+    const key = row.CodigoIndicador;
+    const cur = lastByCode.get(key);
+    if(!cur) lastByCode.set(key, row);
+    else{
+      // pick latest PeriodoYM
+      if(String(row.PeriodoYM||"") > String(cur.PeriodoYM||"")) lastByCode.set(key, row);
+    }
+  }
+
+  const out = fichas.map(f=>{
+    const ar = lastByCode.get(f.CodigoIndicador) || null;
+    const meta = Number(f.MetaObjetivo);
+    const res = ar ? Number(ar.ResultadoObtenido) : null;
+    const cum = (ar && Number.isFinite(meta) && Number.isFinite(res)) ? (res>=meta) : null;
+
+    return {
+      Codigo: f.CodigoIndicador,
+      Nombre: f.NombreIndicador||"",
+      AreaLabel: getAreaLabel(f.AreaResponsable),
+      PeriodoLabel: ar?.PeriodoLabel || (ar?.PeriodoYM ? periodoHuman(ar.PeriodoYM) : ""),
+      Resultado: (ar && Number.isFinite(res)) ? res : null,
+      Meta: Number.isFinite(meta) ? meta : null,
+      Cumple: cum
+    };
+  });
+
+  // orden: NO CUMPLE primero
+  out.sort((x,y)=>{
+    const ax = x.Cumple===false ? 0 : x.Cumple===true ? 1 : 2;
+    const ay = y.Cumple===false ? 0 : y.Cumple===true ? 1 : 2;
+    if(ax!==ay) return ax-ay;
+    return (x.Codigo||"").localeCompare(y.Codigo||"");
+  });
+
+  return out;
+}
+
+/* =========================================================
+   CHARTS Dashboard (sin librerías)
+========================================================= */
+function drawPie(canvasId, cumpleN, noN){
+  const c = $(canvasId);
+  if(!c) return;
+  const ctx = c.getContext("2d");
+
+  const w = c.clientWidth || 600;
+  c.width = w;
+  const h = c.height;
+
+  ctx.clearRect(0,0,w,h);
+
+  const total = (cumpleN+noN);
+  // empty
+  if(!total){
+    ctx.fillStyle="#94a3b8"; ctx.font="800 13px Inter, system-ui";
+    ctx.fillText("Sin datos para el pastel.", 18, 28);
+    return;
+  }
+
+  const cx = w/2, cy = h/2, r = Math.min(w,h)*0.32;
+
+  const angCum = (cumpleN/total) * Math.PI*2;
+  const start = -Math.PI/2;
+
+  // Cumple (green)
+  ctx.beginPath();
+  ctx.moveTo(cx,cy);
+  ctx.fillStyle="rgba(22,163,74,.85)";
+  ctx.arc(cx,cy,r,start,start+angCum);
+  ctx.closePath();
+  ctx.fill();
+
+  // No cumple (red)
+  ctx.beginPath();
+  ctx.moveTo(cx,cy);
+  ctx.fillStyle="rgba(220,38,38,.85)";
+  ctx.arc(cx,cy,r,start+angCum,start+Math.PI*2);
+  ctx.closePath();
+  ctx.fill();
+
+  // center hole (donut)
+  ctx.beginPath();
+  ctx.fillStyle="#fff";
+  ctx.arc(cx,cy,r*0.60,0,Math.PI*2);
+  ctx.fill();
+
+  // labels
+  ctx.fillStyle="#0b2a4a";
+  ctx.font="900 16px Inter, system-ui";
+  ctx.fillText(`${Math.round((cumpleN/total)*100)}%`, cx-18, cy+6);
+  ctx.font="800 11px Inter, system-ui";
+  ctx.fillStyle="#64748b";
+  ctx.fillText("CUMPLE", cx-24, cy+26);
+
+  // legend
+  ctx.font="800 12px Inter, system-ui";
+  ctx.fillStyle="rgba(22,163,74,.95)"; ctx.fillText(`Cumple: ${cumpleN}`, 18, h-42);
+  ctx.fillStyle="rgba(220,38,38,.95)"; ctx.fillText(`No cumple: ${noN}`, 18, h-22);
+}
+
+function drawBars(canvasId, rows){
+  const c = $(canvasId);
+  if(!c) return;
+  const ctx = c.getContext("2d");
+
+  let w = c.clientWidth || 600;
+  w = Math.min(w, 280);  // Ancho más compacto
+  c.width = w;
+  const h = c.height;
+
+  ctx.clearRect(0,0,w,h);
+  ctx.fillStyle="#fff"; ctx.fillRect(0,0,w,h);
+
+  const padL=46,padR=18,padT=18,padB=42;
+  const gw=w-padL-padR, gh=h-padT-padB;
+
+  drawGrid(ctx,padL,padT,gw,gh);
+
+  const data = (rows||[]).filter(r=>r.Resultado!==null && r.Meta!==null).slice(0,10);
+  if(!data.length){
+    ctx.fillStyle="#94a3b8"; ctx.font="800 13px Inter, system-ui";
+    ctx.fillText("Sin datos para barras.", padL, padT+24);
+    return;
+  }
+
+  const vals = data.map(d=>Math.max(d.Resultado, d.Meta));
+  const maxV = Math.max(...vals)*1.15;
+  const minV = 0;
+
+  // y labels
+  ctx.fillStyle="#64748b"; ctx.font="700 11px Inter, system-ui";
+  for(let i=0;i<=4;i++){
+    const yv = minV + (maxV-minV)*(1 - i/4);
+    const yy = padT + gh*(i/4);
+    ctx.fillText(fmtNum(yv), 6, yy+4);
+  }
+
+  const n=data.length;
+  const gap=Math.max(8, gw*0.02);
+  const barW=Math.max(18, (gw-gap*(n+1))/n);
+
+  for(let i=0;i<n;i++){
+    const x = padL + gap + i*(barW+gap);
+
+    // Resultado bar (navy)
+    const yR = valueToY(data[i].Resultado, minV, maxV, padT, gh);
+    const hR = (padT+gh)-yR;
+    ctx.fillStyle="rgba(11,42,74,.85)";
+    roundRect(ctx,x,yR,barW,hR,10,true,false);
+
+    // Meta line (sky) on bar
+    const yM = valueToY(data[i].Meta, minV, maxV, padT, gh);
+    ctx.strokeStyle="rgba(59,169,230,.95)";
+    ctx.lineWidth=2.5;
+    ctx.beginPath(); ctx.moveTo(x, yM); ctx.lineTo(x+barW, yM); ctx.stroke();
+
+    // label code short
+    ctx.fillStyle="#64748b"; ctx.font="800 10px Inter, system-ui";
+    ctx.fillText(data[i].Codigo.slice(-6), x, padT+gh+22);
+  }
+}
+
+/* =========================================================
+   HOOK: cuando se abre sección, renderiza
+========================================================= */
+(function hookShowSection(){
+  const original = showSection;
+  window.showSection = function(id){
+    original(id);
+
+    // Render dinámico al entrar
+    if(id==="secFicha"){
+      renderFichaForm();
+    }
+    if(id==="secAnalisis"){
+      renderAnalisis();
+    }
+    if(id==="secDashboard"){
+      renderDashboard();
+    }
+  }
+})();
+
+/* =========================================================
+   FIN PARTE 3
+========================================================= */
+</script>
+<script>
+/* =========================================================
+   PATCH DEMO API: delete docs/seg (sin romper lo anterior)
+========================================================= */
+(function patchDemoApi(){
+  if(typeof demoApi !== "function") return;
+  const old = demoApi;
+  window.demoApi = function(action, payload){
+    seedDemo();
+
+    if(action==="docs.delete"){
+      const key = payload?.Key;
+      if(!key) return fail_("Falta Key");
+      const docs = lsRead(LS_KEYS.DOCS, []);
+      const out = docs.filter(d=>d.Key !== key);
+      lsWrite(LS_KEYS.DOCS, out);
+      return ok_(true, "Registro eliminado");
+    }
+    if(action==="seg.delete"){
+      const key = payload?.Key;
+      if(!key) return fail_("Falta Key");
+      const seg = lsRead(LS_KEYS.SEG, []);
+      const out = seg.filter(s=>s.Key !== key);
+      lsWrite(LS_KEYS.SEG, out);
+      return ok_(true, "Registro eliminado");
+    }
+    return old(action, payload);
+  };
+})();
+
+/* =========================================================
+   EXPLORADOR DOCUMENTAL (PRO)
+========================================================= */
+function renderExplorador(){
+  const sec = $("secExplorador");
+  sec.innerHTML = `
+    <div class="card">
+      <div class="card-h">
+        <div class="font-extrabold text-navy text-lg">Explorador Documental</div>
+        <div class="text-sm text-slate-500">
+          Maneja documentos, fichas y análisis · Estado EXISTE/NO EXISTE · Ver o eliminar desde aquí
+        </div>
+      </div>
+
+      <div class="card-b space-y-6">
+
+        <!-- FILTROS -->
+        <div class="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
+          <div>
+            <label class="text-xs font-extrabold text-slate-600">Área</label>
+            <select id="e_Area" class="input mt-1"></select>
+          </div>
+          <div>
+            <label class="text-xs font-extrabold text-slate-600">Código</label>
+            <select id="e_Codigo" class="input mt-1">
+              <option value="">Todos</option>
+            </select>
+          </div>
+          <div>
+            <label class="text-xs font-extrabold text-slate-600">Periodo (mes)</label>
+            <input id="e_PeriodoYM" type="month" class="input mt-1"/>
+          </div>
+          <div>
+            <label class="text-xs font-extrabold text-slate-600">Tipo documento</label>
+            <select id="e_Tipo" class="input mt-1">
+              <option value="">Todos</option>
+              <option value="FichaTecnica">Ficha Técnica</option>
+              <option value="AnalisisIndicador">Análisis del Indicador</option>
+              <option value="Seguimiento">Seguimiento</option>
+              <option value="Otro">Otro</option>
+            </select>
+          </div>
+          <div class="flex gap-2">
+            <button id="btnEApply" class="btn btn-primary flex-1">Aplicar</button>
+            <button id="btnEClear" class="btn btn-soft">Limpiar</button>
+          </div>
+        </div>
+
+        <!-- TABLA -->
+        <div class="card">
+          <div class="card-h">
+            <div class="font-extrabold text-navy">Listado</div>
+            <div class="text-xs text-slate-500">Documento · Periodo · Estado · Acción</div>
+          </div>
+
+          <div class="card-b overflow-auto">
+            <table class="min-w-[980px] w-full text-sm">
+              <thead>
+                <tr class="text-left text-xs text-slate-500 border-b border-slate-200">
+                  <th class="p-2">Documento</th>
+                  <th class="p-2">Código</th>
+                  <th class="p-2">Periodo</th>
+                  <th class="p-2">Tipo</th>
+                  <th class="p-2">Estado</th>
+                  <th class="p-2">Acción</th>
+                </tr>
+              </thead>
+              <tbody id="e_Table"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- EDITOR -->
+        <div id="e_Editor" class="hidden card">
+          <div class="card-h">
+            <div class="font-extrabold text-navy">Editar registro</div>
+            <div id="e_Sub" class="text-xs text-slate-500"></div>
+          </div>
+          <div class="card-b space-y-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label class="text-xs font-extrabold text-slate-600">Nombre documento *</label>
+                <input id="e_DocName" class="input mt-1" placeholder="Ej. Plantilla_Analisis_Indicador"/>
+              </div>
+              <div>
+                <label class="text-xs font-extrabold text-slate-600">Notas</label>
+                <input id="e_Notas" class="input mt-1" placeholder="Comentario interno..."/>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label class="text-xs font-extrabold text-slate-600">Link Word (Drive/SharePoint) *</label>
+                <input id="e_WordUrl" class="input mt-1" placeholder="https://..."/>
+              </div>
+              <div>
+                <label class="text-xs font-extrabold text-slate-600">Link PDF (Drive/SharePoint)</label>
+                <input id="e_PdfUrl" class="input mt-1" placeholder="https://..."/>
+              </div>
+            </div>
+
+            <div class="flex flex-wrap gap-2">
+              <button id="btnESave" class="btn btn-primary">Guardar</button>
+              <button id="btnEDelete" class="btn btn-danger">Eliminar registro</button>
+              <button id="btnEClose" class="btn btn-soft">Cerrar</button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  `;
+
+  // fill area
+  $("e_Area").innerHTML =
+    `<option value="">Todas</option>` +
+    AREAS_CATALOGO.map(o=>`<option value="${escapeHtml(o.Area)}">${escapeHtml(o.NombreArea)}</option>`).join("");
+
+  $("e_Area").addEventListener("change", ()=>{
+    fillExplorerCodigo();
+    refreshExplorador();
+  });
+
+  $("btnEApply").addEventListener("click", refreshExplorador);
+  $("btnEClear").addEventListener("click", ()=>{
+    $("e_Area").value="";
+    $("e_PeriodoYM").value="";
+    $("e_Tipo").value="";
+    $("e_Codigo").innerHTML = `<option value="">Todos</option>`;
+    refreshExplorador();
+  });
+
+  $("btnEClose").addEventListener("click", ()=>$("e_Editor").classList.add("hidden"));
+
+  refreshExplorador();
+}
+
+function fillExplorerCodigo(){
+  const area = $("e_Area").value;
+  const dd = $("e_Codigo");
+  const fichas = area ? fichasByArea(area) : (CACHE.fichas||[]);
+  dd.innerHTML = `<option value="">Todos</option>` + fichas
+    .sort((a,b)=>(a.CodigoIndicador||"").localeCompare(b.CodigoIndicador||""))
+    .map(f=>`<option value="${escapeHtml(f.CodigoIndicador)}">${escapeHtml(f.CodigoIndicador)} · ${escapeHtml(f.NombreIndicador||"")}</option>`).join("");
+}
+
+function refreshExplorador(){
+  const area = $("e_Area")?.value || "";
+  const codigo = $("e_Codigo")?.value || "";
+  const per = $("e_PeriodoYM")?.value || "";
+  const tipo = $("e_Tipo")?.value || "";
+
+  // combinamos: docs + fichas + analisis
+  let docs = [];
+
+  // agregamos los documentos normales
+  docs = docs.concat(CACHE.docs||[]);
+  // fichas
+  docs = docs.concat((CACHE.fichas||[]).map(f=>({
+    ...f,
+    DocName: "Ficha técnica",
+    PeriodoLabel: "",
+    TipoDocumento: "FichaTecnica",
+    Key: `F-${f.CodigoIndicador}`
+  })));
+  // analisis
+  docs = docs.concat((CACHE.analisis||[]).map(a=>({
+    ...a,
+    DocName: "Análisis",
+    PeriodoLabel: periodoHuman(a.PeriodoYM),
+    TipoDocumento: "AnalisisIndicador",
+    Key: `A-${a.CodigoIndicador}-${a.PeriodoYM}`
+  })));
+
+  if(area) docs = docs.filter(d=>d.AreaResponsable===area);
+  if(codigo) docs = docs.filter(d=>d.CodigoIndicador===codigo);
+  if(per) docs = docs.filter(d=>d.PeriodoYM===per);
+  if(tipo) docs = docs.filter(d=>d.TipoDocumento===tipo);
+
+  // sort
+  docs.sort((a,b)=>{
+    const ak = `${a.CodigoIndicador||""}-${a.PeriodoYM||""}-${a.TipoDocumento||""}`;
+    const bk = `${b.CodigoIndicador||""}-${b.PeriodoYM||""}-${b.TipoDocumento||""}`;
+    return ak.localeCompare(bk);
+  });
+
+  const tb = $("e_Table");
+  if(!docs.length){
+    tb.innerHTML = `<tr><td class="p-3 text-slate-400" colspan="6">Sin registros en el Explorador.</td></tr>`;
+    return;
+  }
+
+  tb.innerHTML = docs.map(d=>{
+    let exists = true;
+    if(d.TipoDocumento==="FichaTecnica" || d.TipoDocumento==="AnalisisIndicador"){
+      exists = true; // always "exists" since data is in cache
+    } else {
+      exists = !!(String(d.WordUrl||"").trim() || String(d.PdfUrl||"").trim());
+    }
+    const estado = exists ? `<span class="badge badge-ok">EXISTE</span>` : `<span class="badge badge-gray">NO EXISTE</span>`;
+    return `
+      <tr class="border-b border-slate-200">
+        <td class="p-2 font-extrabold text-navy">${escapeHtml(d.DocName||"(Sin nombre)")}</td>
+        <td class="p-2">${escapeHtml(d.CodigoIndicador||"")}</td>
+        <td class="p-2">${escapeHtml(d.PeriodoLabel || (d.PeriodoYM ? periodoHuman(d.PeriodoYM) : "—"))}</td>
+        <td class="p-2">${escapeHtml(d.TipoDocumento||"")}</td>
+        <td class="p-2">${estado}</td>
+        <td class="p-2">
+          <button class="btn btn-soft" data-edit="${escapeHtml(d.Key)}" data-type="${escapeHtml(d.TipoDocumento)}">Ver</button>
+          <button class="btn btn-danger ml-2" data-del="${escapeHtml(d.Key)}" data-type="${escapeHtml(d.TipoDocumento)}">Eliminar</button>
+        </td>
+      </tr>
+    `;
+  }).join("");
+
+  tb.querySelectorAll("[data-edit]").forEach(b=>{
+    b.addEventListener("click", ()=>{
+      const key = b.getAttribute("data-edit");
+      const type = b.getAttribute("data-type");
+      if(type==="FichaTecnica") openFichaView(key);
+      else if(type==="AnalisisIndicador") openAnalisisView(key);
+      else openDocEditor(key);
+    });
+  });
+
+  tb.querySelectorAll("[data-del]").forEach(b=>{
+    b.addEventListener("click", async ()=>{
+      const key = b.getAttribute("data-del");
+      const type = b.getAttribute("data-type");
+      if(type==="FichaTecnica"){
+        const codigo = key.replace(/^F-/,'');
+        const r = await apiFetch("fichas.delete",{CodigoIndicador:codigo});
+        if(!r.ok) return toast("err","Error",r.message||"No se eliminó");
+      } else if(type==="AnalisisIndicador"){
+        const parts = key.split("-");
+        const codigo = parts[1];
+        const periodo = parts.slice(2).join("-");
+        const r = await apiFetch("analisis.delete",{CodigoIndicador:codigo,PeriodoYM:periodo});
+        if(!r.ok) return toast("err","Error",r.message||"No se eliminó");
+      } else {
+        const r = await apiFetch("docs.delete",{Key:key});
+        if(!r.ok) return toast("err","Error",r.message||"No se eliminó");
+      }
+      await loadAll();
+      toast("ok","Eliminado","Registro eliminado.");
+      refreshExplorador();
+    });
+  });
+}
+
+function openDocEditor(key){
+  const d = (CACHE.docs||[]).find(x=>x.Key===key);
+  if(!d) return toast("err","No encontrado","No existe el registro.");
+
+  $("e_Editor").classList.remove("hidden");
+  $("e_Sub").textContent = `${d.CodigoIndicador} · ${periodoHuman(d.PeriodoYM||"")} · ${d.TipoDocumento}`;
+
+  $("e_DocName").value = d.DocName || "";
+  $("e_Notas").value = d.Notas || "";
+  $("e_WordUrl").value = d.WordUrl || "";
+  $("e_PdfUrl").value = d.PdfUrl || "";
+
+  $("btnESave").onclick = async ()=>{
+    const docName = ($("e_DocName").value||"").trim();
+    const wordUrl = ($("e_WordUrl").value||"").trim();
+    if(!docName || !wordUrl){
+      toast("err","Faltan campos","Nombre documento y link Word son obligatorios.");
+      return;
+    }
+
+    const upd = {
+      ...d,
+      DocName: docName,
+      Notas: ($("e_Notas").value||"").trim(),
+      WordUrl: wordUrl,
+      PdfUrl: ($("e_PdfUrl").value||"").trim(),
+      UpdatedAt: nowISO()
+    };
+
+    const r = await apiFetch("docs.upsert", upd);
+    if(!r.ok) return toast("err","Error", r.message||"No se guardó");
+
+    await loadAll();
+    toast("ok","Guardado","Registro actualizado.");
+    refreshExplorador();
+  };
+
+  $("btnEDelete").onclick = async ()=>{
+    const r = await apiFetch("docs.delete", { Key: d.Key });
+    if(!r.ok) return toast("err","Error", r.message||"No se eliminó");
+    await loadAll();
+    toast("ok","Eliminado","Registro eliminado del Explorador.");
+    $("e_Editor").classList.add("hidden");
+    refreshExplorador();
+  };
+}
+
+function openFichaView(key){
+  const codigo = key.replace(/^F-/,"");
+  const f = fichaByCodigo(codigo);
+  if(!f) return toast("err","No encontrado","Ficha no existe.");
+  showSection("secFicha");
+  renderFichaForm();
+
+  // populate fields
+  $("f_AreaResponsable").value = f.AreaResponsable || "";
+  updateCodigoFromArea();
+  $("f_CodigoIndicador").value = f.CodigoIndicador || "";
+  $("f_NombreIndicador").value = f.NombreIndicador || "";
+  $("f_TipoIndicador").value = f.TipoIndicador || "";
+  $("f_Objetivo").value = f.ObjetivoIndicador || "";
+  $("f_Periodicidad").value = f.PeriodicidadMedicion || "";
+  $("f_Meta").value = f.MetaObjetivo ?? "";
+  $("f_FormulaTipo").value = f.FormulaTipo || "";
+  $("f_FormulaEtiqueta").value = f.FormulaEtiqueta || "";
+  $("f_NumTxt").value = f.FormulaNumerador || "";
+  $("f_DenTxt").value = f.FormulaDenominador || "";
+  $("f_Factor").value = f.FormulaFactor || 1;
+  $("f_ResponsableIndicador").value = f.ResponsableIndicador || "";
+  setListState("f_FuentesList", f.FuentesRecoleccion || []);
+  setListState("f_TerminosList", f.Terminos || []);
+  setListState("f_ObservacionesList", f.Observaciones || []);
+  renderNumbered("f_FuentesList");
+  renderNumbered("f_TerminosList");
+  renderNumbered("f_ObservacionesList", false, true);
+}
+
+function openAnalisisView(key){
+  const parts = key.split("-");
+  const codigo = parts[1];
+  const periodo = parts.slice(2).join("-");
+  const a = analisisByCodigo(codigo).find(x=>x.PeriodoYM===periodo);
+  if(!a) return toast("err","No encontrado","Análisis no existe.");
+  showSection("secAnalisis");
+  renderAnalisis();
+
+  $("a_Area").value = a.AreaResponsable || "";
+  fillCodigoByArea();
+  $("a_Codigo").value = a.CodigoIndicador || "";
+  cargarIndicadorAnalisis();
+
+  $("a_PeriodoYM").value = a.PeriodoYM || "";
+  $("a_Num").value = a.NumValor || "";
+  $("a_Den").value = a.DenValor || "";
+  $("a_Resultado").value = a.ResultadoObtenido || "";
+  $("a_Analisis").value = a.AnalisisInterpretacion || "";
+
+  // disable editing
+  ["a_PeriodoYM","a_Num","a_Den","a_Resultado","a_Analisis"].forEach(id=>{
+    const el=$(id); if(el) el.disabled=true;
+  });
+  $("btnACargar").disabled = true;
+  $("btnAReset").disabled = true;
+}
+
+
+/* =========================================================
+   SEGUIMIENTO (CALIDAD) - lista NO CUMPLEN + capturar 1..5
+========================================================= */
+function renderSeguimiento(){
+  const sec = $("secSeguimiento");
+  sec.innerHTML = `
+    <div class="card">
+      <div class="card-h">
+        <div class="font-extrabold text-navy text-lg">Seguimiento (Calidad)</div>
+        <div class="text-sm text-slate-500">Interfaz simple para ver NO CUMPLEN y capturar seguimiento</div>
+      </div>
+
+      <div class="card-b space-y-6">
+
+        <!-- LISTA NO CUMPLEN -->
+        <div class="card">
+          <div class="card-h">
+            <div class="font-extrabold text-navy">Indicadores NO CUMPLEN</div>
+            <div class="text-xs text-slate-500">Se toma del último análisis por código.</div>
+          </div>
+          <div class="card-b overflow-auto">
+            <table class="min-w-[980px] w-full text-sm">
+              <thead>
+                <tr class="text-left text-xs text-slate-500 border-b border-slate-200">
+                  <th class="p-2">Código</th>
+                  <th class="p-2">Indicador</th>
+                  <th class="p-2">Área</th>
+                  <th class="p-2">Periodo</th>
+                  <th class="p-2">Resultado</th>
+                  <th class="p-2">Meta</th>
+                  <th class="p-2">Acción</th>
+                </tr>
+              </thead>
+              <tbody id="s_Table"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- FORM SEGUIMIENTO -->
+        <div id="s_Form" class="hidden card">
+          <div class="card-h">
+            <div class="font-extrabold text-navy">Captura de seguimiento</div>
+            <div id="s_Sub" class="text-xs text-slate-500"></div>
+          </div>
+
+          <div class="card-b space-y-5">
+
+            <div>
+              <label class="text-xs font-extrabold text-slate-600">Verificador de acciones (Calidad) *</label>
+              <input id="s_Verificador" class="input mt-1" placeholder="Nombre de quien verifica..."/>
+            </div>
+
+            <div id="s_Rows" class="space-y-3"></div>
+
+            <div class="flex gap-2">
+              <button id="btnSAdd" class="btn btn-soft">+ Agregar seguimiento</button>
+              <div class="text-xs text-slate-500 self-center">Máximo 5.</div>
+            </div>
+
+            <div class="flex flex-wrap gap-2">
+              <button id="btnSSave" class="btn btn-primary">Guardar seguimiento</button>
+              <button id="btnSPDF" class="btn btn-soft">Generar documento (Vista PDF)</button>
+              <button id="btnSClose" class="btn btn-soft">Cerrar</button>
+            </div>
+
+            <div id="s_SaveMsg" class="hidden rounded-2xl border border-emerald-200 bg-emerald-50 text-emerald-900 p-3 text-sm">
+              <div class="font-extrabold">Seguimiento guardado</div>
+              <div>Listo.</div>
+            </div>
+
+          </div>
+        </div>
+
+      </div>
+    </div>
+  `;
+
+  buildNoCumplenTable();
+
+  $("btnSClose").addEventListener("click", ()=>$("s_Form").classList.add("hidden"));
+  $("btnSAdd").addEventListener("click", ()=>addSegRow());
+  $("btnSSave").addEventListener("click", ()=>saveSeguimiento());
+  $("btnSPDF").addEventListener("click", ()=>openSeguimientoPreviewPDF());
+}
+
+function getUltimoAnalisisPorCodigo(){
+  const map = new Map();
+  for(const a of (CACHE.analisis||[])){
+    const key = a.CodigoIndicador;
+    const cur = map.get(key);
+    if(!cur) map.set(key, a);
+    else if(String(a.PeriodoYM||"") > String(cur.PeriodoYM||"")) map.set(key, a);
+  }
+  return map;
+}
+
+function buildNoCumplenTable(){
+  const tb = $("s_Table");
+  const lastMap = getUltimoAnalisisPorCodigo();
+  const rows = [];
+
+  for(const [codigo, a] of lastMap.entries()){
+    if(a.Cumple === false || a.Cumple === "false"){
+      const f = fichaByCodigo(codigo);
+      rows.push({
+        Codigo: codigo,
+        Nombre: f?.NombreIndicador || "",
+        AreaLabel: getAreaLabel(a.AreaResponsable || f?.AreaResponsable || ""),
+        Area: a.AreaResponsable || f?.AreaResponsable || "",
+        PeriodoYM: a.PeriodoYM,
+        PeriodoLabel: a.PeriodoLabel || periodoHuman(a.PeriodoYM),
+        Resultado: Number(a.ResultadoObtenido),
+        Meta: Number(a.MetaObjetivo ?? f?.MetaObjetivo ?? null)
+      });
+    }
+  }
+
+  rows.sort((x,y)=>(x.AreaLabel||"").localeCompare(y.AreaLabel||"") || (x.Codigo||"").localeCompare(y.Codigo||""));
+
+  if(!rows.length){
+    tb.innerHTML = `<tr><td class="p-3 text-slate-400" colspan="7">No hay indicadores en NO CUMPLE.</td></tr>`;
+    return;
+  }
+
+  tb.innerHTML = rows.map(r=>`
+    <tr class="border-b border-slate-200">
+      <td class="p-2 font-extrabold text-navy">${escapeHtml(r.Codigo)}</td>
+      <td class="p-2">${escapeHtml(r.Nombre)}</td>
+      <td class="p-2">${escapeHtml(r.AreaLabel)}</td>
+      <td class="p-2">${escapeHtml(r.PeriodoLabel)}</td>
+      <td class="p-2">${fmtNum(r.Resultado)}</td>
+      <td class="p-2">${fmtNum(r.Meta)}</td>
+      <td class="p-2">
+        <button class="btn btn-soft" data-seg-open="${escapeHtml(r.Codigo)}" data-seg-per="${escapeHtml(r.PeriodoYM)}">Abrir seguimiento</button>
+      </td>
+    </tr>
+  `).join("");
+
+  tb.querySelectorAll("[data-seg-open]").forEach(b=>{
+    b.addEventListener("click", ()=>{
+      const codigo = b.getAttribute("data-seg-open");
+      const per = b.getAttribute("data-seg-per");
+      openSeguimientoForm(codigo, per);
+    });
+  });
+}
+
+function segKey(codigo, periodoYM){
+  return `SEG|${codigo}|${periodoYM}`;
+}
+
+function openSeguimientoForm(codigo, periodoYM){
+  const f = fichaByCodigo(codigo);
+  const key = segKey(codigo, periodoYM);
+
+  $("s_Form").classList.remove("hidden");
+  $("s_SaveMsg").classList.add("hidden");
+  $("s_Sub").textContent = `${codigo} · ${f?.NombreIndicador||""} · ${periodoHuman(periodoYM)}`;
+
+  // load existing seg record if exists
+  const existing = (CACHE.seg||[]).find(x=>x.Key===key) || null;
+
+  $("s_Verificador").value = existing?.VerificadorAcciones || "";
+
+  window.__SEG_CTX = { codigo, periodoYM, key };
+
+  window.__SEG_ROWS = (existing?.Items && Array.isArray(existing.Items) && existing.Items.length)
+    ? existing.Items.slice(0,5)
+    : [];
+
+  if(!window.__SEG_ROWS.length) addSegRow();
+
+  renderSegRows();
+}
+
+function addSegRow(){
+  window.__SEG_ROWS = window.__SEG_ROWS || [];
+  if(window.__SEG_ROWS.length >= 5) return toast("warn","Límite","Máximo 5 seguimientos.");
+  window.__SEG_ROWS.push({
+    Fecha:"",
+    Resultado:"",
+    CierreEfectiva:"", // Si/No
+    EvidenciaSi:"",
+    EvidenciaNo:""
+  });
+  renderSegRows();
+}
+
+function renderSegRows(){
+  const wrap = $("s_Rows");
+  if(!wrap) return;
+
+  wrap.innerHTML = (window.__SEG_ROWS||[]).map((r,i)=>`
+    <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+      <div class="flex items-center justify-between">
+        <div class="font-extrabold text-navy">Seguimiento ${i+1}</div>
+        <button class="text-xs font-extrabold text-red-700 hover:underline" data-sdel="${i}">Eliminar</button>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-5 gap-3 mt-3">
+        <div>
+          <label class="text-xs font-extrabold text-slate-600">Fecha *</label>
+          <input type="date" class="input mt-1" data-s="Fecha" data-i="${i}" value="${escapeHtml(r.Fecha||"")}"/>
+        </div>
+        <div>
+          <label class="text-xs font-extrabold text-slate-600">Resultado *</label>
+          <input class="input mt-1" data-s="Resultado" data-i="${i}" value="${escapeHtml(r.Resultado||"")}" placeholder="Ej. 92"/>
+        </div>
+        <div>
+          <label class="text-xs font-extrabold text-slate-600">Cierre efectiva *</label>
+          <select class="input mt-1" data-s="CierreEfectiva" data-i="${i}">
+            <option value="">Selecciona...</option>
+            <option ${r.CierreEfectiva==="Si"?"selected":""}>Si</option>
+            <option ${r.CierreEfectiva==="No"?"selected":""}>No</option>
+          </select>
+        </div>
+        <div class="md:col-span-2">
+          <label class="text-xs font-extrabold text-slate-600">Evidencia (si aplica)</label>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mt-1">
+            <input class="input" data-s="EvidenciaSi" data-i="${i}" value="${escapeHtml(r.EvidenciaSi||"")}" placeholder="Link evidencia SI"/>
+            <input class="input" data-s="EvidenciaNo" data-i="${i}" value="${escapeHtml(r.EvidenciaNo||"")}" placeholder="Link evidencia NO"/>
+          </div>
+        </div>
+      </div>
+    </div>
+  `).join("");
+
+  wrap.querySelectorAll("[data-s]").forEach(el=>{
+    el.addEventListener("input", ()=>{
+      const i = Number(el.getAttribute("data-i"));
+      const k = el.getAttribute("data-s");
+      window.__SEG_ROWS[i][k] = el.value;
+    });
+    el.addEventListener("change", ()=>{
+      const i = Number(el.getAttribute("data-i"));
+      const k = el.getAttribute("data-s");
+      window.__SEG_ROWS[i][k] = el.value;
+    });
+  });
+
+  wrap.querySelectorAll("[data-sdel]").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      const i = Number(btn.getAttribute("data-sdel"));
+      window.__SEG_ROWS.splice(i,1);
+      renderSegRows();
+    });
+  });
+}
+
+function validateSeguimiento(){
+  const v = ($("s_Verificador").value||"").trim();
+  if(!v) return fail_("Captura Verificador de acciones.");
+
+  const rows = (window.__SEG_ROWS||[]);
+  if(!rows.length) return fail_("Agrega al menos 1 seguimiento.");
+
+  // valida que todos los campos requeridos por fila estén completos
+  for(const r of rows){
+    if(!(r.Fecha||"").trim()) return fail_("Falta fecha en un seguimiento.");
+    if(!(r.Resultado||"").trim()) return fail_("Falta resultado en un seguimiento.");
+    if(!(r.CierreEfectiva||"").trim()) return fail_("Falta cierre efectiva (Si/No).");
+  }
+  return ok_(true);
+}
+
+async function saveSeguimiento(){
+  const v = validateSeguimiento();
+  if(!v.ok) return toast("err","No se puede guardar", v.message);
+
+  const ctx = window.__SEG_CTX;
+  if(!ctx) return;
+
+  const rec = {
+    Key: ctx.key,
+    CodigoIndicador: ctx.codigo,
+    PeriodoYM: ctx.periodoYM,
+    PeriodoLabel: periodoHuman(ctx.periodoYM),
+    VerificadorAcciones: ($("s_Verificador").value||"").trim(),
+    Items: (window.__SEG_ROWS||[]).slice(0,5),
+    UpdatedAt: nowISO()
+  };
+
+  const r = await apiFetch("seg.upsert", rec);
+  if(!r.ok) return toast("err","Error", r.message||"No se guardó");
+
+  await loadAll();
+  $("s_SaveMsg").classList.remove("hidden");
+  toast("ok","Guardado","Seguimiento guardado correctamente.");
+}
+
+function openSeguimientoPreviewPDF(){
+  const v = validateSeguimiento();
+  if(!v.ok) return toast("err","Faltan datos", v.message);
+
+  const ctx = window.__SEG_CTX;
+  const f = fichaByCodigo(ctx.codigo);
+
+  $("pdfSub").textContent = `Seguimiento · ${ctx.codigo} · ${periodoHuman(ctx.periodoYM)}`;
+
+  const rows = (window.__SEG_ROWS||[]).slice(0,5).map((r,i)=>`
+    <tr class="border-b border-slate-200">
+      <td class="p-2 font-extrabold">${i+1}</td>
+      <td class="p-2">${escapeHtml(r.Fecha)}</td>
+      <td class="p-2">${escapeHtml(r.Resultado)}</td>
+      <td class="p-2">${escapeHtml(r.CierreEfectiva)}</td>
+      <td class="p-2">${escapeHtml(r.EvidenciaSi||"")}</td>
+      <td class="p-2">${escapeHtml(r.EvidenciaNo||"")}</td>
+    </tr>
+  `).join("");
+
+  $("pdfContent").innerHTML = `
+    <div class="space-y-4 print-card">
+      <div class="text-2xl font-extrabold text-navy">${escapeHtml(f?.NombreIndicador||"")}</div>
+      <div class="text-sm text-slate-600">
+        <span class="font-extrabold">Código:</span> ${escapeHtml(ctx.codigo)} ·
+        <span class="font-extrabold">Área:</span> ${escapeHtml(getAreaLabel(f?.AreaResponsable||""))} ·
+        <span class="font-extrabold">Periodo:</span> ${escapeHtml(periodoHuman(ctx.periodoYM))}
+      </div>
+
+      <div class="card">
+        <div class="card-h"><div class="font-extrabold text-navy">Verificador de acciones</div></div>
+        <div class="card-b text-sm text-slate-700">${escapeHtml(($("s_Verificador").value||"").trim())}</div>
+      </div>
+
+      <div class="card">
+        <div class="card-h"><div class="font-extrabold text-navy">Registros de seguimiento</div></div>
+        <div class="card-b">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="text-left text-xs text-slate-500 border-b border-slate-200">
+                <th class="p-2">#</th>
+                <th class="p-2">Fecha</th>
+                <th class="p-2">Resultado</th>
+                <th class="p-2">Cierre efectiva</th>
+                <th class="p-2">Evidencia SI</th>
+                <th class="p-2">Evidencia NO</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  `;
+  $("pdfModal").classList.remove("hidden");
+}
+
+/* =========================================================
+   HOOK showSection: Explorador + Seguimiento
+========================================================= */
+(function hookMore(){
+  const original = window.showSection;
+  window.showSection = function(id){
+    original(id);
+
+    if(id==="secExplorador"){
+      renderExplorador();
+      fillExplorerCodigo();
+      refreshExplorador();
+    }
+    if(id==="secSeguimiento"){
+      renderSeguimiento();
+    }
+  }
+})();
+
+/* =========================================================
+   FINAL: al cargar, si estás en análisis/dashboard ya renderizados
+   (no rompe nada)
+========================================================= */
+(function finalBoot(){
+  // nada extra, solo placeholder
+})();
+</script>
