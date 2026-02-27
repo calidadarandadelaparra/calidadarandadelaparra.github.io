@@ -548,9 +548,9 @@ function seedDemo(){
 async function apiFetch(action, payload={}){
   if(USE_DEMO) return demoApi(action, payload);
   const url = SHEETS_WEBAPP_URL || getWebAppUrl();
+
+  // first try the preferred POST (text/plain avoids preflight)
   try {
-    // usar text/plain en lugar de application/json para que la petición
-    // sea «simple» y no dispare un preflight CORS.
     const res = await fetch(url, {
       method:"POST",
       headers: { "Content-Type":"text/plain" },
@@ -558,9 +558,18 @@ async function apiFetch(action, payload={}){
     });
     return await res.json();
   } catch(err) {
-    // reteccionar errores de red o CORS
-    console.error("apiFetch error", err);
-    return fail_("network:", err.message || err);
+    console.warn("apiFetch POST failed, attempting GET fallback", err);
+    // if network/CORS issue, attempt again with GET query string
+  }
+
+  try {
+    const qp = `?action=${encodeURIComponent(action)}` +
+               `&payload=${encodeURIComponent(JSON.stringify(payload))}`;
+    const res2 = await fetch(url + qp);
+    return await res2.json();
+  } catch(err2) {
+    console.error("apiFetch GET fallback also failed", err2);
+    return fail_("network:", err2.message || err2);
   }
 }
 
@@ -3539,15 +3548,6 @@ function openSeguimientoPreviewPDF(){
     }
   }
 })();
-
-/* =========================================================
-   FINAL: al cargar, si estás en análisis/dashboard ya renderizados
-   (no rompe nada)
-========================================================= */
-(function finalBoot(){
-  // nada extra, solo placeholder
-})();
-</script>
 
 
 
