@@ -549,9 +549,11 @@ async function apiFetch(action, payload={}){
   if(USE_DEMO) return demoApi(action, payload);
   const url = SHEETS_WEBAPP_URL || getWebAppUrl();
   try {
+    // usar text/plain en lugar de application/json para que la petición
+    // sea «simple» y no dispare un preflight CORS.
     const res = await fetch(url, {
       method:"POST",
-      headers: { "Content-Type":"application/json" },
+      headers: { "Content-Type":"text/plain" },
       body: JSON.stringify({ action, payload })
     });
     return await res.json();
@@ -3546,6 +3548,7 @@ function openSeguimientoPreviewPDF(){
   // nada extra, solo placeholder
 })();
 </script>
+
 
 
 
