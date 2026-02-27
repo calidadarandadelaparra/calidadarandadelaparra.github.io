@@ -777,7 +777,23 @@ async function loadAll(){
   const d = await apiFetch("docs.list");
   const s = await apiFetch("seg.list");
 
-  CACHE.fichas = f.ok ? f.data : [];
+  // map ficha rows to new property names (and parse JSON lists)
+  CACHE.fichas = f.ok ? (f.data||[]).map(r=>{
+    const out = Object.assign({}, r);
+    // migrate old -> new
+    out.FormulaEtiqueta = out.FormulaEtiqueta || out.Etiqueta || "";
+    out.FormulaNumerador = out.FormulaNumerador || out.NumeradorTxt || "";
+    out.FormulaDenominador = out.FormulaDenominador || out.DenominadorTxt || "";
+    out.FormulaFactor = out.FormulaFactor || out.Factor || 1;
+    out.ResponsableIndicador = out.ResponsableIndicador || out.ResponsableMedicion || "";
+    // arrays stored as JSON in Fuente or as explicit fields
+    try { out.FuentesRecoleccion = JSON.parse(out.Fuente||"[]"); } catch(_){
+      out.FuentesRecoleccion = out.Fuente ? [out.Fuente] : [];
+    }
+    out.Terminos = out.Terminos || [];
+    out.Observaciones = out.Observaciones || [];
+    return out;
+  }) : [];
   CACHE.analisis = a.ok ? a.data : [];
   CACHE.docs = d.ok ? d.data : [];
   CACHE.seg = s.ok ? s.data : [];
@@ -1293,10 +1309,25 @@ async function saveFicha(){
   }).map(x=>x[0]);
   if (empties.length) console.log('warning: empty fields in ficha payload', empties);
 
+  // prepare payload with legacy field names so sheet columns match
+  const payload = {
+    ...row,
+    // old header names used by spreadsheet
+    Etiqueta: row.FormulaEtiqueta,
+    NumeradorTxt: row.FormulaNumerador,
+    DenominadorTxt: row.FormulaDenominador,
+    Factor: row.FormulaFactor,
+    // convert arrays to JSON so they fit in single cell
+    Fuente: JSON.stringify(row.FuentesRecoleccion),
+    ResponsableMedicion: row.ResponsableIndicador,
+    // also keep formula preview as separate column
+    Formula: $("f_FormulaPreview").textContent || ""
+  };
+
   let r;
-  console.log('payload', row);
+  console.log('payload', payload);
   try {
-    r = await apiFetch("fichas.upsert", row);
+    r = await apiFetch("fichas.upsert", payload);
     console.log('apiFetch result', r);
   } catch(e) {
     console.error('fetch threw', e);
@@ -3607,7 +3638,6 @@ function openSeguimientoPreviewPDF(){
   // nada extra, solo placeholder
 })();
 </script>
-
 
 
 
