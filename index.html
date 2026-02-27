@@ -83,10 +83,46 @@
 
 <script>
 /* ===========================
-   CONFIG
+   CONFIG (ajustada para correr como WebApp de Google)
+   - cuando el HTML se sirve desde Apps Script, el mismo URL
+     es el endpoint `/exec`; por eso lo calculamos dinámicamente.
+   - si por alguna razón cargas el HTML localmente todavía puedes
+     forzar un valor concreto o usar DEMO.
 =========================== */
-const SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbxeAnWV-RgOANGy_ojNyYt_p5w4sJPiqYbsDF78JSzBIfwkV4nGOkgkv0TCnStzWi_jUQ/exec"; // pega tu /exec
-const USE_DEMO = SHEETS_WEBAPP_URL.includes("");
+// principal: la URL del web‑app (se evalúa en runtime)
+let SHEETS_WEBAPP_URL = "";
+const CONFIG_KEY_WEBAPP_URL = "CONFIG_SHEETS_WEBAPP_URL";
+
+function getSavedWebAppUrl(){
+  return localStorage.getItem(CONFIG_KEY_WEBAPP_URL) || "";
+}
+function setSavedWebAppUrl(url){
+  url = (url||"").trim();
+  if(url){
+    localStorage.setItem(CONFIG_KEY_WEBAPP_URL, url);
+  } else {
+    localStorage.removeItem(CONFIG_KEY_WEBAPP_URL);
+  }
+  SHEETS_WEBAPP_URL = url;
+}
+
+function getWebAppUrl(){
+  // prioridad: variable explícita > guardada en localStorage > deducida
+  if(SHEETS_WEBAPP_URL) return SHEETS_WEBAPP_URL;
+  const saved = getSavedWebAppUrl();
+  if(saved) return saved;
+  // si se está ejecutando dentro de la WebApp de GAS, la propia
+  // ubicación actual es el endpoint
+  if(typeof location !== 'undefined' && location.href){
+    return location.href;
+  }
+  // fallback placeholder (modo demo)
+  return "PON_AQUI_TU_URL";
+}
+
+// bandera de demo. si la URL contiene el texto de placeholder
+// o no se ha inicializado todavía, se tomará como demo.
+const USE_DEMO = getWebAppUrl().includes("PON_AQUI");
 
 const QUALITY_USER = "calidad";
 const QUALITY_PASS = "Aranda2026!";
@@ -388,11 +424,19 @@ function scrollTopSmooth(){ window.scrollTo({top:0, behavior:"smooth"}); }
     </div>
 
     <div class="card">
-      <div class="card-b">
+      <div class="card-b space-y-2">
         <div class="font-extrabold text-navy">Modo actual</div>
-        <div class="text-sm text-slate-600 mt-1">
+        <div class="text-sm text-slate-600">
           Estás en: <span class="font-extrabold text-navy" id="homeMode"></span>.
-          <span class="text-slate-500">Pega tu URL /exec para Sheets cuando estés listo.</span>
+        </div>
+        <!-- configuration input for web‑app URL -->
+        <div class="text-sm text-slate-600">
+          <label class="font-semibold">URL WebApp de Sheets:</label>
+          <div class="flex gap-2 mt-1">
+            <input id="confWebAppUrl" class="input flex-1" placeholder="https://script.google.com/macros/s/.../exec" />
+            <button id="btnSaveUrl" class="btn btn-soft">Guardar</button>
+          </div>
+          <div class="text-xs text-slate-500">Este valor se almacena en localStorage y se usará cuando la página esté hospedada en GitHub Pages u otro dominio.</div>
         </div>
       </div>
     </div>
@@ -503,12 +547,19 @@ function seedDemo(){
 
 async function apiFetch(action, payload={}){
   if(USE_DEMO) return demoApi(action, payload);
-  const res = await fetch(SHEETS_WEBAPP_URL, {
-    method:"POST",
-    headers: { "Content-Type":"application/json" },
-    body: JSON.stringify({ action, payload })
-  });
-  return await res.json();
+  const url = SHEETS_WEBAPP_URL || getWebAppUrl();
+  try {
+    const res = await fetch(url, {
+      method:"POST",
+      headers: { "Content-Type":"application/json" },
+      body: JSON.stringify({ action, payload })
+    });
+    return await res.json();
+  } catch(err) {
+    // reteccionar errores de red o CORS
+    console.error("apiFetch error", err);
+    return fail_("network:", err.message || err);
+  }
 }
 
 function ok_(data, message="OK"){ return { ok:true, data, message }; }
@@ -1194,6 +1245,7 @@ function clearFichaForm(){
 async function saveFicha(){
   if(!validateFicha()) return;
 
+  console.log('saveFicha invoked, demo=', USE_DEMO, 'url=', getWebAppUrl());
   const row = modelFicha();
 
   row.AreaResponsable = $("f_AreaResponsable").value;
@@ -1215,7 +1267,16 @@ async function saveFicha(){
   row.Observaciones = getListState("f_ObservacionesList");
   row.UpdatedAt = nowISO();
 
-  const r = await apiFetch("fichas.upsert", row);
+  let r;
+  console.log('payload', row);
+  try {
+    r = await apiFetch("fichas.upsert", row);
+    console.log('apiFetch result', r);
+  } catch(e) {
+    console.error('fetch threw', e);
+    toast("err","Error de red", String(e));
+    return;
+  }
   if(!r.ok){
     toast("err","No se guardó", r.message || "Error");
     return;
@@ -1302,8 +1363,15 @@ function getAreaLabel(prefix){
    WIRES PRINCIPALES (PARTE 2)
 ========================================================= */
 function setModeTags(){
+  const url = getWebAppUrl();
   $("modeTag").textContent = USE_DEMO ? "DEMO localStorage" : "Google Sheets";
-  $("homeMode").textContent = USE_DEMO ? "DEMO (localStorage)" : "Google Sheets (WebApp)";
+  if(USE_DEMO){
+    $("homeMode").textContent = "DEMO (localStorage)";
+  } else {
+    // mostrar la URL o una versión corta
+    const short = url.length>40 ? url.slice(0,40)+"…" : url;
+    $("homeMode").textContent = `Google Sheets (WebApp: ${short})`;
+  }
   $("footerMode").textContent = USE_DEMO ? "DEMO localStorage" : "Google Sheets";
 }
 
@@ -1380,10 +1448,30 @@ function wireHeaderNav(){
 /* =========================================================
    INIT PARTE 2
 ========================================================= */
+
+// configuración UI para URL WebApp
+function initConfigUI(){
+  const inp = $("confWebAppUrl");
+  if(!inp) return;
+  inp.value = getSavedWebAppUrl();
+  inp.addEventListener("input", ()=>{
+    // live update so users can copy/paste conveniently
+    setSavedWebAppUrl(inp.value);
+    setModeTags();
+  });
+  $("btnSaveUrl").addEventListener("click", ()=>{
+    setSavedWebAppUrl(inp.value);
+    setModeTags();
+    toast("ok","URL guardada","Se usará para comunicarse con Sheets.");
+  });
+}
+
+// init
 document.addEventListener("DOMContentLoaded", async ()=>{
   seedDemo();
   setModeTags();
   wireHeaderNav();
+  initConfigUI();
   await loadAll();
   showSection("secInicio");
 });
@@ -3457,7 +3545,7 @@ function openSeguimientoPreviewPDF(){
 (function finalBoot(){
   // nada extra, solo placeholder
 })();
-
 </script>
+
 
 
