@@ -1256,6 +1256,12 @@ function clearFichaForm(){
 async function saveFicha(){
   if(!validateFicha()) return;
 
+  // show loading indicator
+  const btn = $("btnFichaSave");
+  const origText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "Guardando…";
+
   console.log('saveFicha invoked, demo=', USE_DEMO, 'url=', getWebAppUrl());
   const row = modelFicha();
 
@@ -1278,6 +1284,15 @@ async function saveFicha(){
   row.Observaciones = getListState("f_ObservacionesList");
   row.UpdatedAt = nowISO();
 
+  // debug: alert if some properties are empty/null
+  const empties = Object.entries(row).filter(([k,v]) => {
+    if (v == null) return true;
+    if (Array.isArray(v) && v.length === 0) return true;
+    if (typeof v === 'string' && v.trim() === '') return true;
+    return false;
+  }).map(x=>x[0]);
+  if (empties.length) console.log('warning: empty fields in ficha payload', empties);
+
   let r;
   console.log('payload', row);
   try {
@@ -1287,6 +1302,10 @@ async function saveFicha(){
     console.error('fetch threw', e);
     toast("err","Error de red", String(e));
     return;
+  } finally {
+    // restore button
+    btn.disabled = false;
+    btn.textContent = origText;
   }
   if(!r.ok){
     toast("err","No se guardó", r.message || "Error");
@@ -2098,9 +2117,21 @@ function validateAnalisis(){
 }
 
 async function guardarAnalisis(status){
+  // loading indicator for both save buttons
+  const btn1 = $("btnABorrador");
+  const btn2 = $("btnAGuardar");
+  const orig1 = btn1.textContent;
+  const orig2 = btn2.textContent;
+  btn1.disabled = true;
+  btn2.disabled = true;
+  btn1.textContent = "Guardando…";
+  btn2.textContent = "Guardando…";
+
   const v = validateAnalisis();
   if(!v.ok){
     toast("err","No se puede guardar", v.message);
+    btn1.disabled = false; btn2.disabled = false;
+    btn1.textContent = orig1; btn2.textContent = orig2;
     return;
   }
 
@@ -2123,7 +2154,26 @@ async function guardarAnalisis(status){
     UpdatedAt: nowISO()
   };
 
-  const r = await apiFetch("analisis.insert", row);
+  // debug empty fields
+  const empt = Object.entries(row).filter(([k,v])=>{
+    if(v==null) return true;
+    if(Array.isArray(v) && v.length===0) return true;
+    if(typeof v==='string' && v.trim()==='') return true;
+    return false;
+  }).map(x=>x[0]);
+  if(empt.length) console.log('warning: empty fields in analisis payload', empt);
+
+  let r;
+  try {
+    r = await apiFetch("analisis.insert", row);
+  } finally {
+    // restore buttons even if API throws
+    btn1.disabled = false;
+    btn2.disabled = false;
+    btn1.textContent = orig1;
+    btn2.textContent = orig2;
+  }
+
   if(!r.ok){
     if(r.message==="DUPLICADO" || r.message==="DUPLICADO"){
       $("a_DupMsg").classList.remove("hidden");
@@ -3548,6 +3598,15 @@ function openSeguimientoPreviewPDF(){
     }
   }
 })();
+
+/* =========================================================
+   FINAL: al cargar, si estás en análisis/dashboard ya renderizados
+   (no rompe nada)
+========================================================= */
+(function finalBoot(){
+  // nada extra, solo placeholder
+})();
+</script>
 
 
 
