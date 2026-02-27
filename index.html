@@ -1171,9 +1171,17 @@ function updateFactorEtiqueta(){
   updateFormulaPreview();
 }
 
+function cleanFormulaText(s){
+  // ensure string and strip Java object notation that crept in
+  s = String(s||"");
+  // common pattern from SpreadsheetApp reading of array objects
+  s = s.replace(/\[Ljava\.lang\.Object;@[0-9a-fA-F]+\]/g, "");
+  return s;
+}
+
 function updateFormulaPreview(){
-  const numT = ($("f_NumTxt")?.value||"N").trim() || "N";
-  const denT = ($("f_DenTxt")?.value||"D").trim() || "D";
+  const numT = cleanFormulaText($("f_NumTxt")?.value).trim() || "N";
+  const denT = cleanFormulaText($("f_DenTxt")?.value).trim() || "D";
   const factor = Number($("f_Factor")?.value||1) || 1;
   const prev = $("f_FormulaPreview");
   if(prev) prev.textContent = `(${numT}/${denT})*${factor}`;
@@ -1292,8 +1300,8 @@ async function saveFicha(){
 
   row.FormulaTipo = $("f_FormulaTipo").value;
   row.FormulaEtiqueta = ($("f_FormulaEtiqueta").value||"").trim();
-  row.FormulaNumerador = ($("f_NumTxt").value||"").trim();
-  row.FormulaDenominador = ($("f_DenTxt").value||"").trim();
+  row.FormulaNumerador = cleanFormulaText($("f_NumTxt").value).trim();
+  row.FormulaDenominador = cleanFormulaText($("f_DenTxt").value).trim();
   row.FormulaFactor = Number($("f_Factor").value||1);
   row.FuentesRecoleccion = getListState("f_FuentesList");
   row.Terminos = getListState("f_TerminosList");
@@ -1347,6 +1355,7 @@ async function saveFicha(){
 
   $("f_SaveMsg").classList.remove("hidden");
   scrollTopSmooth();
+  toast("ok","Guardado","Ficha técnica guardada correctamente.");
 
   setTimeout(()=>{
     $("f_SaveMsg").classList.add("hidden");
@@ -2223,6 +2232,13 @@ async function guardarAnalisis(status){
     toast("err","Error", r.message || "No se guardó.");
     return;
   }
+
+  // success feedback
+  toast("ok","Guardado","Análisis capturado correctamente.");
+  // optionally clear or navigate back to inicio
+  setTimeout(()=>{
+    showSection("secInicio");
+  }, 1200);
 
   // Propuestas (si hay)
   const meta = Number(ficha?.MetaObjetivo);
@@ -3205,16 +3221,25 @@ function openDocEditor(key){
   };
 
   $("btnEDelete").onclick = async ()=>{
+    const btn = $("btnEDelete");
+    const orig = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = "Eliminando…";
+
     // remove document itself
     const r = await apiFetch("docs.delete", { Key: d.Key });
-    if(!r.ok) return toast("err","Error", r.message||"No se eliminó");
+    if(!r.ok){
+      toast("err","Error", r.message||"No se eliminó");
+      btn.disabled = false;
+      btn.textContent = orig;
+      return;
+    }
 
     // also delete the underlying ficha/analisis/seg if applicable
     if(d.TipoDocumento === "FichaTecnica"){
       await apiFetch("fichas.delete", { CodigoIndicador: d.CodigoIndicador });
     } else if(d.TipoDocumento === "AnalisisIndicador"){
       const parts = d.Key.split("-");
-      // key format A-CODE-PERIOD
       const codigo = parts[1];
       const periodo = parts.slice(2).join("-");
       await apiFetch("analisis.delete", { CodigoIndicador: codigo, PeriodoYM: periodo });
@@ -3224,6 +3249,8 @@ function openDocEditor(key){
 
     await loadAll();
     toast("ok","Eliminado","Registro eliminado del Explorador.");
+    btn.disabled = false;
+    btn.textContent = orig;
     $("e_Editor").classList.add("hidden");
     refreshExplorador();
   };
@@ -3247,8 +3274,8 @@ function openFichaView(key){
   $("f_Meta").value = f.MetaObjetivo ?? "";
   $("f_FormulaTipo").value = f.FormulaTipo || "";
   $("f_FormulaEtiqueta").value = f.FormulaEtiqueta || "";
-  $("f_NumTxt").value = f.FormulaNumerador || "";
-  $("f_DenTxt").value = f.FormulaDenominador || "";
+  $("f_NumTxt").value = cleanFormulaText(f.FormulaNumerador) || "";
+  $("f_DenTxt").value = cleanFormulaText(f.FormulaDenominador) || "";
   $("f_Factor").value = f.FormulaFactor || 1;
   $("f_ResponsableIndicador").value = f.ResponsableIndicador || "";
   setListState("f_FuentesList", f.FuentesRecoleccion || []);
