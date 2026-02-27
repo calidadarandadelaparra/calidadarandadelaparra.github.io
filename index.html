@@ -2169,7 +2169,7 @@ async function guardarAnalisis(status){
   const codigo = $("a_Codigo").value;
   const ficha = fichaByCodigo(codigo);
 
-  const row = {
+  let row = {
     CodigoIndicador: codigo,
     AreaResponsable: $("a_Area").value,
     PeriodoYM: $("a_PeriodoYM").value,
@@ -2184,6 +2184,15 @@ async function guardarAnalisis(status){
     Evidencias: (window.__EVID||[]), // opcional
     UpdatedAt: nowISO()
   };
+
+  // drop empty/undefined fields so sheet only stores what user entered
+  Object.keys(row).forEach(k=>{
+    const v = row[k];
+    if (v == null || (typeof v === 'string' && v.trim() === '') ||
+        (Array.isArray(v) && v.length === 0)) {
+      delete row[k];
+    }
+  });
 
   // debug empty fields
   const empt = Object.entries(row).filter(([k,v])=>{
@@ -3196,8 +3205,23 @@ function openDocEditor(key){
   };
 
   $("btnEDelete").onclick = async ()=>{
+    // remove document itself
     const r = await apiFetch("docs.delete", { Key: d.Key });
     if(!r.ok) return toast("err","Error", r.message||"No se eliminó");
+
+    // also delete the underlying ficha/analisis/seg if applicable
+    if(d.TipoDocumento === "FichaTecnica"){
+      await apiFetch("fichas.delete", { CodigoIndicador: d.CodigoIndicador });
+    } else if(d.TipoDocumento === "AnalisisIndicador"){
+      const parts = d.Key.split("-");
+      // key format A-CODE-PERIOD
+      const codigo = parts[1];
+      const periodo = parts.slice(2).join("-");
+      await apiFetch("analisis.delete", { CodigoIndicador: codigo, PeriodoYM: periodo });
+    } else if(d.TipoDocumento === "Seguimiento"){
+      await apiFetch("seg.delete", { Key: d.Key });
+    }
+
     await loadAll();
     toast("ok","Eliminado","Registro eliminado del Explorador.");
     $("e_Editor").classList.add("hidden");
@@ -3638,6 +3662,7 @@ function openSeguimientoPreviewPDF(){
   // nada extra, solo placeholder
 })();
 </script>
+
 
 
 
