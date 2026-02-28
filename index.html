@@ -981,6 +981,7 @@ function renderFichaForm(){
 
         <div class="flex flex-wrap gap-2">
           <button id="btnFichaSave" class="btn btn-primary">Guardar ficha</button>
+          <button id="btnFichaGen" class="btn btn-primary">Generar Word/PDF</button>
           <button id="btnFichaDoc" class="btn btn-soft">Generar documento (Vista PDF)</button>
           <button id="btnFichaClear" class="btn btn-soft">Limpiar</button>
         </div>
@@ -1018,6 +1019,7 @@ function renderFichaForm(){
 
   $("btnFichaClear").addEventListener("click", clearFichaForm);
   $("btnFichaSave").addEventListener("click", saveFicha);
+  $("btnFichaGen").addEventListener("click", ()=>generateFichaDoc());
   $("btnFichaDoc").addEventListener("click", ()=>openFichaPreviewPDF());
 
   // init defaults
@@ -1409,6 +1411,54 @@ function openFichaPreviewPDF(){
   $("pdfModal").classList.remove("hidden");
 }
 
+// ------------------------------------------------
+// Generación de documentos usando backend Apps Script
+// ------------------------------------------------
+async function generateFichaDoc(){
+  if(!validateFicha()) return toast("err","Faltan datos","Revisa la ficha");
+
+  const btn = $("btnFichaGen");
+  const orig = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "Generando…";
+
+  try {
+    const payload = modelFicha();
+    // add same fields used when saving
+    payload.AreaResponsable = $("f_AreaResponsable").value;
+    payload.CodigoIndicador = ($("f_CodigoIndicador").value||"").trim();
+    payload.ResponsableIndicador = ($("f_ResponsableIndicador").value||"").trim();
+    payload.NombreIndicador = ($("f_NombreIndicador").value||"").trim();
+    payload.TipoIndicador = $("f_TipoIndicador").value;
+    payload.PeriodicidadMedicion = $("f_Periodicidad").value;
+    payload.ObjetivoIndicador = ($("f_Objetivo").value||"").trim();
+    payload.MetaObjetivo = Number($("f_Meta").value);
+    payload.FormulaTipo = $("f_FormulaTipo").value;
+    payload.FormulaEtiqueta = ($("f_FormulaEtiqueta").value||"").trim();
+    payload.FormulaNumerador = cleanFormulaText($("f_NumTxt").value).trim();
+    payload.FormulaDenominador = cleanFormulaText($("f_DenTxt").value).trim();
+    payload.FormulaFactor = Number($("f_Factor").value||1);
+    payload.FuentesRecoleccion = getListState("f_FuentesList");
+    payload.Terminos = getListState("f_TerminosList");
+    payload.Observaciones = getListState("f_ObservacionesList");
+    payload.UpdatedAt = nowISO();
+
+    const r = await apiFetch("docs.generarFichaFromUI", payload);
+    if(!r.ok){
+      toast("err","Error", r.message || "Falló generación");
+    } else {
+      const links = r.data;
+      alert(`Documento listo:\nWord: ${links.linkDocx}\nPDF: ${links.linkPdf}`);
+      toast("ok","Generado","Revisa la alerta para links");
+    }
+  } catch(e){
+    toast("err","Error de red", String(e));
+  } finally {
+    btn.disabled = false;
+    btn.textContent = orig;
+  }
+}
+
 function renderListCard(title, items){
   const lis = (items||[]).map((t,i)=>`<div><span class="font-extrabold text-slate-500">${i+1}.</span> ${escapeHtml(t)}.</div>`).join("");
   return `
@@ -1774,6 +1824,7 @@ function renderAnalisis(){
           <div class="flex flex-wrap gap-2">
             <button id="btnABorrador" class="btn btn-soft">Guardar borrador</button>
             <button id="btnAGuardar" class="btn btn-primary">Guardar y generar reporte (MVP: guarda)</button>
+            <button id="btnAnalisisGen" class="btn btn-primary">Generar Word/PDF</button>
             <button id="btnAPDF" class="btn btn-soft">Generar documento (Vista PDF)</button>
             <button id="btnACancelar" class="btn btn-soft">Cancelar</button>
           </div>
@@ -1819,6 +1870,7 @@ function renderAnalisis(){
 
   $("btnABorrador").addEventListener("click", ()=>guardarAnalisis("BORRADOR"));
   $("btnAGuardar").addEventListener("click", ()=>guardarAnalisis("FINAL"));
+  $("btnAnalisisGen").addEventListener("click", ()=>generateAnalisisDoc());
   $("btnAPDF").addEventListener("click", ()=>openAnalisisPreviewPDF());
   $("btnACancelar").addEventListener("click", ()=>{
     resetAnalisisUI(true);
@@ -2340,6 +2392,63 @@ function openAnalisisPreviewPDF(){
     </div>
   `;
   $("pdfModal").classList.remove("hidden");
+}
+
+async function generateAnalisisDoc(){
+  const v = validateAnalisis();
+  if(!v.ok){
+    toast("err","Faltan datos", v.message);
+    return;
+  }
+  const btn = $("btnAnalisisGen");
+  const orig = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "Generando…";
+
+  try {
+    const codigo = $("a_Codigo").value;
+    const ficha = fichaByCodigo(codigo);
+    const perYM = $("a_PeriodoYM").value;
+
+    const meta = Number(ficha?.MetaObjetivo);
+    const res = Number($("a_Resultado").value);
+    const cumple = (res >= meta);
+
+    const payload = {
+      CodigoIndicador: codigo,
+      AreaResponsable: $("a_Area").value,
+      PeriodoYM: perYM,
+      PeriodoLabel: periodoHuman(perYM),
+      NumValor: Number($("a_Num").value),
+      DenValor: Number($("a_Den").value),
+      ResultadoObtenido: res,
+      MetaObjetivo: meta,
+      Cumple: cumple,
+      AnalisisInterpretacion: ($("a_Analisis").value||"").trim(),
+      Status: "FINAL",
+      Evidencias: (window.__EVID||[]),
+      UpdatedAt: nowISO()
+    };
+    Object.keys(payload).forEach(k=>{
+      const v2 = payload[k];
+      if(v2 == null || (typeof v2==='string' && v2.trim()==='') ||
+         (Array.isArray(v2)&&v2.length===0)) delete payload[k];
+    });
+
+    const r = await apiFetch("docs.generarAnalisisFromUI", payload);
+    if(!r.ok){
+      toast("err","Error", r.message || "Falló generación");
+    } else {
+      const links = r.data;
+      alert(`Documento listo:\nWord: ${links.linkDocx}\nPDF: ${links.linkPdf}`);
+      toast("ok","Generado","Revisa la alerta para links");
+    }
+  } catch(e){
+    toast("err","Error de red", String(e));
+  } finally {
+    btn.disabled = false;
+    btn.textContent = orig;
+  }
 }
 
 function renderPropsPDF(){
@@ -3689,6 +3798,7 @@ function openSeguimientoPreviewPDF(){
   // nada extra, solo placeholder
 })();
 </script>
+
 
 
 
