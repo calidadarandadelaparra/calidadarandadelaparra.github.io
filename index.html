@@ -1300,7 +1300,15 @@ async function saveFicha(){
 
   row.AreaResponsable = $("f_AreaResponsable").value;
   row.CodigoIndicador = ($("f_CodigoIndicador").value||"").trim();
-  row.NumeroIndicador = Number($("f_NumeroIndicador")?.value||0) || null;
+  // Asegurar que NumeroIndicador siempre se envía correctamente
+  let numInd = Number($("f_NumeroIndicador")?.value||0);
+  if(!numInd){
+    // Extraer del código si es posible
+    const codVal = $("f_CodigoIndicador")?.value||"";
+    const match = codVal.match(/(\d+)$/);
+    if(match) numInd = Number(match[1]);
+  }
+  row.NumeroIndicador = numInd || null;
   row.ResponsableIndicador = ($("f_ResponsableIndicador").value||"").trim();
   row.NombreIndicador = ($("f_NombreIndicador").value||"").trim();
   row.TipoIndicador = $("f_TipoIndicador").value;
