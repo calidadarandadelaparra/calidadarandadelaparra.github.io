@@ -1300,7 +1300,7 @@ async function saveFicha(){
 
   row.AreaResponsable = $("f_AreaResponsable").value;
   row.CodigoIndicador = ($("f_CodigoIndicador").value||"").trim();
-  row.NumeroIndicador = ($("f_NumeroIndicador")?.value||"").trim(); // <-- AGREGADO
+  row.NumeroIndicador = Number($("f_NumeroIndicador")?.value||0) || null;
   row.ResponsableIndicador = ($("f_ResponsableIndicador").value||"").trim();
   row.NombreIndicador = ($("f_NombreIndicador").value||"").trim();
   row.TipoIndicador = $("f_TipoIndicador").value;
@@ -1340,8 +1340,9 @@ async function saveFicha(){
     ResponsableMedicion: row.ResponsableIndicador,
     // also keep formula preview as separate column
     Formula: $("f_FormulaPreview").textContent || ""
-    // NumeroIndicador ya incluido arriba
   };
+  // Si NumeroIndicador es null o 0, eliminarlo del payload para evitar errores
+  if(!payload.NumeroIndicador) delete payload.NumeroIndicador;
 
   let r;
   console.log('payload', payload);
@@ -3822,8 +3823,3 @@ function openSeguimientoPreviewPDF(){
   // nada extra, solo placeholder
 })();
 </script>
-
-
-
-
-
