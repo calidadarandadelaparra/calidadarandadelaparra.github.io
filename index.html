@@ -694,6 +694,7 @@ function nowISO(){ return new Date().toISOString(); }
 function modelFicha(){
   return {
     CodigoIndicador:"",
+    NumeroIndicador:"", // <-- AGREGADO
     NombreIndicador:"",
     AreaResponsable:"",
     TipoIndicador:"",              // select
@@ -1293,6 +1294,7 @@ async function saveFicha(){
 
   row.AreaResponsable = $("f_AreaResponsable").value;
   row.CodigoIndicador = ($("f_CodigoIndicador").value||"").trim();
+  row.NumeroIndicador = ($("f_NumeroIndicador")?.value||"").trim(); // <-- AGREGADO
   row.ResponsableIndicador = ($("f_ResponsableIndicador").value||"").trim();
   row.NombreIndicador = ($("f_NombreIndicador").value||"").trim();
   row.TipoIndicador = $("f_TipoIndicador").value;
@@ -1332,6 +1334,7 @@ async function saveFicha(){
     ResponsableMedicion: row.ResponsableIndicador,
     // also keep formula preview as separate column
     Formula: $("f_FormulaPreview").textContent || ""
+    // NumeroIndicador ya incluido arriba
   };
 
   let r;
@@ -3235,13 +3238,10 @@ function refreshExplorador(){
   }
 
   tb.innerHTML = docs.map(d=>{
-    let exists = true;
-    if(d.TipoDocumento==="FichaTecnica" || d.TipoDocumento==="AnalisisIndicador"){
-      exists = true; // always "exists" since data is in cache
-    } else {
-      exists = !!(String(d.WordUrl||"").trim() || String(d.PdfUrl||"").trim());
-    }
-    const estado = exists ? `<span class="badge badge-ok">EXISTE</span>` : `<span class="badge badge-gray">NO EXISTE</span>`;
+    // Links reales de Drive (Word/PDF)
+    const wordLink = d.Link || d.WordUrl || '';
+    const pdfLink = d.PdfUrl || (d.Link && d.Link.endsWith('.pdf') ? d.Link : '');
+    const estado = (wordLink || pdfLink) ? `<span class="badge badge-ok">EXISTE</span>` : `<span class="badge badge-gray">NO EXISTE</span>`;
     return `
       <tr class="border-b border-slate-200">
         <td class="p-2 font-extrabold text-navy">${escapeHtml(d.DocName||"(Sin nombre)")}</td>
@@ -3250,8 +3250,10 @@ function refreshExplorador(){
         <td class="p-2">${escapeHtml(d.TipoDocumento||"")}</td>
         <td class="p-2">${estado}</td>
         <td class="p-2">
-          <button class="btn btn-soft" data-edit="${escapeHtml(d.Key)}" data-type="${escapeHtml(d.TipoDocumento)}">Ver</button>
-          <button class="btn btn-danger ml-2" data-del="${escapeHtml(d.Key)}" data-type="${escapeHtml(d.TipoDocumento)}">Eliminar</button>
+          ${wordLink ? `<a href="${wordLink}" target="_blank" class="btn btn-soft">Word</a>` : ''}
+          ${pdfLink ? `<a href="${pdfLink}" target="_blank" class="btn btn-soft ml-1">PDF</a>` : ''}
+          <button class="btn btn-soft ml-2" data-edit="${escapeHtml(d.Key)}" data-type="${escapeHtml(d.TipoDocumento)}">Editar</button>
+          <button class="btn btn-danger ml-2" data-del="${escapeHtml(d.Key)}" data-type="${escapeHtml(d.TipoDocumento)}" data-fileid="${escapeHtml(d.FileId||d.Id||'')}">Eliminar</button>
         </td>
       </tr>
     `;
@@ -3271,20 +3273,28 @@ function refreshExplorador(){
     b.addEventListener("click", async ()=>{
       const key = b.getAttribute("data-del");
       const type = b.getAttribute("data-type");
-      if(type==="FichaTecnica"){
+      const fileId = b.getAttribute("data-fileid");
+      let r;
+      // Eliminar en backend y Drive
+      if(fileId){
+        r = await apiFetch("docs.delete",{Key:key});
+        if(r.ok){
+          // Llama a Apps Script para borrar en Drive
+          const r2 = await apiFetch("borrarArchivoDrivePorId",{fileId});
+          if(!r2.ok) toast("err","Drive","No se eliminó en Drive: "+(r2.message||''));
+        }
+      }else if(type==="FichaTecnica"){
         const codigo = key.replace(/^F-/,'');
-        const r = await apiFetch("fichas.delete",{CodigoIndicador:codigo});
-        if(!r.ok) return toast("err","Error",r.message||"No se eliminó");
-      } else if(type==="AnalisisIndicador"){
+        r = await apiFetch("fichas.delete",{CodigoIndicador:codigo});
+      }else if(type==="AnalisisIndicador"){
         const parts = key.split("-");
         const codigo = parts[1];
         const periodo = parts.slice(2).join("-");
-        const r = await apiFetch("analisis.delete",{CodigoIndicador:codigo,PeriodoYM:periodo});
-        if(!r.ok) return toast("err","Error",r.message||"No se eliminó");
-      } else {
-        const r = await apiFetch("docs.delete",{Key:key});
-        if(!r.ok) return toast("err","Error",r.message||"No se eliminó");
+        r = await apiFetch("analisis.delete",{CodigoIndicador:codigo,PeriodoYM:periodo});
+      }else{
+        r = await apiFetch("docs.delete",{Key:key});
       }
+      if(!r?.ok) return toast("err","Error",r?.message||"No se eliminó");
       await loadAll();
       toast("ok","Eliminado","Registro eliminado.");
       refreshExplorador();
@@ -3307,6 +3317,7 @@ function openDocEditor(key){
   $("btnESave").onclick = async ()=>{
     const docName = ($("e_DocName").value||"").trim();
     const wordUrl = ($("e_WordUrl").value||"").trim();
+    const pdfUrl = ($("e_PdfUrl").value||"").trim();
     if(!docName || !wordUrl){
       toast("err","Faltan campos","Nombre documento y link Word son obligatorios.");
       return;
@@ -3317,12 +3328,19 @@ function openDocEditor(key){
       DocName: docName,
       Notas: ($("e_Notas").value||"").trim(),
       WordUrl: wordUrl,
-      PdfUrl: ($("e_PdfUrl").value||"").trim(),
+      PdfUrl: pdfUrl,
       UpdatedAt: nowISO()
     };
 
+    // Actualizar en backend
     const r = await apiFetch("docs.upsert", upd);
     if(!r.ok) return toast("err","Error", r.message||"No se guardó");
+
+    // Si hay FileId y cambió el nombre, intenta renombrar en Drive
+    if(d.FileId && docName !== d.DocName){
+      const r2 = await apiFetch("renameDriveFile", { fileId: d.FileId, newName: docName });
+      if(!r2.ok) toast("err","Drive","No se pudo renombrar en Drive: "+(r2.message||''));
+    }
 
     await loadAll();
     toast("ok","Guardado","Registro actualizado.");
@@ -3798,6 +3816,7 @@ function openSeguimientoPreviewPDF(){
   // nada extra, solo placeholder
 })();
 </script>
+
 
 
 
