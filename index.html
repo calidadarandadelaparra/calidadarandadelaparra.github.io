@@ -836,10 +836,12 @@ function updateCodigoFromArea(){
   if(!sel || !out) return;
 
   const prefix = (sel.value||"").trim();
-  if(!prefix){ out.value=""; return; }
+  if(!prefix){ out.value=""; $("f_NumeroIndicador").value = ""; return; }
 
   const nnn = nextNumberForPrefix(prefix);
   out.value = `${prefix}${nnn}`;
+  // Autollenar el campo oculto NumeroIndicador solo con el número
+  $("f_NumeroIndicador").value = nnn;
 }
 
 /* =========================================================
@@ -859,7 +861,7 @@ function renderFichaForm(){
       <div class="card-b space-y-5">
 
         <!-- GRID TOP -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div>
             <label class="text-xs font-extrabold text-slate-600">Área responsable *</label>
             <select id="f_AreaResponsable" class="input mt-1"></select>
@@ -868,6 +870,10 @@ function renderFichaForm(){
           <div>
             <label class="text-xs font-extrabold text-slate-600">Código (auto) *</label>
             <input id="f_CodigoIndicador" class="input mt-1" placeholder="Se genera al elegir el área" readonly />
+          </div>
+
+          <div style="display:none">
+            <input id="f_NumeroIndicador" class="input mt-1" type="hidden" />
           </div>
 
           <div>
@@ -3816,7 +3822,6 @@ function openSeguimientoPreviewPDF(){
   // nada extra, solo placeholder
 })();
 </script>
-
 
 
 
