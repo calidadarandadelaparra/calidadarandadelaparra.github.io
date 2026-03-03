@@ -1187,6 +1187,23 @@ function updateFactorEtiqueta(){
   updateFormulaPreview();
 }
 
+function resolveFormulaFromFichaForm(){
+  const tipo = $("f_FormulaTipo")?.value || "";
+  let etiqueta = ($("f_FormulaEtiqueta")?.value || "").trim();
+  let factor = Number($("f_Factor")?.value || 1);
+  if(!Number.isFinite(factor) || factor <= 0) factor = 1;
+
+  if(tipo === "Porcentaje"){
+    etiqueta = "%";
+    factor = 100;
+  } else if(tipo === "Tasa"){
+    etiqueta = "tasa";
+    factor = 1000;
+  }
+
+  return { tipo, etiqueta, factor };
+}
+
 function cleanFormulaText(s){
   // ensure string and strip Java object notation that crept in
   s = String(s||"");
@@ -1323,11 +1340,12 @@ async function saveFicha(){
   row.ObjetivoIndicador = ($("f_Objetivo").value||"").trim();
   row.MetaObjetivo = Number($("f_Meta").value);
 
-  row.FormulaTipo = $("f_FormulaTipo").value;
-  row.FormulaEtiqueta = ($("f_FormulaEtiqueta").value||"").trim();
+  const fcfg = resolveFormulaFromFichaForm();
+  row.FormulaTipo = fcfg.tipo;
+  row.FormulaEtiqueta = fcfg.etiqueta;
   row.FormulaNumerador = cleanFormulaText($("f_NumTxt").value).trim();
   row.FormulaDenominador = cleanFormulaText($("f_DenTxt").value).trim();
-  row.FormulaFactor = Number($("f_Factor").value||1);
+  row.FormulaFactor = fcfg.factor;
   row.FuentesRecoleccion = getListState("f_FuentesList");
   row.Terminos = getListState("f_TerminosList");
   row.Observaciones = getListState("f_ObservacionesList");
@@ -1458,11 +1476,12 @@ async function generateFichaDoc(){
     payload.PeriodicidadMedicion = $("f_Periodicidad").value;
     payload.ObjetivoIndicador = ($("f_Objetivo").value||"").trim();
     payload.MetaObjetivo = Number($("f_Meta").value);
-    payload.FormulaTipo = $("f_FormulaTipo").value;
-    payload.FormulaEtiqueta = ($("f_FormulaEtiqueta").value||"").trim();
+    const fcfg = resolveFormulaFromFichaForm();
+    payload.FormulaTipo = fcfg.tipo;
+    payload.FormulaEtiqueta = fcfg.etiqueta;
     payload.FormulaNumerador = cleanFormulaText($("f_NumTxt").value).trim();
     payload.FormulaDenominador = cleanFormulaText($("f_DenTxt").value).trim();
-    payload.FormulaFactor = Number($("f_Factor").value||1);
+    payload.FormulaFactor = fcfg.factor;
     payload.FuentesRecoleccion = getListState("f_FuentesList");
     payload.Terminos = getListState("f_TerminosList");
     payload.Observaciones = getListState("f_ObservacionesList");
@@ -3528,6 +3547,12 @@ function openFichaView(key){
   $("f_NumTxt").value = cleanFormulaText(f.FormulaNumerador) || "";
   $("f_DenTxt").value = cleanFormulaText(f.FormulaDenominador) || "";
   $("f_Factor").value = f.FormulaFactor || 1;
+  updateFactorEtiqueta();
+  if((f.FormulaTipo || "") === "Otro"){
+    $("f_FormulaEtiqueta").value = f.FormulaEtiqueta || "";
+    $("f_Factor").value = f.FormulaFactor || 1;
+    updateFormulaPreview();
+  }
   $("f_ResponsableIndicador").value = f.ResponsableIndicador || "";
   setListState("f_FuentesList", f.FuentesRecoleccion || []);
   setListState("f_TerminosList", f.Terminos || []);
