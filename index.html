@@ -796,7 +796,14 @@ async function loadAll(){
     return out;
   }) : [];
   CACHE.analisis = a.ok ? a.data : [];
-  CACHE.docs = d.ok ? d.data : [];
+  CACHE.docs = d.ok ? (d.data||[]).map(x=>({
+    ...x,
+    TipoDocumento: x.TipoDocumento || x.Tipo || "Otro",
+    DocName: x.DocName || x.Nombre || "",
+    WordUrl: x.WordUrl || x.Link || "",
+    PdfUrl: x.PdfUrl || "",
+    FileId: x.FileId || x.Key || ""
+  })) : [];
   CACHE.seg = s.ok ? s.data : [];
 
   fillAreaSelects();
