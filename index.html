@@ -2013,7 +2013,7 @@ function resetAnalisisUI(full){
   renderEvidenceList();
 
   // firmas
-  window.__FIRMAS = { ResponsableDataUrl:"", CalidadDataUrl:"", ResponsableFileName:"", CalidadFileName:"" };
+  window.__FIRMAS = { ResponsableDataUrl:"", ResponsableFileName:"" };
   renderFirmasPreview();
 
   // chart clear
@@ -2120,7 +2120,7 @@ function recalcResultadoAndUI(){
   if(ficha){
     const meta = Number(ficha.MetaObjetivo||0);
     const series = buildSeriesForCodigo(codigo);
-    const per = $("a_PeriodoYM").value;
+    const per = $("a_PeriodoYM").value || nowYM();
     if(per && res!==null){
       // agrega/override temporal
       const idx = series.findIndex(x=>x.PeriodoYM===per);
@@ -2265,29 +2265,18 @@ async function handleFirmaFile(e, tipo){
   const file = (e.target.files||[])[0];
   if(!file) return;
   const dataUrl = await fileToDataURL(file);
-  window.__FIRMAS = window.__FIRMAS || { ResponsableDataUrl:"", CalidadDataUrl:"", ResponsableFileName:"", CalidadFileName:"" };
-  if(tipo === "Responsable"){
-    window.__FIRMAS.ResponsableDataUrl = dataUrl;
-    window.__FIRMAS.ResponsableFileName = file.name;
-  } else {
-    window.__FIRMAS.CalidadDataUrl = dataUrl;
-    window.__FIRMAS.CalidadFileName = file.name;
-  }
+  window.__FIRMAS = window.__FIRMAS || { ResponsableDataUrl:"", ResponsableFileName:"" };
+  window.__FIRMAS.ResponsableDataUrl = dataUrl;
+  window.__FIRMAS.ResponsableFileName = file.name;
   renderFirmasPreview();
 }
 
 function renderFirmasPreview(){
   const f = window.__FIRMAS || {};
   const rPrev = $("a_FirmaResponsablePrev");
-  const cPrev = $("a_FirmaCalidadPrev");
   if(rPrev){
     rPrev.innerHTML = f.ResponsableDataUrl
       ? `<img src="${f.ResponsableDataUrl}" class="w-full max-w-xs h-24 object-contain rounded-xl border border-slate-200 bg-white"/><div class="text-xs text-slate-500 mt-1 truncate">${escapeHtml(f.ResponsableFileName||"")}</div>`
-      : `<div class="text-xs text-slate-400">Sin firma cargada.</div>`;
-  }
-  if(cPrev){
-    cPrev.innerHTML = f.CalidadDataUrl
-      ? `<img src="${f.CalidadDataUrl}" class="w-full max-w-xs h-24 object-contain rounded-xl border border-slate-200 bg-white"/><div class="text-xs text-slate-500 mt-1 truncate">${escapeHtml(f.CalidadFileName||"")}</div>`
       : `<div class="text-xs text-slate-400">Sin firma cargada.</div>`;
   }
 }
@@ -2378,7 +2367,6 @@ async function guardarAnalisis(status){
     Status: status, // BORRADOR/FINAL
     Evidencias: (window.__EVID||[]), // opcional
     FirmaResponsableDataUrl: (window.__FIRMAS?.ResponsableDataUrl || ""),
-    FirmaCalidadDataUrl: (window.__FIRMAS?.CalidadDataUrl || ""),
     UpdatedAt: nowISO()
   };
 
@@ -2570,7 +2558,6 @@ async function generateAnalisisDoc(){
       GraficoDataUrl: getChartDataUrl(),
       Responsable: ficha?.ResponsableIndicador || "",
       FirmaResponsableDataUrl: (window.__FIRMAS?.ResponsableDataUrl || ""),
-      FirmaCalidadDataUrl: (window.__FIRMAS?.CalidadDataUrl || ""),
       Status: "FINAL",
       Evidencias: (window.__EVID||[]),
       UpdatedAt: nowISO()
@@ -2667,11 +2654,24 @@ function drawAnalisisChart(series, meta){
   }
 
   // values
-  const vals = series.map(s=>Number(s.Resultado));
-  const maxV = Math.max(meta || 0, ...vals);
+  const cleanSeries = (series||[]).filter(s=>Number.isFinite(Number(s.Resultado)));
+  if(!cleanSeries.length){
+    ctx.fillStyle = "#94a3b8";
+    ctx.font = "800 13px Inter, system-ui";
+    ctx.fillText("Sin datos para graficar (captura un resultado).", padL, padT+24);
+    drawGrid(ctx, padL, padT, gw, gh);
+    return;
+  }
+  const vals = cleanSeries.map(s=>Number(s.Resultado));
+  const metaNum = Number(meta);
+  const maxV = Math.max(Number.isFinite(metaNum) ? metaNum : 0, ...vals);
   const minV = Math.min(0, ...vals);
-  const top = maxV * 1.15;
-  const bottom = minV;
+  let top = maxV * 1.15;
+  let bottom = minV;
+  if(!Number.isFinite(top) || !Number.isFinite(bottom) || top === bottom){
+    top = (Number.isFinite(maxV) ? maxV : 1) + 1;
+    bottom = Number.isFinite(minV) ? minV : 0;
+  }
 
   // grid
   drawGrid(ctx, padL, padT, gw, gh);
@@ -2686,7 +2686,7 @@ function drawAnalisisChart(series, meta){
   }
 
   // bars
-  const n = series.length;
+  const n = cleanSeries.length;
   const gap = Math.max(8, gw * 0.02);
   const barW = Math.max(18, (gw - gap*(n+1))/n);
   const xs = [];
@@ -2694,7 +2694,7 @@ function drawAnalisisChart(series, meta){
     const x = padL + gap + i*(barW+gap);
     xs.push(x + barW/2);
 
-    const v = Number(series[i].Resultado);
+    const v = Number(cleanSeries[i].Resultado);
     const y = valueToY(v, bottom, top, padT, gh);
     const barH = (padT+gh) - y;
 
@@ -2709,8 +2709,8 @@ function drawAnalisisChart(series, meta){
   }
 
   // meta line
-  if(Number.isFinite(meta)){
-    const yM = valueToY(meta, bottom, top, padT, gh);
+  if(Number.isFinite(metaNum)){
+    const yM = valueToY(metaNum, bottom, top, padT, gh);
     ctx.strokeStyle = "rgba(59,169,230,.95)"; // sky
     ctx.lineWidth = 2.5;
     ctx.beginPath();
@@ -2730,9 +2730,8 @@ function drawAnalisisChart(series, meta){
   ctx.fillStyle = "#64748b";
   ctx.font = "700 11px Inter, system-ui";
   for(let i=0;i<n;i++){
-    const label = (series[i].PeriodoLabel||"").replace(" ", "\n");
     // show month only (enero 2026 -> ene)
-    const parts = (series[i].PeriodoLabel||"").split(" ");
+    const parts = (cleanSeries[i].PeriodoLabel||"").split(" ");
     const m = parts[0]?.slice(0,3) || "";
     const y = parts[1] || "";
     const x = padL + gap + i*(barW+gap);
