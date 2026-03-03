@@ -2226,7 +2226,8 @@ async function handleEvidenceFiles(e){
     window.__EVID.push({
       Figura: window.__EVID.length + 1,
       FileName: f.name,
-      DataUrl: dataUrl
+      DataUrl: dataUrl,
+      caption: ""
     });
   }
   renderEvidenceList();
@@ -2246,9 +2247,20 @@ function renderEvidenceList(){
       <div class="text-xs font-extrabold text-slate-600 mb-2">Figura ${i+1}</div>
       <img src="${x.DataUrl}" class="w-full h-40 object-cover rounded-xl border border-slate-100"/>
       <div class="text-xs text-slate-500 mt-2 truncate">${escapeHtml(x.FileName)}</div>
+      <label class="text-xs font-extrabold text-slate-600 mt-2 block">Título de pie de foto</label>
+      <input class="input mt-1" data-evid-cap="${i}" value="${escapeHtml(x.caption||x.Caption||"")}" placeholder="Ej. Evidencia del evento"/>
       <button class="text-xs font-extrabold text-red-700 hover:underline mt-2" data-evid-del="${i}">Eliminar</button>
     </div>
   `).join("");
+
+  wrap.querySelectorAll("[data-evid-cap]").forEach(inp=>{
+    inp.addEventListener("input", ()=>{
+      const idx = Number(inp.getAttribute("data-evid-cap"));
+      if(!window.__EVID[idx]) return;
+      window.__EVID[idx].caption = inp.value || "";
+      window.__EVID[idx].Caption = inp.value || "";
+    });
+  });
 
   wrap.querySelectorAll("[data-evid-del]").forEach(b=>{
     b.addEventListener("click", ()=>{
@@ -2477,6 +2489,7 @@ function openAnalisisPreviewPDF(){
       <div class="card-h"><div class="font-extrabold text-navy">Figura ${i+1}</div></div>
       <div class="card-b">
         <img src="${x.DataUrl}" class="w-full rounded-2xl border border-slate-200"/>
+        <div class="text-xs text-slate-700 mt-1">${escapeHtml(x.caption||x.Caption||"")}</div>
         <div class="text-xs text-slate-500 mt-2">${escapeHtml(x.FileName)}</div>
       </div>
     </div>
