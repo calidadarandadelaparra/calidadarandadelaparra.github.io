@@ -1681,7 +1681,7 @@ function getFichaFactor(ficha){
   if(tipo.includes("tasa") || etiqueta.includes("tasa")) return 1000;
 
   const explicit = Number(ficha.FormulaFactor ?? ficha.Factor);
-  if(Number.isFinite(explicit) && explicit > 0) return explicit;
+  if(Number.isFinite(explicit) && explicit > 1) return explicit;
 
   // Fallback seguro para fichas viejas: si no hay pista clara y venía en 1,
   // usar porcentaje por defecto (caso más común en tus indicadores).
@@ -1840,18 +1840,13 @@ function renderAnalisis(){
           <div id="a_FirmasCard" class="card ring-1 ring-sky-200">
             <div class="card-h">
               <div class="font-extrabold text-navy">Firmas (obligatorio)</div>
-              <div class="text-xs text-slate-500">Carga firma del responsable y firma/recibido de Calidad.</div>
+              <div class="text-xs text-slate-500">Carga firma del responsable.</div>
             </div>
-            <div class="card-b grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="card-b grid grid-cols-1 gap-4">
               <div>
                 <label class="text-xs font-extrabold text-slate-600">Firma responsable *</label>
                 <input id="a_FirmaResponsable" type="file" accept="image/*" class="input mt-1"/>
                 <div id="a_FirmaResponsablePrev" class="mt-2"></div>
-              </div>
-              <div>
-                <label class="text-xs font-extrabold text-slate-600">Firma área de calidad *</label>
-                <input id="a_FirmaCalidad" type="file" accept="image/*" class="input mt-1"/>
-                <div id="a_FirmaCalidadPrev" class="mt-2"></div>
               </div>
             </div>
           </div>
@@ -1934,7 +1929,6 @@ function renderAnalisis(){
 
   $("a_Evidencias").addEventListener("change", (e)=>handleEvidenceFiles(e));
   $("a_FirmaResponsable").addEventListener("change", (e)=>handleFirmaFile(e, "Responsable"));
-  $("a_FirmaCalidad").addEventListener("change", (e)=>handleFirmaFile(e, "Calidad"));
 
   $("btnABorrador").addEventListener("click", ()=>guardarAnalisis("BORRADOR"));
   $("btnAGuardar").addEventListener("click", ()=>guardarAnalisis("FINAL"));
@@ -2310,8 +2304,8 @@ function validateAnalisis(){
   if(checkDuplicadoPeriodo()) return fail_("DUPLICADO");
 
   const firmas = window.__FIRMAS || {};
-  if(!firmas.ResponsableDataUrl || !firmas.CalidadDataUrl){
-    return fail_("Carga ambas firmas obligatorias (Responsable y Calidad).");
+  if(!firmas.ResponsableDataUrl){
+    return fail_("Carga la firma obligatoria del responsable.");
   }
 
   // si NO cumple -> validar propuestas (al menos 1 completa)
