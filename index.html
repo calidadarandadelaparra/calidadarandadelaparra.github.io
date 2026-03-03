@@ -1668,6 +1668,18 @@ function cumpleFrom(meta, resultado){
   if(!Number.isFinite(meta) || !Number.isFinite(resultado)) return null;
   return resultado >= meta;
 }
+function getFichaFactor(ficha){
+  if(!ficha) return 1;
+  const explicit = Number(ficha.FormulaFactor ?? ficha.Factor);
+  if(Number.isFinite(explicit) && explicit > 0) return explicit;
+
+  const tipo = String(ficha.FormulaTipo || "").toLowerCase();
+  const etiqueta = String(ficha.FormulaEtiqueta || ficha.Etiqueta || "").toLowerCase();
+
+  if(tipo.includes("porcentaje") || etiqueta.includes("%") || etiqueta.includes("porcentaje")) return 100;
+  if(tipo.includes("tasa")) return 1000;
+  return 1;
+}
 function fmtNum(n){
   if(n===null || n===undefined || n==="") return "—";
   const x = Number(n);
@@ -1846,6 +1858,26 @@ function renderAnalisis(){
             </div>
           </div>
 
+          <!-- FIRMAS (OBLIGATORIO) -->
+          <div class="card">
+            <div class="card-h">
+              <div class="font-extrabold text-navy">Firmas (obligatorio)</div>
+              <div class="text-xs text-slate-500">Carga firma del responsable y firma/recibido de Calidad.</div>
+            </div>
+            <div class="card-b grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label class="text-xs font-extrabold text-slate-600">Firma responsable *</label>
+                <input id="a_FirmaResponsable" type="file" accept="image/*" class="input mt-1"/>
+                <div id="a_FirmaResponsablePrev" class="mt-2"></div>
+              </div>
+              <div>
+                <label class="text-xs font-extrabold text-slate-600">Firma área de calidad *</label>
+                <input id="a_FirmaCalidad" type="file" accept="image/*" class="input mt-1"/>
+                <div id="a_FirmaCalidadPrev" class="mt-2"></div>
+              </div>
+            </div>
+          </div>
+
           <div class="flex flex-wrap gap-2">
             <button id="btnABorrador" class="btn btn-soft">Guardar borrador</button>
             <button id="btnAGuardar" class="btn btn-primary">Guardar y generar reporte (MVP: guarda)</button>
@@ -1892,6 +1924,8 @@ function renderAnalisis(){
   $("btnPropAdd").addEventListener("click", ()=>addPropRow());
 
   $("a_Evidencias").addEventListener("change", (e)=>handleEvidenceFiles(e));
+  $("a_FirmaResponsable").addEventListener("change", (e)=>handleFirmaFile(e, "Responsable"));
+  $("a_FirmaCalidad").addEventListener("change", (e)=>handleFirmaFile(e, "Calidad"));
 
   $("btnABorrador").addEventListener("click", ()=>guardarAnalisis("BORRADOR"));
   $("btnAGuardar").addEventListener("click", ()=>guardarAnalisis("FINAL"));
@@ -1953,6 +1987,10 @@ function resetAnalisisUI(full){
   window.__EVID = [];
   renderEvidenceList();
 
+  // firmas
+  window.__FIRMAS = { ResponsableDataUrl:"", CalidadDataUrl:"", ResponsableFileName:"", CalidadFileName:"" };
+  renderFirmasPreview();
+
   // chart clear
   drawAnalisisChart([], 0);
 }
@@ -1983,7 +2021,7 @@ function cargarIndicadorAnalisis(){
   $("a_Objetivo").textContent = ficha.ObjetivoIndicador || "";
 
   // hint fórmula
-  const f = Number(ficha.FormulaFactor||1) || 1;
+  const f = getFichaFactor(ficha);
   $("a_FormulaHint").textContent = `Fórmula: (${ficha.FormulaNumerador||"N"}/${ficha.FormulaDenominador||"D"})*${f}  · Etiqueta: ${ficha.FormulaEtiqueta||""}`;
 
   updatePeriodosRegistrados();
@@ -2035,14 +2073,14 @@ function recalcResultadoAndUI(){
 
   let res = null;
   if(Number.isFinite(n) && Number.isFinite(d) && d !== 0 && ficha){
-    const factor = Number(ficha.FormulaFactor||1) || 1;
+    const factor = getFichaFactor(ficha);
     res = (n / d) * factor;
   }
 
   $("a_Resultado").value = res===null ? "" : res.toFixed(2);
 
   // semáforo
-  let c=false;
+  let c = null;
   if(ficha && res!==null){
     const meta = Number(ficha.MetaObjetivo);
     c = cumpleFrom(meta, res);
@@ -2051,7 +2089,7 @@ function recalcResultadoAndUI(){
     $("a_Semaforo").innerHTML = `<span class="badge badge-gray">—</span>`;
   }
   // show/hide propuestas section
-  togglePropSection(!c);
+  togglePropSection(c===false);
 
   // chart: si ya hay resultado y periodo seleccionado, grafica instantánea (incluye el punto actual aunque no esté guardado)
   if(ficha){
@@ -2198,6 +2236,47 @@ function renderEvidenceList(){
   });
 }
 
+async function handleFirmaFile(e, tipo){
+  const file = (e.target.files||[])[0];
+  if(!file) return;
+  const dataUrl = await fileToDataURL(file);
+  window.__FIRMAS = window.__FIRMAS || { ResponsableDataUrl:"", CalidadDataUrl:"", ResponsableFileName:"", CalidadFileName:"" };
+  if(tipo === "Responsable"){
+    window.__FIRMAS.ResponsableDataUrl = dataUrl;
+    window.__FIRMAS.ResponsableFileName = file.name;
+  } else {
+    window.__FIRMAS.CalidadDataUrl = dataUrl;
+    window.__FIRMAS.CalidadFileName = file.name;
+  }
+  renderFirmasPreview();
+}
+
+function renderFirmasPreview(){
+  const f = window.__FIRMAS || {};
+  const rPrev = $("a_FirmaResponsablePrev");
+  const cPrev = $("a_FirmaCalidadPrev");
+  if(rPrev){
+    rPrev.innerHTML = f.ResponsableDataUrl
+      ? `<img src="${f.ResponsableDataUrl}" class="w-full max-w-xs h-24 object-contain rounded-xl border border-slate-200 bg-white"/><div class="text-xs text-slate-500 mt-1 truncate">${escapeHtml(f.ResponsableFileName||"")}</div>`
+      : `<div class="text-xs text-slate-400">Sin firma cargada.</div>`;
+  }
+  if(cPrev){
+    cPrev.innerHTML = f.CalidadDataUrl
+      ? `<img src="${f.CalidadDataUrl}" class="w-full max-w-xs h-24 object-contain rounded-xl border border-slate-200 bg-white"/><div class="text-xs text-slate-500 mt-1 truncate">${escapeHtml(f.CalidadFileName||"")}</div>`
+      : `<div class="text-xs text-slate-400">Sin firma cargada.</div>`;
+  }
+}
+
+function getChartDataUrl(){
+  const canvas = $("aChart");
+  if(!canvas) return "";
+  try {
+    return canvas.toDataURL("image/png");
+  } catch(_) {
+    return "";
+  }
+}
+
 /* =========================================================
    VALIDACIÓN + GUARDAR ANÁLISIS
 ========================================================= */
@@ -2217,6 +2296,11 @@ function validateAnalisis(){
   if(!anal) return fail_("Captura el análisis e interpretación.");
   if(res==="") return fail_("Resultado no calculado (revisa N/D).");
   if(checkDuplicadoPeriodo()) return fail_("DUPLICADO");
+
+  const firmas = window.__FIRMAS || {};
+  if(!firmas.ResponsableDataUrl || !firmas.CalidadDataUrl){
+    return fail_("Carga ambas firmas obligatorias (Responsable y Calidad).");
+  }
 
   // si NO cumple -> validar propuestas (al menos 1 completa)
   const ficha = fichaByCodigo(codigo);
@@ -2268,6 +2352,8 @@ async function guardarAnalisis(status){
     AnalisisInterpretacion: ($("a_Analisis").value||"").trim(),
     Status: status, // BORRADOR/FINAL
     Evidencias: (window.__EVID||[]), // opcional
+    FirmaResponsableDataUrl: (window.__FIRMAS?.ResponsableDataUrl || ""),
+    FirmaCalidadDataUrl: (window.__FIRMAS?.CalidadDataUrl || ""),
     UpdatedAt: nowISO()
   };
 
@@ -2442,14 +2528,24 @@ async function generateAnalisisDoc(){
     const payload = {
       CodigoIndicador: codigo,
       AreaResponsable: $("a_Area").value,
+      AreaLabel: getAreaLabel(ficha?.AreaResponsable || ""),
+      NombreIndicador: ficha?.NombreIndicador || "",
+      TipoIndicador: ficha?.TipoIndicador || "",
+      Objetivo: ficha?.ObjetivoIndicador || "",
       PeriodoYM: perYM,
       PeriodoLabel: periodoHuman(perYM),
+      Periodo: periodoHuman(perYM),
       NumValor: Number($("a_Num").value),
       DenValor: Number($("a_Den").value),
       ResultadoObtenido: res,
+      Resultado: res,
       MetaObjetivo: meta,
       Cumple: cumple,
       AnalisisInterpretacion: ($("a_Analisis").value||"").trim(),
+      GraficoDataUrl: getChartDataUrl(),
+      Responsable: ficha?.ResponsableIndicador || "",
+      FirmaResponsableDataUrl: (window.__FIRMAS?.ResponsableDataUrl || ""),
+      FirmaCalidadDataUrl: (window.__FIRMAS?.CalidadDataUrl || ""),
       Status: "FINAL",
       Evidencias: (window.__EVID||[]),
       UpdatedAt: nowISO()
