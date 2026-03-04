@@ -2179,10 +2179,10 @@ function renderAnalisis(){
   $("a_Evidencias").addEventListener("change", (e)=>handleEvidenceFiles(e));
   $("a_FirmaResponsable").addEventListener("change", (e)=>handleFirmaFile(e, "Responsable"));
 
-  $("btnABorrador").addEventListener("click", ()=>guardarAnalisis("BORRADOR"));
-  $("btnAGuardar").addEventListener("click", ()=>guardarAnalisis("FINAL"));
+  $("btnABorrador").addEventListener("click", ()=>guardarAnalisis("BORRADOR", { generatePreviewDoc:true }));
+  $("btnAGuardar").addEventListener("click", ()=>generateAnalisisDoc({ previewOnly:true }));
   $("btnAnalisisGen").addEventListener("click", ()=>generateAnalisisDoc());
-  $("btnAPDF").addEventListener("click", ()=>openAnalisisPreviewPDF());
+  $("btnAPDF").addEventListener("click", ()=>openAnalisisDraftPreview_());
   $("btnAIrFirmas")?.addEventListener("click", ()=>{
     $("a_FirmasCard")?.scrollIntoView({ behavior:"smooth", block:"center" });
   });
@@ -2642,7 +2642,7 @@ async function guardarAnalisis(status, opts){
   const resultado = Number($("a_Resultado").value);
   const cumple = cumpleFrom(meta, resultado);
   const evidencias = buildAnalisisEvidenceList_(window.__EVID || []);
-  const analisisPrincipal = String($("a_Analisis").value || "").trim();
+  const analisisPrincipal = String($("a_Analisis").value || "").trimStart().trimEnd();
 
   let row = {
     CodigoIndicador: codigo,
@@ -2741,10 +2741,29 @@ async function guardarAnalisis(status, opts){
     $("a_SaveMsg").classList.add("hidden");
   }, 1600);
 
+  if(opts.generatePreviewDoc){
+    await generateAnalisisDoc({ previewOnly:true });
+    return;
+  }
+
   // flujo claro: tras guardar FINAL, abrir vista previa para generar Word/PDF
   if(status === "FINAL" && opts.openPreviewAfterSave){
     openAnalisisPreviewPDF({ forGeneration:true });
   }
+}
+
+function openAnalisisDraftPreview_(){
+  const codigo = $("a_Codigo").value;
+  const perYM = $("a_PeriodoYM").value;
+  const draft = window.__AN_DOC_DRAFT;
+  const hasCurrentDraft = !!(draft && draft.codigo === codigo && draft.periodo === perYM && draft.docId);
+
+  if(hasCurrentDraft && draft.linkDocx){
+    window.open(draft.linkDocx, "_blank");
+    return;
+  }
+
+  toast("warn","Sin vista previa","Primero genera el borrador para este periodo.");
 }
 
 /* =========================================================
@@ -2816,7 +2835,8 @@ function openAnalisisPreviewPDF(opts){
   $("pdfModal").classList.remove("hidden");
 }
 
-async function generateAnalisisDoc(){
+async function generateAnalisisDoc(opts){
+  opts = opts || {};
   const v = validateAnalisis();
   if(!v.ok){
     toast("err","Faltan datos", v.message);
@@ -2829,6 +2849,12 @@ async function generateAnalisisDoc(){
 
   const draft = window.__AN_DOC_DRAFT;
   const hasCurrentDraft = !!(draft && draft.codigo === codigo && draft.periodo === perYM && draft.docId);
+
+  if(opts.previewOnly && hasCurrentDraft){
+    if(draft.linkDocx) window.open(draft.linkDocx, "_blank");
+    else toast("warn","Sin vista previa","No se encontró el enlace del borrador actual.");
+    return;
+  }
 
   if(!hasCurrentDraft){
     const previewWin = window.open("about:blank", "_blank");
@@ -2915,6 +2941,8 @@ async function generateAnalisisDoc(){
       if(btn.textContent === "Generando borrador…") btn.textContent = origTxt;
     }
   }
+
+  if(opts.previewOnly) return;
 
   const ok = confirm("¿Confirmas que el documento en Drive ya está correcto para guardarlo de forma final (Word + PDF)?");
   if(!ok) return;
