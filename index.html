@@ -2581,6 +2581,7 @@ async function generateAnalisisDoc(){
   const hasCurrentDraft = !!(draft && draft.codigo === codigo && draft.periodo === perYM && draft.docId);
 
   if(!hasCurrentDraft){
+    const previewWin = window.open("about:blank", "_blank");
     const fichaPrev = fichaByCodigo(codigo);
     const metaPrev = Number(fichaPrev?.MetaObjetivo);
     const resPrev = Number($("a_Resultado").value);
@@ -2629,6 +2630,7 @@ async function generateAnalisisDoc(){
     try {
       const rp = await apiFetch("docs.generarAnalisisFromUI", payloadPreview);
       if(!rp.ok){
+        try { previewWin && !previewWin.closed && previewWin.close(); } catch(_) {}
         toast("err","Error", rp.message || "No se pudo generar borrador en Drive");
         return;
       }
@@ -2641,11 +2643,17 @@ async function generateAnalisisDoc(){
         periodo: perYM,
         baseName: d.baseName || ""
       };
-      if(d.linkDocx) window.open(d.linkDocx, "_blank");
+      if(d.linkDocx){
+        if(previewWin && !previewWin.closed) previewWin.location.href = d.linkDocx;
+        else window.open(d.linkDocx, "_blank");
+      } else {
+        try { previewWin && !previewWin.closed && previewWin.close(); } catch(_) {}
+      }
       btn.textContent = "Confirmar y guardar documento WORD/PDF";
       toast("ok","Borrador en Drive","Revisa/ajusta el formato en Drive y luego presiona de nuevo este botón para confirmar guardado final.");
       return;
     } catch(e){
+      try { previewWin && !previewWin.closed && previewWin.close(); } catch(_) {}
       toast("err","Error de red", String(e));
       return;
     } finally {
@@ -2660,6 +2668,8 @@ async function generateAnalisisDoc(){
   const orig = btn.textContent;
   btn.disabled = true;
   btn.textContent = "Confirmando…";
+  const docWin = window.open("about:blank", "_blank");
+  const pdfWin = window.open("about:blank", "_blank");
 
   try {
     const r = await apiFetch("docs.confirmarAnalisisDoc", {
@@ -2669,17 +2679,31 @@ async function generateAnalisisDoc(){
       baseName: draft.baseName || ""
     });
     if(!r.ok){
+      try { docWin && !docWin.closed && docWin.close(); } catch(_) {}
+      try { pdfWin && !pdfWin.closed && pdfWin.close(); } catch(_) {}
       toast("err","Error", r.message || "Falló confirmación final");
     } else {
       const links = r.data;
       $("pdfModal")?.classList.add("hidden");
-      if(links?.linkDocx) window.open(links.linkDocx, "_blank");
-      if(links?.linkPdf) window.open(links.linkPdf, "_blank");
+      if(links?.linkDocx){
+        if(docWin && !docWin.closed) docWin.location.href = links.linkDocx;
+        else window.open(links.linkDocx, "_blank");
+      } else {
+        try { docWin && !docWin.closed && docWin.close(); } catch(_) {}
+      }
+      if(links?.linkPdf){
+        if(pdfWin && !pdfWin.closed) pdfWin.location.href = links.linkPdf;
+        else window.open(links.linkPdf, "_blank");
+      } else {
+        try { pdfWin && !pdfWin.closed && pdfWin.close(); } catch(_) {}
+      }
       alert(`Documento listo:\nWord: ${links.linkDocx}\nPDF: ${links.linkPdf}`);
       toast("ok","Documento confirmado","Se guardó como siempre (Word y PDF) y se abrieron en pestañas nuevas.");
       clearAnalisisDocDraft_();
     }
   } catch(e){
+    try { docWin && !docWin.closed && docWin.close(); } catch(_) {}
+    try { pdfWin && !pdfWin.closed && pdfWin.close(); } catch(_) {}
     toast("err","Error de red", String(e));
   } finally {
     btn.disabled = false;
