@@ -357,6 +357,7 @@ function scrollTopSmooth(){ window.scrollTo({top:0, behavior:"smooth"}); }
         <div id="pdfSub" class="text-xs text-slate-500"></div>
       </div>
       <div class="flex gap-2">
+        <button id="btnPdfGenerate" class="btn btn-primary hidden">Generar Word/PDF</button>
         <button id="btnPrint" class="btn btn-primary">Imprimir / Guardar PDF</button>
         <button id="btnPdfClose" class="btn btn-soft">Cerrar</button>
       </div>
@@ -1414,6 +1415,7 @@ async function saveFicha(){
 ========================================================= */
 function openFichaPreviewPDF(){
   if(!validateFicha()) return;
+  setPdfGenerateAction_(false);
 
   const codigo = $("f_CodigoIndicador").value;
   const nombre = $("f_NombreIndicador").value;
@@ -1607,6 +1609,17 @@ function wireHeaderNav(){
   // PDF modal
   $("btnPdfClose").addEventListener("click", ()=>$("pdfModal").classList.add("hidden"));
   $("btnPrint").addEventListener("click", ()=>window.print());
+  $("btnPdfGenerate")?.addEventListener("click", ()=>generateAnalisisDoc(true));
+}
+
+function setPdfGenerateAction_(show){
+  const btn = $("btnPdfGenerate");
+  if(!btn) return;
+  btn.classList.toggle("hidden", !show);
+  if(show){
+    btn.disabled = false;
+    btn.textContent = "Generar Word/PDF";
+  }
 }
 
 /* =========================================================
@@ -1940,7 +1953,10 @@ function renderAnalisis(){
 
   $("a_Num").addEventListener("input", ()=>recalcResultadoAndUI());
   $("a_Den").addEventListener("input", ()=>recalcResultadoAndUI());
-  $("a_PeriodoYM").addEventListener("input", ()=>checkDuplicadoPeriodo());
+  $("a_PeriodoYM").addEventListener("input", ()=>{
+    checkDuplicadoPeriodo();
+    recalcResultadoAndUI();
+  });
 
   $("a_Analisis").addEventListener("blur", ()=>suggestRedaction("a_Analisis","a_AnalisisSug","a_AnalisisSugTxt"));
 
@@ -1951,7 +1967,7 @@ function renderAnalisis(){
 
   $("btnABorrador").addEventListener("click", ()=>guardarAnalisis("BORRADOR"));
   $("btnAGuardar").addEventListener("click", ()=>guardarAnalisis("FINAL"));
-  $("btnAnalisisGen").addEventListener("click", ()=>generateAnalisisDoc());
+  $("btnAnalisisGen").addEventListener("click", ()=>openAnalisisPreviewPDF({ forGeneration:true }));
   $("btnAPDF").addEventListener("click", ()=>openAnalisisPreviewPDF());
   $("btnAIrFirmas").addEventListener("click", ()=>{
     $("a_FirmasCard")?.scrollIntoView({ behavior:"smooth", block:"center" });
@@ -2468,12 +2484,14 @@ async function guardarAnalisis(status){
 /* =========================================================
    PDF PREVIEW ANÁLISIS
 ========================================================= */
-function openAnalisisPreviewPDF(){
+function openAnalisisPreviewPDF(opts){
+  opts = opts || {};
   const v = validateAnalisis();
   if(!v.ok){
     toast("err","Faltan datos", v.message);
     return;
   }
+  setPdfGenerateAction_(!!opts.forGeneration);
   const codigo = $("a_Codigo").value;
   const ficha = fichaByCodigo(codigo);
   const perYM = $("a_PeriodoYM").value;
@@ -2531,16 +2549,27 @@ function openAnalisisPreviewPDF(){
   $("pdfModal").classList.remove("hidden");
 }
 
-async function generateAnalisisDoc(){
+async function generateAnalisisDoc(fromPreview){
+  if(!fromPreview){
+    openAnalisisPreviewPDF({ forGeneration:true });
+    return;
+  }
+
   const v = validateAnalisis();
   if(!v.ok){
     toast("err","Faltan datos", v.message);
     return;
   }
   const btn = $("btnAnalisisGen");
+  const btnModal = $("btnPdfGenerate");
   const orig = btn.textContent;
+  const origModal = btnModal ? btnModal.textContent : "";
   btn.disabled = true;
   btn.textContent = "Generando…";
+  if(btnModal){
+    btnModal.disabled = true;
+    btnModal.textContent = "Generando…";
+  }
 
   try {
     const codigo = $("a_Codigo").value;
@@ -2573,6 +2602,16 @@ async function generateAnalisisDoc(){
       FirmaResponsableDataUrl: (window.__FIRMAS?.ResponsableDataUrl || ""),
       Status: "FINAL",
       Evidencias: (window.__EVID||[]),
+      Propuestas: (window.__PROP_ROWS||[])
+        .filter(r => (r.Accion||"").trim() || (r.Responsable||"").trim() || (r.FechaCompromiso||"").trim())
+        .slice(0,5)
+        .map(r=>(
+          {
+            Accion:(r.Accion||"").trim(),
+            Responsable:(r.Responsable||"").trim(),
+            FechaCompromiso:(r.FechaCompromiso||"").trim()
+          }
+        )),
       UpdatedAt: nowISO()
     };
     Object.keys(payload).forEach(k=>{
@@ -2586,6 +2625,7 @@ async function generateAnalisisDoc(){
       toast("err","Error", r.message || "Falló generación");
     } else {
       const links = r.data;
+      $("pdfModal")?.classList.add("hidden");
       alert(`Documento listo:\nWord: ${links.linkDocx}\nPDF: ${links.linkPdf}`);
       toast("ok","Generado","Revisa la alerta para links");
     }
@@ -2594,6 +2634,10 @@ async function generateAnalisisDoc(){
   } finally {
     btn.disabled = false;
     btn.textContent = orig;
+    if(btnModal){
+      btnModal.disabled = false;
+      btnModal.textContent = origModal || "Generar Word/PDF";
+    }
   }
 }
 
@@ -3896,6 +3940,7 @@ async function saveSeguimiento(){
 function openSeguimientoPreviewPDF(){
   const v = validateSeguimiento();
   if(!v.ok) return toast("err","Faltan datos", v.message);
+  setPdfGenerateAction_(false);
 
   const ctx = window.__SEG_CTX;
   const f = fichaByCodigo(ctx.codigo);
