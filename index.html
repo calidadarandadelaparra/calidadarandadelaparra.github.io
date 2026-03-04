@@ -1622,6 +1622,14 @@ function setPdfGenerateAction_(show){
   }
 }
 
+function clearAnalisisDocDraft_(){
+  window.__AN_DOC_DRAFT = null;
+  const btn = $("btnAnalisisGen");
+  if(btn){
+    btn.textContent = "Generar documento WORD/PDF (Drive)";
+  }
+}
+
 /* =========================================================
    INIT PARTE 2
 ========================================================= */
@@ -1917,7 +1925,7 @@ function renderAnalisis(){
             <button id="btnAIrFirmas" class="btn btn-soft">Ir a firmas</button>
             <button id="btnABorrador" class="btn btn-soft">Guardar borrador</button>
             <button id="btnAGuardar" class="btn btn-primary">Guardar análisis</button>
-            <button id="btnAnalisisGen" class="btn btn-primary">Vista previa y generar Word/PDF</button>
+            <button id="btnAnalisisGen" class="btn btn-primary">Generar documento WORD/PDF (Drive)</button>
             <button id="btnAPDF" class="btn btn-soft">Solo vista previa</button>
             <button id="btnACancelar" class="btn btn-soft">Cancelar</button>
           </div>
@@ -1966,8 +1974,8 @@ function renderAnalisis(){
   $("a_FirmaResponsable").addEventListener("change", (e)=>handleFirmaFile(e, "Responsable"));
 
   $("btnABorrador").addEventListener("click", ()=>guardarAnalisis("BORRADOR"));
-  $("btnAGuardar").addEventListener("click", ()=>guardarAnalisis("FINAL", { openPreviewAfterSave:true }));
-  $("btnAnalisisGen").addEventListener("click", ()=>openAnalisisPreviewPDF({ forGeneration:true }));
+  $("btnAGuardar").addEventListener("click", ()=>guardarAnalisis("FINAL"));
+  $("btnAnalisisGen").addEventListener("click", ()=>generateAnalisisDoc(false));
   $("btnAPDF").addEventListener("click", ()=>openAnalisisPreviewPDF());
   $("btnAIrFirmas").addEventListener("click", ()=>{
     $("a_FirmasCard")?.scrollIntoView({ behavior:"smooth", block:"center" });
@@ -2034,6 +2042,8 @@ function resetAnalisisUI(full){
 
   // chart clear
   drawAnalisisChart([], 0);
+
+  clearAnalisisDocDraft_();
 }
 
 function cargarIndicadorAnalisis(){
@@ -2095,6 +2105,10 @@ function updatePeriodosRegistrados(){
 function checkDuplicadoPeriodo(){
   const codigo = $("a_Codigo").value;
   const per = $("a_PeriodoYM").value;
+  const draft = window.__AN_DOC_DRAFT;
+  if(draft && (draft.codigo !== codigo || draft.periodo !== per)){
+    clearAnalisisDocDraft_();
+  }
   if(!codigo || !per){
     $("a_DupMsg").classList.add("hidden");
     return false;
@@ -2553,86 +2567,128 @@ function openAnalisisPreviewPDF(opts){
 }
 
 async function generateAnalisisDoc(fromPreview){
-  if(!fromPreview){
-    openAnalisisPreviewPDF({ forGeneration:true });
-    return;
-  }
-
   const v = validateAnalisis();
   if(!v.ok){
     toast("err","Faltan datos", v.message);
     return;
   }
+
+  const codigo = $("a_Codigo").value;
+  const perYM = $("a_PeriodoYM").value;
   const btn = $("btnAnalisisGen");
   const btnModal = $("btnPdfGenerate");
-  const orig = btn.textContent;
-  const origModal = btnModal ? btnModal.textContent : "";
-  btn.disabled = true;
-  btn.textContent = "Generando…";
-  if(btnModal){
-    btnModal.disabled = true;
-    btnModal.textContent = "Generando…";
-  }
 
-  try {
-    const codigo = $("a_Codigo").value;
-    const ficha = fichaByCodigo(codigo);
-    const perYM = $("a_PeriodoYM").value;
+  const draft = window.__AN_DOC_DRAFT;
+  const hasCurrentDraft = !!(draft && draft.codigo === codigo && draft.periodo === perYM && draft.docId);
 
-    const meta = Number(ficha?.MetaObjetivo);
-    const res = Number($("a_Resultado").value);
-    const cumple = (res >= meta);
-
-    const payload = {
+  if(!fromPreview && !hasCurrentDraft){
+    const fichaPrev = fichaByCodigo(codigo);
+    const metaPrev = Number(fichaPrev?.MetaObjetivo);
+    const resPrev = Number($("a_Resultado").value);
+    const payloadPreview = {
       CodigoIndicador: codigo,
       AreaResponsable: $("a_Area").value,
-      AreaLabel: getAreaLabel(ficha?.AreaResponsable || ""),
-      NombreIndicador: ficha?.NombreIndicador || "",
-      TipoIndicador: ficha?.TipoIndicador || "",
-      Objetivo: ficha?.ObjetivoIndicador || "",
+      AreaLabel: getAreaLabel(fichaPrev?.AreaResponsable || ""),
+      NombreIndicador: fichaPrev?.NombreIndicador || "",
+      TipoIndicador: fichaPrev?.TipoIndicador || "",
+      Objetivo: fichaPrev?.ObjetivoIndicador || "",
       PeriodoYM: perYM,
       PeriodoLabel: periodoHuman(perYM),
       Periodo: periodoHuman(perYM),
       NumValor: Number($("a_Num").value),
       DenValor: Number($("a_Den").value),
-      ResultadoObtenido: res,
-      Resultado: res,
-      MetaObjetivo: meta,
-      Cumple: cumple,
+      ResultadoObtenido: resPrev,
+      Resultado: resPrev,
+      MetaObjetivo: metaPrev,
+      Cumple: (resPrev >= metaPrev),
       AnalisisInterpretacion: ($("a_Analisis").value||"").trim(),
       GraficoDataUrl: getChartDataUrl(),
-      Responsable: ficha?.ResponsableIndicador || "",
+      Responsable: fichaPrev?.ResponsableIndicador || "",
       FirmaResponsableDataUrl: (window.__FIRMAS?.ResponsableDataUrl || ""),
       Status: "FINAL",
       Evidencias: (window.__EVID||[]),
       Propuestas: (window.__PROP_ROWS||[])
         .filter(r => (r.Accion||"").trim() || (r.Responsable||"").trim() || (r.FechaCompromiso||"").trim())
         .slice(0,5)
-        .map(r=>(
-          {
-            Accion:(r.Accion||"").trim(),
-            Responsable:(r.Responsable||"").trim(),
-            FechaCompromiso:(r.FechaCompromiso||"").trim()
-          }
-        )),
+        .map(r=>({
+          Accion:(r.Accion||"").trim(),
+          Responsable:(r.Responsable||"").trim(),
+          FechaCompromiso:(r.FechaCompromiso||"").trim()
+        })),
+      PreviewOnly: true,
       UpdatedAt: nowISO()
     };
-    Object.keys(payload).forEach(k=>{
-      const v2 = payload[k];
-      if(v2 == null || (typeof v2==='string' && v2.trim()==='') ||
-         (Array.isArray(v2)&&v2.length===0)) delete payload[k];
+    Object.keys(payloadPreview).forEach(k=>{
+      const v3 = payloadPreview[k];
+      if(v3 == null || (typeof v3==='string' && v3.trim()==='') ||
+         (Array.isArray(v3)&&v3.length===0)) delete payloadPreview[k];
     });
 
-    const r = await apiFetch("docs.generarAnalisisFromUI", payload);
+    btn.disabled = true;
+    const origTxt = btn.textContent;
+    btn.textContent = "Generando borrador…";
+    try {
+      const rp = await apiFetch("docs.generarAnalisisFromUI", payloadPreview);
+      if(!rp.ok){
+        toast("err","Error", rp.message || "No se pudo generar borrador en Drive");
+        return;
+      }
+
+      const d = rp.data || {};
+      window.__AN_DOC_DRAFT = {
+        docId: d.docId,
+        linkDocx: d.linkDocx,
+        codigo,
+        periodo: perYM,
+        baseName: d.baseName || ""
+      };
+      if(d.linkDocx) window.open(d.linkDocx, "_blank");
+      btn.textContent = "Confirmar y guardar documento WORD/PDF";
+      toast("ok","Borrador en Drive","Revisa/ajusta el formato en Drive y luego presiona de nuevo este botón para confirmar guardado final.");
+      return;
+    } catch(e){
+      toast("err","Error de red", String(e));
+      return;
+    } finally {
+      btn.disabled = false;
+      if(btn.textContent === "Generando borrador…") btn.textContent = origTxt;
+    }
+  }
+
+  if(!hasCurrentDraft){
+    toast("warn","Sin borrador","Primero genera el borrador en Drive para vista previa.");
+    return;
+  }
+
+  const ok = confirm("¿Confirmas que el documento en Drive ya está correcto para guardarlo de forma final (Word + PDF)?");
+  if(!ok) return;
+
+  const orig = btn.textContent;
+  const origModal = btnModal ? btnModal.textContent : "";
+  btn.disabled = true;
+  btn.textContent = "Confirmando…";
+  if(btnModal){
+    btnModal.disabled = true;
+    btnModal.textContent = "Confirmando…";
+  }
+
+  try {
+    const r = await apiFetch("docs.confirmarAnalisisDoc", {
+      docId: draft.docId,
+      codigo: draft.codigo,
+      periodo: draft.periodo,
+      baseName: draft.baseName || ""
+    });
     if(!r.ok){
-      toast("err","Error", r.message || "Falló generación");
+      toast("err","Error", r.message || "Falló confirmación final");
     } else {
       const links = r.data;
       $("pdfModal")?.classList.add("hidden");
       if(links?.linkDocx) window.open(links.linkDocx, "_blank");
       if(links?.linkPdf) window.open(links.linkPdf, "_blank");
       alert(`Documento listo:\nWord: ${links.linkDocx}\nPDF: ${links.linkPdf}`);
-      toast("ok","Generado","Se abrieron Word y PDF en pestañas nuevas.");
+      toast("ok","Documento confirmado","Se guardó como siempre (Word y PDF) y se abrieron en pestañas nuevas.");
+      clearAnalisisDocDraft_();
     }
   } catch(e){
     toast("err","Error de red", String(e));
@@ -4027,4 +4083,5 @@ function openSeguimientoPreviewPDF(){
   // nada extra, solo placeholder
 })();
 </script>
+
 
