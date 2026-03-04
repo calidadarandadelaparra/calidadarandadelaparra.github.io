@@ -1916,15 +1916,15 @@ function renderAnalisis(){
           <div class="flex flex-wrap gap-2">
             <button id="btnAIrFirmas" class="btn btn-soft">Ir a firmas</button>
             <button id="btnABorrador" class="btn btn-soft">Guardar borrador</button>
-            <button id="btnAGuardar" class="btn btn-primary">Guardar y generar reporte (MVP: guarda)</button>
-            <button id="btnAnalisisGen" class="btn btn-primary">Generar Word/PDF</button>
-            <button id="btnAPDF" class="btn btn-soft">Generar documento (Vista PDF)</button>
+            <button id="btnAGuardar" class="btn btn-primary">Guardar análisis</button>
+            <button id="btnAnalisisGen" class="btn btn-primary">Vista previa y generar Word/PDF</button>
+            <button id="btnAPDF" class="btn btn-soft">Solo vista previa</button>
             <button id="btnACancelar" class="btn btn-soft">Cancelar</button>
           </div>
 
           <div id="a_SaveMsg" class="hidden rounded-2xl border border-emerald-200 bg-emerald-50 text-emerald-900 p-3 text-sm">
             <div class="font-extrabold">Guardado correctamente</div>
-            <div>Regresando al Dashboard/Inicio…</div>
+            <div>El análisis se guardó en la base de datos.</div>
           </div>
 
         </div>
@@ -1966,7 +1966,7 @@ function renderAnalisis(){
   $("a_FirmaResponsable").addEventListener("change", (e)=>handleFirmaFile(e, "Responsable"));
 
   $("btnABorrador").addEventListener("click", ()=>guardarAnalisis("BORRADOR"));
-  $("btnAGuardar").addEventListener("click", ()=>guardarAnalisis("FINAL"));
+  $("btnAGuardar").addEventListener("click", ()=>guardarAnalisis("FINAL", { openPreviewAfterSave:true }));
   $("btnAnalisisGen").addEventListener("click", ()=>openAnalisisPreviewPDF({ forGeneration:true }));
   $("btnAPDF").addEventListener("click", ()=>openAnalisisPreviewPDF());
   $("btnAIrFirmas").addEventListener("click", ()=>{
@@ -2359,7 +2359,8 @@ function validateAnalisis(){
   return ok_(true);
 }
 
-async function guardarAnalisis(status){
+async function guardarAnalisis(status, opts){
+  opts = opts || {};
   // loading indicator for both save buttons
   const btn1 = $("btnABorrador");
   const btn2 = $("btnAGuardar");
@@ -2439,10 +2440,6 @@ async function guardarAnalisis(status){
 
   // success feedback
   toast("ok","Guardado","Análisis capturado correctamente.");
-  // optionally clear or navigate back to inicio
-  setTimeout(()=>{
-    showSection("secInicio");
-  }, 1200);
 
   // Propuestas (si hay)
   const meta = Number(ficha?.MetaObjetivo);
@@ -2470,15 +2467,21 @@ async function guardarAnalisis(status){
 
   await loadAll();
 
+  // refresca chips/histórico del indicador actual
+  updatePeriodosRegistrados();
+  recalcResultadoAndUI();
+
   $("a_SaveMsg").classList.remove("hidden");
   scrollTopSmooth();
 
   setTimeout(()=>{
     $("a_SaveMsg").classList.add("hidden");
-    // si ya tienes acceso calidad, te mando al dashboard. si no, al inicio
-    if(isQuality()) showSection("secDashboard");
-    else showSection("secInicio");
   }, 1600);
+
+  // flujo claro: tras guardar FINAL, abrir vista previa para generar Word/PDF
+  if(status === "FINAL" && opts.openPreviewAfterSave){
+    openAnalisisPreviewPDF({ forGeneration:true });
+  }
 }
 
 /* =========================================================
@@ -2626,8 +2629,10 @@ async function generateAnalisisDoc(fromPreview){
     } else {
       const links = r.data;
       $("pdfModal")?.classList.add("hidden");
+      if(links?.linkDocx) window.open(links.linkDocx, "_blank");
+      if(links?.linkPdf) window.open(links.linkPdf, "_blank");
       alert(`Documento listo:\nWord: ${links.linkDocx}\nPDF: ${links.linkPdf}`);
-      toast("ok","Generado","Revisa la alerta para links");
+      toast("ok","Generado","Se abrieron Word y PDF en pestañas nuevas.");
     }
   } catch(e){
     toast("err","Error de red", String(e));
@@ -4022,3 +4027,4 @@ function openSeguimientoPreviewPDF(){
   // nada extra, solo placeholder
 })();
 </script>
+
