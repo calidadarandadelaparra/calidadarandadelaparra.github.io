@@ -720,6 +720,118 @@ function modelFicha(){
   };
 }
 
+function safeJsonStringify_(value, fallback = ""){
+  try { return JSON.stringify(value); } catch(_) { return fallback; }
+}
+
+function safeJsonParse_(value, fallback = null){
+  if(value == null || value === "") return fallback;
+  if(typeof value === "object") return value;
+  try { return JSON.parse(String(value)); } catch(_) { return fallback; }
+}
+
+function normalizeLineText_(value){
+  return String(value == null ? "" : value).replace(/\s+/g, " ").trim();
+}
+
+function ensureSentenceEndingES_(value){
+  const t = normalizeLineText_(value);
+  if(!t) return "";
+  return /[.!?]$/.test(t) ? t : (t + ".");
+}
+
+function buildAnalisisEvidenceList_(evidencias){
+  return (Array.isArray(evidencias) ? evidencias : []).map((ev, idx)=>{
+    const evidenciaTexto = normalizeLineText_(ev?.evidenciaTexto || ev?.EvidenciaTexto || ev?.evidencia || ev?.Evidencia || "");
+    const figuraTexto = normalizeLineText_(ev?.figuraTexto || ev?.FiguraTexto || ev?.caption || ev?.Caption || "");
+    const dataUrl = ev?.DataUrl || ev?.dataUrl || ev?.DataURL || "";
+    return {
+      Figura: idx + 1,
+      evidenciaTexto,
+      EvidenciaTexto: evidenciaTexto,
+      figuraTexto,
+      FiguraTexto: figuraTexto,
+      caption: figuraTexto,
+      Caption: figuraTexto,
+      DataUrl: dataUrl,
+      dataUrl: dataUrl,
+      FileName: ev?.FileName || ""
+    };
+  }).filter(ev => ev.evidenciaTexto || ev.figuraTexto || ev.DataUrl);
+}
+
+function buildAnalisisInterpretacion(textoPrincipal, evidencias){
+  const principal = String(textoPrincipal == null ? "" : textoPrincipal)
+    .replace(/\r\n?/g, "\n")
+    .split("\n")
+    .map(l => normalizeLineText_(l))
+    .filter((line, idx, arr) => !(line === "" && (idx === 0 || arr[idx-1] === "")))
+    .join("\n")
+    .trim();
+
+  const evs = buildAnalisisEvidenceList_(evidencias)
+    .filter(ev => ev.evidenciaTexto || ev.figuraTexto);
+
+  if(!evs.length) return principal;
+
+  const blocks = evs.map((ev, i)=>{
+    const n = i + 1;
+    const evidencia = ev.evidenciaTexto || "Sin detalle de evidencia";
+    const figura = ensureSentenceEndingES_(ev.figuraTexto || "Sin descripción de figura");
+    return `Evidencia ${n}: ${evidencia}\nFigura ${n}. ${figura}`;
+  });
+
+  if(!principal) return `EVIDENCIAS:\n${blocks.join("\n\n")}`;
+  return `${principal}\n\nEVIDENCIAS:\n${blocks.join("\n\n")}`;
+}
+
+function buildFichaWebSnapshot_(){
+  return {
+    AreaResponsable: $("f_AreaResponsable")?.value || "",
+    CodigoIndicador: ($("f_CodigoIndicador")?.value || "").trim(),
+    NumeroIndicador: ($("f_NumeroIndicador")?.value || "").trim(),
+    ResponsableIndicador: ($("f_ResponsableIndicador")?.value || "").trim(),
+    NombreIndicador: ($("f_NombreIndicador")?.value || "").trim(),
+    TipoIndicador: $("f_TipoIndicador")?.value || "",
+    PeriodicidadMedicion: $("f_Periodicidad")?.value || "",
+    ObjetivoIndicador: ($("f_Objetivo")?.value || "").trim(),
+    MetaObjetivo: Number($("f_Meta")?.value || 0),
+    FormulaTipo: $("f_FormulaTipo")?.value || "",
+    FormulaEtiqueta: $("f_FormulaEtiqueta")?.value || "",
+    FormulaNumerador: cleanFormulaText($("f_NumTxt")?.value || "").trim(),
+    FormulaDenominador: cleanFormulaText($("f_DenTxt")?.value || "").trim(),
+    FormulaFactor: Number($("f_Factor")?.value || 1),
+    FuentesRecoleccion: getListState("f_FuentesList"),
+    Terminos: getListState("f_TerminosList"),
+    Observaciones: getListState("f_ObservacionesList"),
+    UpdatedAt: nowISO()
+  };
+}
+
+function buildAnalisisWebSnapshot_(status){
+  const codigo = $("a_Codigo")?.value || "";
+  const ficha = fichaByCodigo(codigo) || {};
+  const evidencias = buildAnalisisEvidenceList_(window.__EVID || []);
+  return {
+    CodigoIndicador: codigo,
+    AreaResponsable: $("a_Area")?.value || "",
+    PeriodoYM: $("a_PeriodoYM")?.value || "",
+    PeriodoLabel: periodoHuman($("a_PeriodoYM")?.value || ""),
+    NumValor: Number($("a_Num")?.value || 0),
+    DenValor: Number($("a_Den")?.value || 0),
+    ResultadoObtenido: Number($("a_Resultado")?.value || 0),
+    MetaObjetivo: Number(ficha?.MetaObjetivo ?? 0),
+    Cumple: (Number($("a_Resultado")?.value || 0) >= Number(ficha?.MetaObjetivo ?? 0)),
+    AnalisisPrincipal: ($("a_Analisis")?.value || "").trim(),
+    AnalisisInterpretacion: buildAnalisisInterpretacion(($("a_Analisis")?.value || "").trim(), evidencias),
+    Evidencias: evidencias,
+    Propuestas: (window.__PROP_ROWS || []).slice(0,5),
+    FirmaResponsableDataUrl: window.__FIRMAS?.ResponsableDataUrl || "",
+    Status: status || "FINAL",
+    UpdatedAt: nowISO()
+  };
+}
+
 /* =========================================================
    SESIÓN (Calidad)
 ========================================================= */
@@ -794,9 +906,13 @@ async function loadAll(){
     }
     out.Terminos = out.Terminos || [];
     out.Observaciones = out.Observaciones || [];
+    out.WEB_SNAPSHOT = safeJsonParse_(out.WEB_SNAPSHOT, out.WEB_SNAPSHOT || null);
     return out;
   }) : [];
-  CACHE.analisis = a.ok ? a.data : [];
+  CACHE.analisis = a.ok ? (a.data||[]).map(r=>({
+    ...r,
+    WEB_SNAPSHOT: safeJsonParse_(r.WEB_SNAPSHOT, r.WEB_SNAPSHOT || null)
+  })) : [];
   CACHE.docs = d.ok ? (d.data||[]).map(x=>({
     ...x,
     TipoDocumento: x.TipoDocumento || x.Tipo || "Otro",
@@ -1322,6 +1438,7 @@ async function saveFicha(){
 
   console.log('saveFicha invoked, demo=', USE_DEMO, 'url=', getWebAppUrl());
   const row = modelFicha();
+  const fichaSnapshot = buildFichaWebSnapshot_();
 
   row.AreaResponsable = $("f_AreaResponsable").value;
   row.CodigoIndicador = ($("f_CodigoIndicador").value||"").trim();
@@ -1350,6 +1467,7 @@ async function saveFicha(){
   row.FuentesRecoleccion = getListState("f_FuentesList");
   row.Terminos = getListState("f_TerminosList");
   row.Observaciones = getListState("f_ObservacionesList");
+  row.WEB_SNAPSHOT = safeJsonStringify_(fichaSnapshot, "");
   row.UpdatedAt = nowISO();
 
   // debug: alert if some properties are empty/null
@@ -2163,14 +2281,20 @@ function recalcResultadoAndUI(){
 }
 
 function buildSeriesForCodigo(codigo){
-  return analisisByCodigo(codigo)
-    .filter(x=>Number.isFinite(Number(x.ResultadoObtenido)))
-    .map(x=>({
-      PeriodoYM: x.PeriodoYM,
-      PeriodoLabel: periodoHuman(x.PeriodoYM),
-      Resultado: Number(x.ResultadoObtenido)
-    }))
-    .sort((a,b)=>a.PeriodoYM.localeCompare(b.PeriodoYM));
+  const byPeriodo = new Map();
+  analisisByCodigo(codigo)
+    .filter(x=>Number.isFinite(Number(x.ResultadoObtenido)) && x.PeriodoYM)
+    .forEach(x=>{
+      const key = String(x.PeriodoYM);
+      byPeriodo.set(key, {
+        PeriodoYM: key,
+        PeriodoLabel: periodoHuman(key),
+        Resultado: Number(x.ResultadoObtenido)
+      });
+    });
+
+  return Array.from(byPeriodo.values())
+    .sort((a,b)=>String(a.PeriodoYM).localeCompare(String(b.PeriodoYM)));
 }
 
 // muestra/oculta el bloque de propuestas; el contenedor principal es la carta completa
@@ -2257,6 +2381,10 @@ async function handleEvidenceFiles(e){
       Figura: window.__EVID.length + 1,
       FileName: f.name,
       DataUrl: dataUrl,
+      evidenciaTexto: "",
+      EvidenciaTexto: "",
+      figuraTexto: "",
+      FiguraTexto: "",
       caption: ""
     });
   }
@@ -2277,18 +2405,33 @@ function renderEvidenceList(){
       <div class="text-xs font-extrabold text-slate-600 mb-2">Figura ${i+1}</div>
       <img src="${x.DataUrl}" class="w-full h-40 object-cover rounded-xl border border-slate-100"/>
       <div class="text-xs text-slate-500 mt-2 truncate">${escapeHtml(x.FileName)}</div>
+      <label class="text-xs font-extrabold text-slate-600 mt-2 block">Texto evidencia</label>
+      <input class="input mt-1" data-evid-text="${i}" value="${escapeHtml(x.evidenciaTexto||x.EvidenciaTexto||"")}" placeholder="Ej. Se observó cumplimiento en el área..."/>
       <label class="text-xs font-extrabold text-slate-600 mt-2 block">Título de pie de foto</label>
-      <input class="input mt-1" data-evid-cap="${i}" value="${escapeHtml(x.caption||x.Caption||"")}" placeholder="Ej. Evidencia del evento"/>
+      <input class="input mt-1" data-evid-cap="${i}" value="${escapeHtml(x.figuraTexto||x.FiguraTexto||x.caption||x.Caption||"")}" placeholder="Ej. Evidencia del evento"/>
       <button class="text-xs font-extrabold text-red-700 hover:underline mt-2" data-evid-del="${i}">Eliminar</button>
     </div>
   `).join("");
+
+  wrap.querySelectorAll("[data-evid-text]").forEach(inp=>{
+    inp.addEventListener("input", ()=>{
+      const idx = Number(inp.getAttribute("data-evid-text"));
+      if(!window.__EVID[idx]) return;
+      const value = inp.value || "";
+      window.__EVID[idx].evidenciaTexto = value;
+      window.__EVID[idx].EvidenciaTexto = value;
+    });
+  });
 
   wrap.querySelectorAll("[data-evid-cap]").forEach(inp=>{
     inp.addEventListener("input", ()=>{
       const idx = Number(inp.getAttribute("data-evid-cap"));
       if(!window.__EVID[idx]) return;
-      window.__EVID[idx].caption = inp.value || "";
-      window.__EVID[idx].Caption = inp.value || "";
+      const value = inp.value || "";
+      window.__EVID[idx].figuraTexto = value;
+      window.__EVID[idx].FiguraTexto = value;
+      window.__EVID[idx].caption = value;
+      window.__EVID[idx].Caption = value;
     });
   });
 
@@ -2377,14 +2520,19 @@ async function guardarAnalisis(status, opts){
   opts = opts || {};
   // loading indicator for both save buttons
   const btn1 = $("btnABorrador");
+  window.__EX_TAB = window.__EX_TAB || "FichasTecnicas";
   const btn2 = $("btnAGuardar");
   const orig1 = btn1.textContent;
   const orig2 = btn2.textContent;
   btn1.disabled = true;
-  btn2.disabled = true;
+        <div class="text-sm text-slate-500">Búsqueda por tabs: Fichas Técnicas y Análisis.</div>
   btn1.textContent = "Guardando…";
   btn2.textContent = "Guardando…";
 
+        <div class="flex flex-wrap gap-2">
+          <button id="e_TabFichas" class="btn btn-soft">Fichas Técnicas</button>
+          <button id="e_TabAnalisis" class="btn btn-soft">Análisis</button>
+        </div>
   const v = validateAnalisis();
   if(!v.ok){
     toast("err","No se puede guardar", v.message);
@@ -2394,21 +2542,17 @@ async function guardarAnalisis(status, opts){
   }
 
   const codigo = $("a_Codigo").value;
+
+          <div>
+            <label class="text-xs font-extrabold text-slate-600">Texto</label>
+            <input id="e_Search" class="input mt-1" placeholder="Buscar por código, nombre o contenido..."/>
+          </div>
   const ficha = fichaByCodigo(codigo);
 
   let row = {
     CodigoIndicador: codigo,
     AreaResponsable: $("a_Area").value,
     PeriodoYM: $("a_PeriodoYM").value,
-    PeriodoLabel: periodoHuman($("a_PeriodoYM").value), // enero 2026
-    NumValor: Number($("a_Num").value),
-    DenValor: Number($("a_Den").value),
-    ResultadoObtenido: Number($("a_Resultado").value),
-    MetaObjetivo: Number(ficha?.MetaObjetivo ?? null),
-    Cumple: (Number($("a_Resultado").value) >= Number(ficha?.MetaObjetivo)),
-    AnalisisInterpretacion: ($("a_Analisis").value||"").trim(),
-    Status: status, // BORRADOR/FINAL
-    Evidencias: (window.__EVID||[]), // opcional
     FirmaResponsableDataUrl: (window.__FIRMAS?.ResponsableDataUrl || ""),
     UpdatedAt: nowISO()
   };
@@ -2516,6 +2660,7 @@ function openAnalisisPreviewPDF(opts){
   const meta = Number(ficha?.MetaObjetivo);
   const res = Number($("a_Resultado").value);
   const c = cumpleFrom(meta, res);
+  const analisisFinal = buildAnalisisInterpretacion(($("a_Analisis").value||"").trim(), window.__EVID||[]);
 
   $("pdfSub").textContent = `Análisis · ${codigo} · ${periodoHuman(perYM)}`;
 
@@ -2555,7 +2700,7 @@ function openAnalisisPreviewPDF(opts){
 
       <div class="card">
         <div class="card-h"><div class="font-extrabold text-navy">Análisis e interpretación</div></div>
-        <div class="card-b text-sm text-slate-700">${escapeHtml(($("a_Analisis").value||"").trim())}</div>
+        <div class="card-b text-sm text-slate-700 whitespace-pre-line">${escapeHtml(analisisFinal)}</div>
       </div>
 
       ${c===false ? renderPropsPDF() : ""}
@@ -2585,6 +2730,8 @@ async function generateAnalisisDoc(){
     const fichaPrev = fichaByCodigo(codigo);
     const metaPrev = Number(fichaPrev?.MetaObjetivo);
     const resPrev = Number($("a_Resultado").value);
+    const evidenciasPreview = buildAnalisisEvidenceList_(window.__EVID||[]);
+    const analisisPrincipal = ($("a_Analisis").value||"").trim();
     const payloadPreview = {
       CodigoIndicador: codigo,
       AreaResponsable: $("a_Area").value,
@@ -2601,12 +2748,13 @@ async function generateAnalisisDoc(){
       Resultado: resPrev,
       MetaObjetivo: metaPrev,
       Cumple: (resPrev >= metaPrev),
-      AnalisisInterpretacion: ($("a_Analisis").value||"").trim(),
+      AnalisisPrincipal: analisisPrincipal,
+      AnalisisInterpretacion: buildAnalisisInterpretacion(analisisPrincipal, evidenciasPreview),
       GraficoDataUrl: getChartDataUrl(),
       Responsable: fichaPrev?.ResponsableIndicador || "",
       FirmaResponsableDataUrl: (window.__FIRMAS?.ResponsableDataUrl || ""),
       Status: "FINAL",
-      Evidencias: (window.__EVID||[]),
+      Evidencias: evidenciasPreview,
       Propuestas: (window.__PROP_ROWS||[])
         .filter(r => (r.Accion||"").trim() || (r.Responsable||"").trim() || (r.FechaCompromiso||"").trim())
         .slice(0,5)
@@ -2616,6 +2764,7 @@ async function generateAnalisisDoc(){
           FechaCompromiso:(r.FechaCompromiso||"").trim()
         })),
       PreviewOnly: true,
+      WEB_SNAPSHOT: safeJsonStringify_(buildAnalisisWebSnapshot_("FINAL"), ""),
       UpdatedAt: nowISO()
     };
     Object.keys(payloadPreview).forEach(k=>{
@@ -2857,14 +3006,14 @@ function drawAnalisisChart(series, meta){
 
   // x labels
   ctx.fillStyle = "#64748b";
-  ctx.font = "700 11px Inter, system-ui";
+  ctx.font = "700 10px Inter, system-ui";
   for(let i=0;i<n;i++){
-    // show month only (enero 2026 -> ene)
-    const parts = (cleanSeries[i].PeriodoLabel||"").split(" ");
-    const m = parts[0]?.slice(0,3) || "";
+    const parts = String(cleanSeries[i].PeriodoLabel||"").split(" ");
+    const m = parts[0] || "";
     const y = parts[1] || "";
     const x = padL + gap + i*(barW+gap);
-    ctx.fillText(`${m} ${y}`, x, padT+gh+22);
+    ctx.fillText(m, x, padT+gh+20);
+    ctx.fillText(y, x, padT+gh+32);
   }
 }
 
@@ -3147,7 +3296,6 @@ function drawPie(canvasId, cumpleN, noN){
   const w = c.clientWidth || 600;
   c.width = w;
   const h = c.height;
-
   ctx.clearRect(0,0,w,h);
 
   const total = (cumpleN+noN);
@@ -3321,19 +3469,23 @@ function drawBars(canvasId, rows){
 ========================================================= */
 function renderExplorador(){
   const sec = $("secExplorador");
+  window.__EX_TAB = window.__EX_TAB || "FichasTecnicas";
   sec.innerHTML = `
     <div class="card">
       <div class="card-h">
-        <div class="font-extrabold text-navy text-lg">Explorador Documental</div>
-        <div class="text-sm text-slate-500">
-          Maneja documentos, fichas y análisis · Estado EXISTE/NO EXISTE · Ver o eliminar desde aquí
-        </div>
+        <div class="font-extrabold text-navy text-lg">Explorador (Calidad)</div>
+        <div class="text-sm text-slate-500">Búsqueda por tabs: Fichas Técnicas y Análisis.</div>
       </div>
 
-      <div class="card-b space-y-6">
+      <div class="card-b space-y-5">
+
+        <div class="flex flex-wrap gap-2">
+          <button id="e_TabFichas" class="btn btn-soft">Fichas Técnicas</button>
+          <button id="e_TabAnalisis" class="btn btn-soft">Análisis</button>
+        </div>
 
         <!-- FILTROS -->
-        <div class="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
           <div>
             <label class="text-xs font-extrabold text-slate-600">Área</label>
             <select id="e_Area" class="input mt-1"></select>
@@ -3345,18 +3497,12 @@ function renderExplorador(){
             </select>
           </div>
           <div>
-            <label class="text-xs font-extrabold text-slate-600">Periodo (mes)</label>
-            <input id="e_PeriodoYM" type="month" class="input mt-1"/>
+            <label class="text-xs font-extrabold text-slate-600">Texto</label>
+            <input id="e_Search" class="input mt-1" placeholder="Buscar por código, nombre o contenido..."/>
           </div>
           <div>
-            <label class="text-xs font-extrabold text-slate-600">Tipo documento</label>
-            <select id="e_Tipo" class="input mt-1">
-              <option value="">Todos</option>
-              <option value="FichaTecnica">Ficha Técnica</option>
-              <option value="AnalisisIndicador">Análisis del Indicador</option>
-              <option value="Seguimiento">Seguimiento</option>
-              <option value="Otro">Otro</option>
-            </select>
+            <label class="text-xs font-extrabold text-slate-600">Periodo (mes)</label>
+            <input id="e_PeriodoYM" type="month" class="input mt-1"/>
           </div>
           <div class="flex gap-2">
             <button id="btnEApply" class="btn btn-primary flex-1">Aplicar</button>
@@ -3368,18 +3514,18 @@ function renderExplorador(){
         <div class="card">
           <div class="card-h">
             <div class="font-extrabold text-navy">Listado</div>
-            <div class="text-xs text-slate-500">Documento · Periodo · Estado · Acción</div>
+            <div class="text-xs text-slate-500">Registro · Código · Área · Periodo · Acción</div>
           </div>
 
           <div class="card-b overflow-auto">
             <table class="min-w-[980px] w-full text-sm">
               <thead>
                 <tr class="text-left text-xs text-slate-500 border-b border-slate-200">
-                  <th class="p-2">Documento</th>
+                  <th class="p-2">Registro</th>
                   <th class="p-2">Código</th>
+                  <th class="p-2">Área</th>
                   <th class="p-2">Periodo</th>
                   <th class="p-2">Tipo</th>
-                  <th class="p-2">Estado</th>
                   <th class="p-2">Acción</th>
                 </tr>
               </thead>
@@ -3387,6 +3533,26 @@ function renderExplorador(){
             </table>
           </div>
         </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4" id="e_DetailWrap">
+          <div class="card">
+            <div class="card-h">
+              <div class="font-extrabold text-navy">Captura Web</div>
+              <div class="text-xs text-slate-500">Snapshot del formulario al guardar</div>
+            </div>
+            <div id="e_DetailWeb" class="card-b text-sm text-slate-700">Selecciona un registro para ver el detalle.</div>
+          </div>
+
+          <div class="card">
+            <div class="card-h">
+              <div class="font-extrabold text-navy">Captura Sheets</div>
+              <div class="text-xs text-slate-500">Valores persistidos en la hoja</div>
+            </div>
+            <div id="e_DetailSheets" class="card-b text-sm text-slate-700">Selecciona un registro para ver el detalle.</div>
+          </div>
+        </div>
+
+        <div id="e_DetailActions" class="flex flex-wrap gap-2"></div>
 
         <!-- EDITOR -->
         <div id="e_Editor" class="hidden card">
@@ -3439,17 +3605,33 @@ function renderExplorador(){
     refreshExplorador();
   });
 
+  $("e_Search").addEventListener("input", ()=>refreshExplorador());
+
+  $("e_TabFichas").addEventListener("click", ()=>setExplorerTab_("FichasTecnicas"));
+  $("e_TabAnalisis").addEventListener("click", ()=>setExplorerTab_("AnalisisIndicador"));
+
   $("btnEApply").addEventListener("click", refreshExplorador);
   $("btnEClear").addEventListener("click", ()=>{
     $("e_Area").value="";
     $("e_PeriodoYM").value="";
-    $("e_Tipo").value="";
+    $("e_Search").value="";
     $("e_Codigo").innerHTML = `<option value="">Todos</option>`;
     refreshExplorador();
   });
 
   $("btnEClose").addEventListener("click", ()=>$("e_Editor").classList.add("hidden"));
 
+  refreshExplorador();
+  setExplorerTab_(window.__EX_TAB);
+}
+
+function setExplorerTab_(tab){
+  window.__EX_TAB = (tab === "AnalisisIndicador") ? "AnalisisIndicador" : "FichasTecnicas";
+  const isFicha = window.__EX_TAB === "FichasTecnicas";
+  $("e_TabFichas")?.classList.toggle("btn-primary", isFicha);
+  $("e_TabFichas")?.classList.toggle("btn-soft", !isFicha);
+  $("e_TabAnalisis")?.classList.toggle("btn-primary", !isFicha);
+  $("e_TabAnalisis")?.classList.toggle("btn-soft", isFicha);
   refreshExplorador();
 }
 
@@ -3462,115 +3644,154 @@ function fillExplorerCodigo(){
     .map(f=>`<option value="${escapeHtml(f.CodigoIndicador)}">${escapeHtml(f.CodigoIndicador)} · ${escapeHtml(f.NombreIndicador||"")}</option>`).join("");
 }
 
+function getExplorerRows_(){
+  if(window.__EX_TAB === "AnalisisIndicador"){
+    return (CACHE.analisis||[]).map(a=>({
+      __key: `A-${a.CodigoIndicador}-${a.PeriodoYM}`,
+      __type: "AnalisisIndicador",
+      Nombre: "Análisis",
+      CodigoIndicador: a.CodigoIndicador,
+      AreaResponsable: a.AreaResponsable,
+      PeriodoYM: a.PeriodoYM,
+      PeriodoLabel: periodoHuman(a.PeriodoYM),
+      Data: a
+    }));
+  }
+  return (CACHE.fichas||[]).map(f=>({
+    __key: `F-${f.CodigoIndicador}`,
+    __type: "FichasTecnicas",
+    Nombre: "Ficha técnica",
+    CodigoIndicador: f.CodigoIndicador,
+    AreaResponsable: f.AreaResponsable,
+    PeriodoYM: "",
+    PeriodoLabel: "—",
+    Data: f
+  }));
+}
+
+function getDocLinksForRow_(row){
+  const docs = (CACHE.docs||[]);
+  if(row.__type === "AnalisisIndicador"){
+    const d = docs.find(x=>
+      (x.TipoDocumento === "AnalisisIndicador") &&
+      x.CodigoIndicador === row.CodigoIndicador &&
+      String(x.PeriodoYM||"") === String(row.PeriodoYM||"")
+    ) || null;
+    return {
+      word: d?.WordUrl || d?.Link || "",
+      pdf: d?.PdfUrl || "",
+      carpeta: d?.CarpetaUrl || d?.FolderUrl || ""
+    };
+  }
+  const d = docs.find(x=>
+    (x.TipoDocumento === "FichaTecnica") &&
+    x.CodigoIndicador === row.CodigoIndicador
+  ) || null;
+  return {
+    word: d?.WordUrl || d?.Link || "",
+    pdf: d?.PdfUrl || "",
+    carpeta: d?.CarpetaUrl || d?.FolderUrl || ""
+  };
+}
+
+function renderExplorerDetail_(row){
+  const data = row?.Data || {};
+  const snapshot = safeJsonParse_(data.WEB_SNAPSHOT, data.WEB_SNAPSHOT || null);
+
+  const renderPairs = (obj)=>{
+    if(!obj || typeof obj !== "object") return `<div class="text-slate-400">Sin información.</div>`;
+    const entries = Object.entries(obj)
+      .filter(([k])=>!["DataUrl","dataUrl","FirmaResponsableDataUrl"].includes(k));
+    if(!entries.length) return `<div class="text-slate-400">Sin información.</div>`;
+    return `
+      <div class="overflow-auto">
+        <table class="w-full text-sm">
+          <tbody>
+            ${entries.map(([k,v])=>`
+              <tr class="border-b border-slate-100 align-top">
+                <td class="p-2 font-extrabold text-slate-600 w-48">${escapeHtml(k)}</td>
+                <td class="p-2 text-slate-700">${escapeHtml(typeof v === "object" ? safeJsonStringify_(v, "") : String(v ?? ""))}</td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      </div>
+    `;
+  };
+
+  $("e_DetailWeb").innerHTML = renderPairs(snapshot);
+  $("e_DetailSheets").innerHTML = renderPairs(data);
+
+  const links = getDocLinksForRow_(row);
+  const actions = [];
+  if(links.word) actions.push(`<a href="${links.word}" target="_blank" class="btn btn-soft">Abrir Word</a>`);
+  if(links.pdf) actions.push(`<a href="${links.pdf}" target="_blank" class="btn btn-soft">Abrir PDF</a>`);
+  if(links.carpeta) actions.push(`<a href="${links.carpeta}" target="_blank" class="btn btn-soft">Abrir Carpeta</a>`);
+  $("e_DetailActions").innerHTML = actions.join("") || `<span class="text-xs text-slate-400">Sin links disponibles para este registro.</span>`;
+}
+
 function refreshExplorador(){
   const area = $("e_Area")?.value || "";
   const codigo = $("e_Codigo")?.value || "";
   const per = $("e_PeriodoYM")?.value || "";
-  const tipo = $("e_Tipo")?.value || "";
+  const q = ($("e_Search")?.value || "").trim().toLowerCase();
 
-  // combinamos: docs + fichas + analisis
-  let docs = [];
+  let rows = getExplorerRows_();
+  if(area) rows = rows.filter(r=>r.AreaResponsable===area);
+  if(codigo) rows = rows.filter(r=>r.CodigoIndicador===codigo);
+  if(per && window.__EX_TAB === "AnalisisIndicador") rows = rows.filter(r=>r.PeriodoYM===per);
+  if(q){
+    rows = rows.filter(r=>{
+      const txt = [
+        r.CodigoIndicador,
+        r.PeriodoLabel,
+        r.Data?.NombreIndicador,
+        r.Data?.AnalisisInterpretacion,
+        r.Data?.ObjetivoIndicador
+      ].map(x=>String(x||"").toLowerCase()).join(" ");
+      return txt.includes(q);
+    });
+  }
 
-  // agregamos los documentos normales
-  docs = docs.concat(CACHE.docs||[]);
-  // fichas
-  docs = docs.concat((CACHE.fichas||[]).map(f=>({
-    ...f,
-    DocName: "Ficha técnica",
-    PeriodoLabel: "",
-    TipoDocumento: "FichaTecnica",
-    Key: `F-${f.CodigoIndicador}`
-  })));
-  // analisis
-  docs = docs.concat((CACHE.analisis||[]).map(a=>({
-    ...a,
-    DocName: "Análisis",
-    PeriodoLabel: periodoHuman(a.PeriodoYM),
-    TipoDocumento: "AnalisisIndicador",
-    Key: `A-${a.CodigoIndicador}-${a.PeriodoYM}`
-  })));
-
-  if(area) docs = docs.filter(d=>d.AreaResponsable===area);
-  if(codigo) docs = docs.filter(d=>d.CodigoIndicador===codigo);
-  if(per) docs = docs.filter(d=>d.PeriodoYM===per);
-  if(tipo) docs = docs.filter(d=>d.TipoDocumento===tipo);
-
-  // sort
-  docs.sort((a,b)=>{
-    const ak = `${a.CodigoIndicador||""}-${a.PeriodoYM||""}-${a.TipoDocumento||""}`;
-    const bk = `${b.CodigoIndicador||""}-${b.PeriodoYM||""}-${b.TipoDocumento||""}`;
+  rows.sort((a,b)=>{
+    const ak = `${a.CodigoIndicador||""}-${a.PeriodoYM||""}`;
+    const bk = `${b.CodigoIndicador||""}-${b.PeriodoYM||""}`;
     return ak.localeCompare(bk);
   });
 
   const tb = $("e_Table");
-  if(!docs.length){
-    tb.innerHTML = `<tr><td class="p-3 text-slate-400" colspan="6">Sin registros en el Explorador.</td></tr>`;
+  if(!rows.length){
+    tb.innerHTML = `<tr><td class="p-3 text-slate-400" colspan="6">Sin registros para este tab/filtro.</td></tr>`;
+    $("e_DetailWeb").innerHTML = "Selecciona un registro para ver el detalle.";
+    $("e_DetailSheets").innerHTML = "Selecciona un registro para ver el detalle.";
+    $("e_DetailActions").innerHTML = "";
     return;
   }
 
-  tb.innerHTML = docs.map(d=>{
-    // Links reales de Drive (Word/PDF)
-    const wordLink = d.Link || d.WordUrl || '';
-    const pdfLink = d.PdfUrl || (d.Link && d.Link.endsWith('.pdf') ? d.Link : '');
-    const estado = (wordLink || pdfLink) ? `<span class="badge badge-ok">EXISTE</span>` : `<span class="badge badge-gray">NO EXISTE</span>`;
+  tb.innerHTML = rows.map(r=>{
     return `
       <tr class="border-b border-slate-200">
-        <td class="p-2 font-extrabold text-navy">${escapeHtml(d.DocName||"(Sin nombre)")}</td>
-        <td class="p-2">${escapeHtml(d.CodigoIndicador||"")}</td>
-        <td class="p-2">${escapeHtml(d.PeriodoLabel || (d.PeriodoYM ? periodoHuman(d.PeriodoYM) : "—"))}</td>
-        <td class="p-2">${escapeHtml(d.TipoDocumento||"")}</td>
-        <td class="p-2">${estado}</td>
+        <td class="p-2 font-extrabold text-navy">${escapeHtml(r.Nombre||"Registro")}</td>
+        <td class="p-2">${escapeHtml(r.CodigoIndicador||"")}</td>
+        <td class="p-2">${escapeHtml(getAreaLabel(r.AreaResponsable||""))}</td>
+        <td class="p-2">${escapeHtml(r.PeriodoLabel || "—")}</td>
+        <td class="p-2">${escapeHtml(window.__EX_TAB === "AnalisisIndicador" ? "Análisis" : "Ficha técnica")}</td>
         <td class="p-2">
-          ${wordLink ? `<a href="${wordLink}" target="_blank" class="btn btn-soft">Word</a>` : ''}
-          ${pdfLink ? `<a href="${pdfLink}" target="_blank" class="btn btn-soft ml-1">PDF</a>` : ''}
-          <button class="btn btn-soft ml-2" data-edit="${escapeHtml(d.Key)}" data-type="${escapeHtml(d.TipoDocumento)}">Editar</button>
-          <button class="btn btn-danger ml-2" data-del="${escapeHtml(d.Key)}" data-type="${escapeHtml(d.TipoDocumento)}" data-fileid="${escapeHtml(d.FileId||d.Id||'')}">Eliminar</button>
+          <button class="btn btn-soft" data-detail="${escapeHtml(r.__key)}">Ver detalle</button>
         </td>
       </tr>
     `;
   }).join("");
 
-  tb.querySelectorAll("[data-edit]").forEach(b=>{
+  tb.querySelectorAll("[data-detail]").forEach(b=>{
     b.addEventListener("click", ()=>{
-      const key = b.getAttribute("data-edit");
-      const type = b.getAttribute("data-type");
-      if(type==="FichaTecnica") openFichaView(key);
-      else if(type==="AnalisisIndicador") openAnalisisView(key);
-      else openDocEditor(key);
+      const key = b.getAttribute("data-detail");
+      const row = rows.find(x=>x.__key===key);
+      if(row) renderExplorerDetail_(row);
     });
   });
 
-  tb.querySelectorAll("[data-del]").forEach(b=>{
-    b.addEventListener("click", async ()=>{
-      const key = b.getAttribute("data-del");
-      const type = b.getAttribute("data-type");
-      const fileId = b.getAttribute("data-fileid");
-      let r;
-      // Eliminar en backend y Drive
-      if(fileId){
-        r = await apiFetch("docs.delete",{Key:key});
-        if(r.ok){
-          // Llama a Apps Script para borrar en Drive
-          const r2 = await apiFetch("borrarArchivoDrivePorId",{fileId});
-          if(!r2.ok) toast("err","Drive","No se eliminó en Drive: "+(r2.message||''));
-        }
-      }else if(type==="FichaTecnica"){
-        const codigo = key.replace(/^F-/,'');
-        r = await apiFetch("fichas.delete",{CodigoIndicador:codigo});
-      }else if(type==="AnalisisIndicador"){
-        const parts = key.split("-");
-        const codigo = parts[1];
-        const periodo = parts.slice(2).join("-");
-        r = await apiFetch("analisis.delete",{CodigoIndicador:codigo,PeriodoYM:periodo});
-      }else{
-        r = await apiFetch("docs.delete",{Key:key});
-      }
-      if(!r?.ok) return toast("err","Error",r?.message||"No se eliminó");
-      await loadAll();
-      toast("ok","Eliminado","Registro eliminado.");
-      refreshExplorador();
-    });
-  });
+  renderExplorerDetail_(rows[0]);
 }
 
 function openDocEditor(key){
