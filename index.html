@@ -582,7 +582,7 @@ function demoApi(action, payload){
   const fichas = lsRead(LS_KEYS.FICHAS, []);
   const analisis = lsRead(LS_KEYS.ANALISIS, []);
   const prop = lsRead(LS_KEYS.PROP, []);
-  const docs = lsRead(LS_KEYS.DOCS, []);
+  let docs = lsRead(LS_KEYS.DOCS, []);
   const seg = lsRead(LS_KEYS.SEG, []);
 
   // fichas
@@ -597,6 +597,14 @@ function demoApi(action, payload){
 
   // analisis
   if(action==="analisis.list") return ok_(analisis);
+  if(action==="getHistoryByCodigo" || action==="getAnalisisHistoryByCodigo"){
+    const codigo = payload?.CodigoIndicador || payload?.codigo || "";
+    const rows = analisis
+      .filter(x=>x.CodigoIndicador===codigo)
+      .filter(x=>String(x.Status||x.status||"").toUpperCase()!=="ELIMINADO")
+      .sort((a,b)=>String(a.PeriodoYM||"").localeCompare(String(b.PeriodoYM||"")));
+    return ok_(rows);
+  }
   if(action==="analisis.insert"){
     if(!payload?.CodigoIndicador || !payload?.PeriodoYM) return fail_("Falta CodigoIndicador/PeriodoYM");
     const dup = analisis.some(x=>x.CodigoIndicador===payload.CodigoIndicador && x.PeriodoYM===payload.PeriodoYM);
@@ -657,6 +665,27 @@ function demoApi(action, payload){
     }
     lsWrite(LS_KEYS.DOCS, docs);
     return ok_(true, "Documento(s) eliminado(s)");
+  }
+
+  if(action==="deleteRecord"){
+    const tipo = String(payload?.tipo || "").toUpperCase();
+    const codigo = payload?.CodigoIndicador || "";
+    const periodo = payload?.PeriodoYM || "";
+    if(tipo === "FICHA"){
+      lsWrite(LS_KEYS.FICHAS, fichas.filter(x=>x.CodigoIndicador!==codigo));
+      lsWrite(LS_KEYS.ANALISIS, analisis.filter(x=>x.CodigoIndicador!==codigo));
+      lsWrite(LS_KEYS.PROP, prop.filter(x=>x.CodigoIndicador!==codigo));
+      lsWrite(LS_KEYS.DOCS, docs.filter(x=>x.CodigoIndicador!==codigo));
+      lsWrite(LS_KEYS.SEG, seg.filter(x=>x.CodigoIndicador!==codigo));
+      return ok_(true, "Registro eliminado (DEMO)");
+    }
+    if(tipo === "ANALISIS"){
+      lsWrite(LS_KEYS.ANALISIS, analisis.filter(x=>!(x.CodigoIndicador===codigo && x.PeriodoYM===periodo)));
+      lsWrite(LS_KEYS.PROP, prop.filter(x=>!(x.CodigoIndicador===codigo && x.PeriodoYM===periodo)));
+      lsWrite(LS_KEYS.DOCS, docs.filter(x=>!(x.CodigoIndicador===codigo && x.PeriodoYM===periodo)));
+      return ok_(true, "Registro eliminado (DEMO)");
+    }
+    return fail_("Tipo no soportado");
   }
 
   // fichas (with cascade delete)
@@ -767,22 +796,10 @@ function buildAnalisisInterpretacion(textoPrincipal, evidencias){
     .map(l => normalizeLineText_(l))
     .filter((line, idx, arr) => !(line === "" && (idx === 0 || arr[idx-1] === "")))
     .join("\n")
-    .trim();
+    .replace(/^\s+/, "")
+    .trimEnd();
 
-  const evs = buildAnalisisEvidenceList_(evidencias)
-    .filter(ev => ev.evidenciaTexto || ev.figuraTexto);
-
-  if(!evs.length) return principal;
-
-  const blocks = evs.map((ev, i)=>{
-    const n = i + 1;
-    const evidencia = ev.evidenciaTexto || "Sin detalle de evidencia";
-    const figura = ensureSentenceEndingES_(ev.figuraTexto || "Sin descripción de figura");
-    return `Evidencia ${n}: ${evidencia}\nFigura ${n}. ${figura}`;
-  });
-
-  if(!principal) return `EVIDENCIAS:\n${blocks.join("\n\n")}`;
-  return `${principal}\n\nEVIDENCIAS:\n${blocks.join("\n\n")}`;
+  return principal;
 }
 
 function buildFichaWebSnapshot_(){
@@ -909,10 +926,12 @@ async function loadAll(){
     out.WEB_SNAPSHOT = safeJsonParse_(out.WEB_SNAPSHOT, out.WEB_SNAPSHOT || null);
     return out;
   }) : [];
-  CACHE.analisis = a.ok ? (a.data||[]).map(r=>({
-    ...r,
-    WEB_SNAPSHOT: safeJsonParse_(r.WEB_SNAPSHOT, r.WEB_SNAPSHOT || null)
-  })) : [];
+  CACHE.analisis = a.ok ? (a.data||[])
+    .filter(r => String(r?.Status || r?.status || "").toUpperCase() !== "ELIMINADO")
+    .map(r=>({
+      ...r,
+      WEB_SNAPSHOT: safeJsonParse_(r.WEB_SNAPSHOT, r.WEB_SNAPSHOT || null)
+    })) : [];
   CACHE.docs = d.ok ? (d.data||[]).map(x=>({
     ...x,
     TipoDocumento: x.TipoDocumento || x.Tipo || "Otro",
@@ -1112,8 +1131,8 @@ function renderFichaForm(){
 
         <div class="flex flex-wrap gap-2">
           <button id="btnFichaSave" class="btn btn-primary">Guardar ficha</button>
-          <button id="btnFichaGen" class="btn btn-primary">Generar Word/PDF</button>
-          <button id="btnFichaDoc" class="btn btn-soft">Generar documento (Vista PDF)</button>
+          <button id="btnFichaDoc" class="btn btn-soft">Generar vista previa</button>
+          <button id="btnFichaGen" class="btn btn-primary">Guardar definitivo (Word/PDF)</button>
           <button id="btnFichaClear" class="btn btn-soft">Limpiar</button>
         </div>
 
@@ -1150,8 +1169,8 @@ function renderFichaForm(){
 
   $("btnFichaClear").addEventListener("click", clearFichaForm);
   $("btnFichaSave").addEventListener("click", saveFicha);
+  $("btnFichaDoc").addEventListener("click", ()=>generateFichaPreviewDoc());
   $("btnFichaGen").addEventListener("click", ()=>generateFichaDoc());
-  $("btnFichaDoc").addEventListener("click", ()=>openFichaPreviewPDF());
 
   // init defaults
   updateFactorEtiqueta();
@@ -1424,6 +1443,12 @@ function clearFichaForm(){
   toast("ok","Listo","Formulario limpio.");
 }
 
+function clearFichaDocDraft_(){
+  window.__FT_DOC_DRAFT = null;
+  const btn = $("btnFichaGen");
+  if(btn) btn.textContent = "Guardar definitivo (Word/PDF)";
+}
+
 /* =========================================================
    GUARDAR FICHA
 ========================================================= */
@@ -1582,12 +1607,59 @@ async function generateFichaDoc(){
 
   const btn = $("btnFichaGen");
   const orig = btn.textContent;
+  const codigo = ($("f_CodigoIndicador").value||"").trim();
+  const periodo = nowYM();
+  const draft = window.__FT_DOC_DRAFT;
+  const hasDraft = !!(draft && draft.codigo === codigo && draft.periodo === periodo && draft.docId);
+  if(!hasDraft){
+    toast("warn","Sin vista previa","Primero presiona 'Generar vista previa'.");
+    return;
+  }
+
+  try {
+    const ok = confirm("¿Confirmas guardar definitivo de la ficha (Word + PDF)?");
+    if(!ok) return;
+
+    btn.disabled = true;
+    btn.textContent = "Guardando definitivo…";
+    const docWin = window.open("about:blank", "_blank");
+    const pdfWin = window.open("about:blank", "_blank");
+    const r = await apiFetch("docs.confirmarFichaDoc", {
+      docId: draft.docId,
+      codigo: draft.codigo,
+      periodo: draft.periodo,
+      baseName: draft.baseName || "",
+      folderId: draft.folderId || ""
+    });
+    if(!r.ok){
+      try { docWin && !docWin.closed && docWin.close(); } catch(_) {}
+      try { pdfWin && !pdfWin.closed && pdfWin.close(); } catch(_) {}
+      toast("err","Error", r.message || "Falló guardado definitivo");
+      return;
+    }
+    const links = r.data || {};
+    if(links.linkDocx){ if(docWin && !docWin.closed) docWin.location.href = links.linkDocx; else window.open(links.linkDocx, "_blank"); }
+    if(links.linkPdf){ if(pdfWin && !pdfWin.closed) pdfWin.location.href = links.linkPdf; else window.open(links.linkPdf, "_blank"); }
+    toast("ok","Ficha guardada","Word y PDF generados correctamente.");
+    clearFichaDocDraft_();
+  } catch(e){
+    toast("err","Error de red", String(e));
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Guardar definitivo (Word/PDF)";
+  }
+}
+
+async function generateFichaPreviewDoc(){
+  if(!validateFicha()) return toast("err","Faltan datos","Revisa la ficha");
+
+  const btn = $("btnFichaDoc");
+  const orig = btn.textContent;
   btn.disabled = true;
   btn.textContent = "Generando…";
 
   try {
     const payload = modelFicha();
-    // add same fields used when saving
     payload.AreaResponsable = $("f_AreaResponsable").value;
     payload.CodigoIndicador = ($("f_CodigoIndicador").value||"").trim();
     payload.ResponsableIndicador = ($("f_ResponsableIndicador").value||"").trim();
@@ -1605,16 +1677,32 @@ async function generateFichaDoc(){
     payload.FuentesRecoleccion = getListState("f_FuentesList");
     payload.Terminos = getListState("f_TerminosList");
     payload.Observaciones = getListState("f_ObservacionesList");
+    payload.PeriodoYM = nowYM();
+    payload.WEB_SNAPSHOT = safeJsonStringify_(buildFichaWebSnapshot_(), "");
+    payload.PreviewOnly = true;
     payload.UpdatedAt = nowISO();
 
+    const previewWin = window.open("about:blank", "_blank");
     const r = await apiFetch("docs.generarFichaFromUI", payload);
     if(!r.ok){
-      toast("err","Error", r.message || "Falló generación");
-    } else {
-      const links = r.data;
-      alert(`Documento listo:\nWord: ${links.linkDocx}\nPDF: ${links.linkPdf}`);
-      toast("ok","Generado","Revisa la alerta para links");
+      try { previewWin && !previewWin.closed && previewWin.close(); } catch(_) {}
+      toast("err","Error", r.message || "No se pudo generar vista previa");
+      return;
     }
+    const d = r.data || {};
+    window.__FT_DOC_DRAFT = {
+      docId: d.docId,
+      linkDocx: d.linkDocx,
+      codigo: payload.CodigoIndicador,
+      periodo: payload.PeriodoYM,
+      baseName: d.baseName || "",
+      folderId: d.folderId || ""
+    };
+    if(d.linkDocx){
+      if(previewWin && !previewWin.closed) previewWin.location.href = d.linkDocx;
+      else window.open(d.linkDocx, "_blank");
+    }
+    toast("ok","Vista previa lista","Ahora pulsa 'Guardar definitivo (Word/PDF)'.");
   } catch(e){
     toast("err","Error de red", String(e));
   } finally {
@@ -1744,7 +1832,7 @@ function clearAnalisisDocDraft_(){
   window.__AN_DOC_DRAFT = null;
   const btn = $("btnAnalisisGen");
   if(btn){
-    btn.textContent = "Generar documento WORD/PDF (Drive)";
+    btn.textContent = "Guardar definitivo (Word/PDF)";
   }
 }
 
@@ -1817,10 +1905,14 @@ function fichasByArea(prefix){
   return (CACHE.fichas||[]).filter(f=>f.AreaResponsable===prefix);
 }
 function analisisByCodigo(codigo){
-  return (CACHE.analisis||[]).filter(a=>a.CodigoIndicador===codigo);
+  return (CACHE.analisis||[]).filter(a=>
+    a.CodigoIndicador===codigo && String(a.Status||a.status||"").toUpperCase() !== "ELIMINADO"
+  );
 }
 function findAnalisis(codigo, periodoYM){
-  return (CACHE.analisis||[]).find(a=>a.CodigoIndicador===codigo && a.PeriodoYM===periodoYM) || null;
+  return (CACHE.analisis||[]).find(a=>
+    a.CodigoIndicador===codigo && a.PeriodoYM===periodoYM && String(a.Status||a.status||"").toUpperCase() !== "ELIMINADO"
+  ) || null;
 }
 function cumpleFrom(meta, resultado){
   if(!Number.isFinite(meta) || !Number.isFinite(resultado)) return null;
@@ -1934,7 +2026,7 @@ function renderAnalisis(){
               <label class="text-xs font-extrabold text-slate-600">Periodo (mes) *</label>
               <input id="a_PeriodoYM" type="month" class="input mt-1"/>
               <div id="a_DupMsg" class="hidden mt-2 rounded-2xl border border-red-200 bg-red-50 text-red-900 p-3 text-sm">
-                ⚠️ Este periodo ya fue registrado.
+                Ese mes ya fue capturado. Si deseas recapturarlo, elimínalo primero en el Explorador.
               </div>
             </div>
 
@@ -2040,12 +2132,12 @@ function renderAnalisis(){
           </div>
 
           <div class="flex flex-wrap gap-2">
-            <button id="btnAIrFirmas" class="btn btn-soft">Ir a firmas</button>
+            <button id="btnAIrFirmas" class="btn btn-soft hidden">Firmas</button>
             <button id="btnABorrador" class="btn btn-soft">Guardar borrador</button>
-            <button id="btnAGuardar" class="btn btn-primary">Guardar análisis</button>
-            <button id="btnAnalisisGen" class="btn btn-primary">Generar documento WORD/PDF (Drive)</button>
-            <button id="btnAPDF" class="btn btn-soft">Solo vista previa</button>
-            <button id="btnACancelar" class="btn btn-soft">Cancelar</button>
+            <button id="btnAGuardar" class="btn btn-primary">Generar vista previa</button>
+            <button id="btnAnalisisGen" class="btn btn-primary">Guardar definitivo (Word/PDF)</button>
+            <button id="btnAPDF" class="btn btn-soft">Vista previa</button>
+            <button id="btnACancelar" class="btn btn-soft">Cerrar</button>
           </div>
 
           <div id="a_SaveMsg" class="hidden rounded-2xl border border-emerald-200 bg-emerald-50 text-emerald-900 p-3 text-sm">
@@ -2095,7 +2187,7 @@ function renderAnalisis(){
   $("btnAGuardar").addEventListener("click", ()=>guardarAnalisis("FINAL"));
   $("btnAnalisisGen").addEventListener("click", ()=>generateAnalisisDoc());
   $("btnAPDF").addEventListener("click", ()=>openAnalisisPreviewPDF());
-  $("btnAIrFirmas").addEventListener("click", ()=>{
+  $("btnAIrFirmas")?.addEventListener("click", ()=>{
     $("a_FirmasCard")?.scrollIntoView({ behavior:"smooth", block:"center" });
   });
   $("btnACancelar").addEventListener("click", ()=>{
@@ -2164,7 +2256,7 @@ function resetAnalisisUI(full){
   clearAnalisisDocDraft_();
 }
 
-function cargarIndicadorAnalisis(){
+async function cargarIndicadorAnalisis(){
   const area = $("a_Area").value;
   const codigo = $("a_Codigo").value;
 
@@ -2193,11 +2285,22 @@ function cargarIndicadorAnalisis(){
   const f = getFichaFactor(ficha);
   $("a_FormulaHint").textContent = `Fórmula: (${ficha.FormulaNumerador||"N"}/${ficha.FormulaDenominador||"D"})*${f}  · Etiqueta: ${ficha.FormulaEtiqueta||""}`;
 
+  await refreshHistoryByCodigo_(codigo);
   updatePeriodosRegistrados();
   recalcResultadoAndUI();
   // chart con históricos al cargar indicador
   const series = buildSeriesForCodigo(codigo);
   drawAnalisisChart(series, Number(ficha.MetaObjetivo||0));
+}
+
+async function refreshHistoryByCodigo_(codigo){
+  const code = (codigo || "").trim();
+  if(!code) return;
+  window.__AN_HISTORY_BY_CODIGO = window.__AN_HISTORY_BY_CODIGO || {};
+  const r = await apiFetch("getHistoryByCodigo", { CodigoIndicador: code });
+  if(r?.ok && Array.isArray(r.data)){
+    window.__AN_HISTORY_BY_CODIGO[code] = r.data;
+  }
 }
 
 function updatePeriodosRegistrados(){
@@ -2281,8 +2384,10 @@ function recalcResultadoAndUI(){
 }
 
 function buildSeriesForCodigo(codigo){
+  const hist = window.__AN_HISTORY_BY_CODIGO?.[codigo];
+  const source = Array.isArray(hist) ? hist : analisisByCodigo(codigo);
   const byPeriodo = new Map();
-  analisisByCodigo(codigo)
+  source
     .filter(x=>Number.isFinite(Number(x.ResultadoObtenido)) && x.PeriodoYM)
     .forEach(x=>{
       const key = String(x.PeriodoYM);
@@ -2520,19 +2625,13 @@ async function guardarAnalisis(status, opts){
   opts = opts || {};
   // loading indicator for both save buttons
   const btn1 = $("btnABorrador");
-  window.__EX_TAB = window.__EX_TAB || "FichasTecnicas";
   const btn2 = $("btnAGuardar");
   const orig1 = btn1.textContent;
   const orig2 = btn2.textContent;
   btn1.disabled = true;
-        <div class="text-sm text-slate-500">Búsqueda por tabs: Fichas Técnicas y Análisis.</div>
   btn1.textContent = "Guardando…";
   btn2.textContent = "Guardando…";
 
-        <div class="flex flex-wrap gap-2">
-          <button id="e_TabFichas" class="btn btn-soft">Fichas Técnicas</button>
-          <button id="e_TabAnalisis" class="btn btn-soft">Análisis</button>
-        </div>
   const v = validateAnalisis();
   if(!v.ok){
     toast("err","No se puede guardar", v.message);
@@ -2542,17 +2641,28 @@ async function guardarAnalisis(status, opts){
   }
 
   const codigo = $("a_Codigo").value;
-
-          <div>
-            <label class="text-xs font-extrabold text-slate-600">Texto</label>
-            <input id="e_Search" class="input mt-1" placeholder="Buscar por código, nombre o contenido..."/>
-          </div>
   const ficha = fichaByCodigo(codigo);
+  const meta = Number(ficha?.MetaObjetivo ?? 0);
+  const resultado = Number($("a_Resultado").value);
+  const cumple = cumpleFrom(meta, resultado);
+  const evidencias = buildAnalisisEvidenceList_(window.__EVID || []);
+  const analisisPrincipal = String($("a_Analisis").value || "").trim();
 
   let row = {
     CodigoIndicador: codigo,
     AreaResponsable: $("a_Area").value,
     PeriodoYM: $("a_PeriodoYM").value,
+    PeriodoLabel: periodoHuman($("a_PeriodoYM").value),
+    NumValor: Number($("a_Num").value),
+    DenValor: Number($("a_Den").value),
+    ResultadoObtenido: resultado,
+    MetaObjetivo: meta,
+    Cumple: cumple,
+    AnalisisInterpretacion: buildAnalisisInterpretacion(analisisPrincipal, evidencias),
+    AnalisisPrincipal: analisisPrincipal,
+    Evidencias: evidencias,
+    Status: status || "FINAL",
+    WEB_SNAPSHOT: safeJsonStringify_(buildAnalisisWebSnapshot_(status || "FINAL"), ""),
     FirmaResponsableDataUrl: (window.__FIRMAS?.ResponsableDataUrl || ""),
     UpdatedAt: nowISO()
   };
@@ -2589,7 +2699,7 @@ async function guardarAnalisis(status, opts){
   if(!r.ok){
     if(r.message==="DUPLICADO" || r.message==="DUPLICADO"){
       $("a_DupMsg").classList.remove("hidden");
-      toast("err","Duplicado","⚠️ Este periodo ya fue registrado.");
+      toast("err","Duplicado","Ese mes ya fue capturado. Si deseas recapturarlo, elimínalo primero en el Explorador.");
       return;
     }
     toast("err","Error", r.message || "No se guardó.");
@@ -2600,9 +2710,7 @@ async function guardarAnalisis(status, opts){
   toast("ok","Guardado","Análisis capturado correctamente.");
 
   // Propuestas (si hay)
-  const meta = Number(ficha?.MetaObjetivo);
-  const resultado = Number(row.ResultadoObtenido);
-  const c = cumpleFrom(meta, resultado);
+  const c = cumple;
 
   if(c===false){
     const rows = (window.__PROP_ROWS||[])
@@ -2624,6 +2732,7 @@ async function guardarAnalisis(status, opts){
   }
 
   await loadAll();
+  await refreshHistoryByCodigo_(codigo);
 
   // refresca chips/histórico del indicador actual
   updatePeriodosRegistrados();
@@ -2798,7 +2907,7 @@ async function generateAnalisisDoc(){
       } else {
         try { previewWin && !previewWin.closed && previewWin.close(); } catch(_) {}
       }
-      btn.textContent = "Confirmar y guardar documento WORD/PDF";
+      btn.textContent = "Guardar definitivo (Word/PDF)";
       toast("ok","Borrador en Drive","Revisa/ajusta el formato en Drive y luego presiona de nuevo este botón para confirmar guardado final.");
       return;
     } catch(e){
@@ -2857,8 +2966,8 @@ async function generateAnalisisDoc(){
   } finally {
     btn.disabled = false;
     btn.textContent = window.__AN_DOC_DRAFT
-      ? "Confirmar y guardar documento WORD/PDF"
-      : "Generar documento WORD/PDF (Drive)";
+      ? "Guardar definitivo (Word/PDF)"
+      : "Guardar definitivo (Word/PDF)";
   }
 }
 
@@ -3724,10 +3833,45 @@ function renderExplorerDetail_(row){
 
   const links = getDocLinksForRow_(row);
   const actions = [];
+  if(links.word) actions.push(`<a href="${links.word}" target="_blank" class="btn btn-soft">Vista previa</a>`);
+  else if(links.pdf) actions.push(`<a href="${links.pdf}" target="_blank" class="btn btn-soft">Vista previa</a>`);
   if(links.word) actions.push(`<a href="${links.word}" target="_blank" class="btn btn-soft">Abrir Word</a>`);
   if(links.pdf) actions.push(`<a href="${links.pdf}" target="_blank" class="btn btn-soft">Abrir PDF</a>`);
   if(links.carpeta) actions.push(`<a href="${links.carpeta}" target="_blank" class="btn btn-soft">Abrir Carpeta</a>`);
+  actions.push(`<button class="btn btn-danger" id="btnExplorerDeleteNow">Eliminar</button>`);
   $("e_DetailActions").innerHTML = actions.join("") || `<span class="text-xs text-slate-400">Sin links disponibles para este registro.</span>`;
+
+  const delBtn = $("btnExplorerDeleteNow");
+  if(delBtn){
+    delBtn.onclick = ()=>deleteExplorerRow_(row);
+  }
+}
+
+async function deleteExplorerRow_(row){
+  if(!row) return;
+  const tipo = row.__type === "AnalisisIndicador" ? "ANALISIS" : "FICHA";
+  const codigo = row.CodigoIndicador;
+  const periodo = row.PeriodoYM || "";
+  const ok = confirm(tipo === "ANALISIS"
+    ? `¿Eliminar análisis ${codigo} ${periodoHuman(periodo)}? También se enviarán a papelera sus archivos en Drive.`
+    : `¿Eliminar ficha ${codigo}? También se enviarán a papelera sus archivos en Drive.`);
+  if(!ok) return;
+
+  const r = await apiFetch("deleteRecord", {
+    tipo,
+    CodigoIndicador: codigo,
+    PeriodoYM: periodo,
+    recordId: row.__key
+  });
+  if(!r.ok){
+    toast("err","Error", r.message || "No se pudo eliminar");
+    return;
+  }
+
+  await loadAll();
+  if(tipo === "ANALISIS") await refreshHistoryByCodigo_(codigo);
+  refreshExplorador();
+  toast("ok","Eliminado","Registro y archivos asociados eliminados correctamente.");
 }
 
 function refreshExplorador(){
@@ -3778,6 +3922,8 @@ function refreshExplorador(){
         <td class="p-2">${escapeHtml(window.__EX_TAB === "AnalisisIndicador" ? "Análisis" : "Ficha técnica")}</td>
         <td class="p-2">
           <button class="btn btn-soft" data-detail="${escapeHtml(r.__key)}">Ver detalle</button>
+          <button class="btn btn-soft" data-preview="${escapeHtml(r.__key)}">Vista previa</button>
+          <button class="btn btn-danger" data-del="${escapeHtml(r.__key)}">Eliminar</button>
         </td>
       </tr>
     `;
@@ -3788,6 +3934,26 @@ function refreshExplorador(){
       const key = b.getAttribute("data-detail");
       const row = rows.find(x=>x.__key===key);
       if(row) renderExplorerDetail_(row);
+    });
+  });
+
+  tb.querySelectorAll("[data-preview]").forEach(b=>{
+    b.addEventListener("click", ()=>{
+      const key = b.getAttribute("data-preview");
+      const row = rows.find(x=>x.__key===key);
+      if(!row) return;
+      const links = getDocLinksForRow_(row);
+      const url = links.word || links.pdf;
+      if(url) window.open(url, "_blank");
+      else toast("warn","Sin vista previa","No hay documento de vista previa para este registro.");
+    });
+  });
+
+  tb.querySelectorAll("[data-del]").forEach(b=>{
+    b.addEventListener("click", ()=>{
+      const key = b.getAttribute("data-del");
+      const row = rows.find(x=>x.__key===key);
+      if(row) deleteExplorerRow_(row);
     });
   });
 
