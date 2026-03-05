@@ -278,6 +278,61 @@ function periodoHuman(ym){
   const [y,m]=ym.split("-").map(Number);
   return `${MESES[m-1]} ${y}`;
 }
+
+function periodicidadToAllowedMonths(periodicidad){
+  const p = String(periodicidad || "").trim().toLowerCase();
+  if(p === "bimestral") return [2,4,6,8,10,12];
+  if(p === "trimestral") return [3,6,9,12];
+  if(p === "semestral") return [6,12];
+  if(p === "anual") return [12];
+  return [1,2,3,4,5,6,7,8,9,10,11,12];
+}
+
+function isPeriodoAllowedByPeriodicidad(periodoYM, periodicidad){
+  const m = String(periodoYM || "").match(/^\d{4}-(\d{2})$/);
+  if(!m) return false;
+  const month = Number(m[1]);
+  return periodicidadToAllowedMonths(periodicidad).includes(month);
+}
+
+function getUniquePeriodosRegistradosByCodigo(codigo){
+  return Array.from(new Set(
+    getHistoryRowsForCodigo_(codigo)
+      .map(x=>String(x?.PeriodoYM || ""))
+      .filter(x=>/^\d{4}-\d{2}$/.test(x))
+  )).sort();
+}
+
+function getNextPeriodoDisponible(codigo, periodicidad){
+  const used = new Set(getUniquePeriodosRegistradosByCodigo(codigo));
+  const now = new Date();
+  const base = new Date(now.getFullYear(), now.getMonth(), 1);
+  for(let i=0; i<60; i++){
+    const d = new Date(base.getFullYear(), base.getMonth() + i, 1);
+    const ym = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    if(!isPeriodoAllowedByPeriodicidad(ym, periodicidad)) continue;
+    if(used.has(ym)) continue;
+    return ym;
+  }
+  return "";
+}
+
+function setPeriodoValidationMessage(msg){
+  const box = $("a_DupMsg");
+  if(!box) return;
+  if(msg){
+    box.textContent = msg;
+    box.classList.remove("hidden");
+    return;
+  }
+  box.classList.add("hidden");
+}
+
+function getPeriodicidadActualAnalisis(){
+  const codigo = $("a_Codigo")?.value || "";
+  const ficha = codigo ? fichaByCodigo(codigo) : null;
+  return String(ficha?.PeriodicidadMedicion || "").trim();
+}
 function scrollTopSmooth(){ window.scrollTo({top:0, behavior:"smooth"}); }
 </script>
 
@@ -2282,7 +2337,12 @@ async function cargarIndicadorAnalisis(){
   $("a_FormulaHint").textContent = `Fórmula: (${ficha.FormulaNumerador||"N"}/${ficha.FormulaDenominador||"D"})*${f}  · Etiqueta: ${ficha.FormulaEtiqueta||""}`;
 
   await refreshHistoryByCodigo_(codigo);
+  const periodoSugerido = getNextPeriodoDisponible(codigo, ficha.PeriodicidadMedicion || "");
+  if(periodoSugerido){
+    $("a_PeriodoYM").value = periodoSugerido;
+  }
   updatePeriodosRegistrados();
+  checkDuplicadoPeriodo();
   recalcResultadoAndUI();
   // chart con históricos al cargar indicador
   const series = buildSeriesForCodigo(codigo);
@@ -2307,8 +2367,7 @@ async function refreshHistoryByCodigo_(codigo){
       }))
       .filter(x => String(x.CodigoIndicador||"").trim() === code)
       .filter(x => String(x.Status || x.status || "").toUpperCase() !== "ELIMINADO")
-      .filter(x => /^\d{4}-\d{2}$/.test(String(x.PeriodoYM || "")))
-      .filter(x => Number.isFinite(Number(x.ResultadoObtenido)));
+      .filter(x => /^\d{4}-\d{2}$/.test(String(x.PeriodoYM || "")));
 
     const tsOf = (row, fallbackIdx) => {
       const cand = row?.UpdatedAt || row?.updatedAt || row?.Timestamp || row?.timestamp || row?.Fecha || row?.fecha || "";
@@ -2360,10 +2419,7 @@ function updatePeriodosRegistrados(){
     $("a_PeriodosRegistrados").innerHTML = `Selecciona un código para ver periodos.`;
     return;
   }
-  const arr = getHistoryRowsForCodigo_(codigo)
-    .map(x=>x.PeriodoYM)
-    .filter(Boolean)
-    .sort();
+  const arr = getUniquePeriodosRegistradosByCodigo(codigo);
 
   if(!arr.length){
     $("a_PeriodosRegistrados").innerHTML = `<span class="badge badge-gray">Aún no hay periodos registrados.</span>`;
@@ -2377,17 +2433,28 @@ function updatePeriodosRegistrados(){
 function checkDuplicadoPeriodo(){
   const codigo = $("a_Codigo").value;
   const per = $("a_PeriodoYM").value;
+  const periodicidad = getPeriodicidadActualAnalisis();
   const draft = window.__AN_DOC_DRAFT;
   if(draft && (draft.codigo !== codigo || draft.periodo !== per)){
     clearAnalisisDocDraft_();
   }
   if(!codigo || !per){
-    $("a_DupMsg").classList.add("hidden");
+    setPeriodoValidationMessage("");
     return false;
   }
-  const dup = getHistoryRowsForCodigo_(codigo).some(x => String(x?.PeriodoYM||"") === per);
-  if(dup) $("a_DupMsg").classList.remove("hidden");
-  else $("a_DupMsg").classList.add("hidden");
+
+  if(!isPeriodoAllowedByPeriodicidad(per, periodicidad)){
+    const allowed = periodicidadToAllowedMonths(periodicidad).map(m=>MESES[m-1]).join(", ");
+    setPeriodoValidationMessage(`Periodo no válido para periodicidad ${periodicidad || "seleccionada"}. Meses permitidos: ${allowed}.`);
+    return true;
+  }
+
+  const dup = getUniquePeriodosRegistradosByCodigo(codigo).includes(per);
+  if(dup){
+    setPeriodoValidationMessage("Ese mes ya fue capturado. Si deseas recapturarlo, elimínalo primero en el Explorador.");
+  } else {
+    setPeriodoValidationMessage("");
+  }
   return dup;
 }
 
