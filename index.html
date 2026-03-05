@@ -2462,15 +2462,46 @@ function getHistoryRowsForCodigo_(codigo){
   return analisisByCodigo(code);
 }
 
+function getAllRowsForCodigo_(codigo){
+  const code = String(codigo || "").trim().toUpperCase();
+  if(!code) return [];
+
+  const normalizeOne = (x)=>({
+    ...x,
+    CodigoIndicador: String(x?.CodigoIndicador || x?.codigo || x?.codigoIndicador || "").trim(),
+    PeriodoYM: String(x?.PeriodoYM || x?.Periodo || x?.periodoYYYYMM || x?.periodo || "").trim()
+  });
+
+  const fromHistory = getHistoryRowsForCodigo_(codigo).map(normalizeOne);
+  const fromCache = (CACHE.analisis || []).map(normalizeOne)
+    .filter(x => String(x.CodigoIndicador).toUpperCase() === code)
+    .filter(x => String(x?.Status || x?.status || "").toUpperCase() !== "ELIMINADO");
+
+  const merged = fromHistory.concat(fromCache)
+    .filter(x => /^\d{4}-\d{2}$/.test(String(x.PeriodoYM || "")));
+
+  const byPeriodo = new Map();
+  merged.forEach((row, idx)=>{
+    const key = String(row.PeriodoYM);
+    const candTs = Date.parse(String(row?.UpdatedAt || row?.updatedAt || row?.Timestamp || row?.timestamp || ""));
+    const curr = byPeriodo.get(key);
+    const rowTs = Number.isFinite(candTs) ? candTs : idx;
+    const currTs = curr ? (Number.isFinite(curr.__ts) ? curr.__ts : -1) : -1;
+    if(!curr || rowTs >= currTs) byPeriodo.set(key, { ...row, __ts: rowTs });
+  });
+
+  return Array.from(byPeriodo.values())
+    .map(({__ts, ...rest})=>rest)
+    .sort((a,b)=>String(a.PeriodoYM).localeCompare(String(b.PeriodoYM)));
+}
+
 function updatePeriodosRegistrados(){
   const codigo = $("a_Codigo").value;
   if(!codigo){
     $("a_PeriodosRegistrados").innerHTML = `Selecciona un código para ver periodos.`;
     return;
   }
-  const rows = getHistoryRowsForCodigo_(codigo)
-    .filter(x => /^\d{4}-\d{2}$/.test(String(x?.PeriodoYM || "")))
-    .sort((a,b)=>String(a.PeriodoYM).localeCompare(String(b.PeriodoYM)));
+  const rows = getAllRowsForCodigo_(codigo);
   const arr = Array.from(new Set(rows.map(x=>String(x.PeriodoYM))));
 
   if(!arr.length){
@@ -2539,7 +2570,7 @@ function checkDuplicadoPeriodo(){
     return true;
   }
 
-  const dup = getUniquePeriodosRegistradosByCodigo(codigo).includes(per);
+  const dup = getAllRowsForCodigo_(codigo).some(x => String(x.PeriodoYM) === per);
   if(dup){
     const next = getNextPeriodoDisponible(codigo, periodicidad);
     const sug = next ? ` Sugerido: ${periodoHuman(next)}.` : "";
@@ -2596,7 +2627,7 @@ function recalcResultadoAndUI(){
 }
 
 function buildSeriesForCodigo(codigo){
-  const source = getHistoryRowsForCodigo_(codigo);
+  const source = getAllRowsForCodigo_(codigo);
   const byPeriodo = new Map();
   const tsOf = (row, fallbackIdx) => {
     const cand = row?.UpdatedAt || row?.updatedAt || row?.Timestamp || row?.timestamp || row?.Fecha || row?.fecha || "";
@@ -2926,6 +2957,16 @@ async function guardarAnalisis(status, opts){
     toast("err","Error", r.message || "No se guardó.");
     return;
   }
+
+  // reflejo inmediato en UI aunque haya latencia de lectura remota
+  const codeKey = String(codigo || "").trim();
+  window.__AN_HISTORY_BY_CODIGO = window.__AN_HISTORY_BY_CODIGO || {};
+  const currHist = Array.isArray(window.__AN_HISTORY_BY_CODIGO[codeKey]) ? window.__AN_HISTORY_BY_CODIGO[codeKey] : [];
+  const keepHist = currHist.filter(x => String(x?.PeriodoYM || "") !== String(row.PeriodoYM || ""));
+  window.__AN_HISTORY_BY_CODIGO[codeKey] = keepHist.concat([row]);
+
+  const othersCache = (CACHE.analisis || []).filter(x => !(String(x?.CodigoIndicador || "") === codeKey && String(x?.PeriodoYM || "") === String(row.PeriodoYM || "")));
+  CACHE.analisis = othersCache.concat([row]);
 
   // success feedback
   toast("ok","Guardado","Análisis capturado correctamente.");
