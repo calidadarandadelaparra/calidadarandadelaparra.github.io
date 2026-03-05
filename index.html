@@ -278,81 +278,6 @@ function periodoHuman(ym){
   const [y,m]=ym.split("-").map(Number);
   return `${MESES[m-1]} ${y}`;
 }
-
-function periodicidadToAllowedMonths(periodicidad){
-  const p = String(periodicidad || "").trim().toLowerCase();
-  if(p === "bimestral") return [2,4,6,8,10,12];
-  if(p === "trimestral") return [3,6,9,12];
-  if(p === "semestral") return [6,12];
-  if(p === "anual") return [12];
-  return [1,2,3,4,5,6,7,8,9,10,11,12];
-}
-
-function isPeriodoAllowedByPeriodicidad(periodoYM, periodicidad){
-  const m = String(periodoYM || "").match(/^\d{4}-(\d{2})$/);
-  if(!m) return false;
-  const month = Number(m[1]);
-  return periodicidadToAllowedMonths(periodicidad).includes(month);
-}
-
-function getUniquePeriodosRegistradosByCodigo(codigo){
-  return Array.from(new Set(
-    getHistoryRowsForCodigo_(codigo)
-      .map(x=>String(x?.PeriodoYM || ""))
-      .filter(x=>/^\d{4}-\d{2}$/.test(x))
-  )).sort();
-}
-
-function getNextPeriodoDisponible(codigo, periodicidad){
-  const used = new Set(getUniquePeriodosRegistradosByCodigo(codigo));
-  const now = new Date();
-  const base = new Date(now.getFullYear(), now.getMonth(), 1);
-  for(let i=0; i<60; i++){
-    const d = new Date(base.getFullYear(), base.getMonth() + i, 1);
-    const ym = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
-    if(!isPeriodoAllowedByPeriodicidad(ym, periodicidad)) continue;
-    if(used.has(ym)) continue;
-    return ym;
-  }
-  return "";
-}
-
-function setPeriodoValidationMessage(msg){
-  const box = $("a_DupMsg");
-  if(!box) return;
-  if(msg){
-    box.textContent = msg;
-    box.classList.remove("hidden");
-    return;
-  }
-  box.classList.add("hidden");
-}
-
-function setPeriodoInputState_(locked){
-  const inp = $("a_PeriodoYM");
-  if(!inp) return;
-  if(locked) inp.classList.add("err");
-  else inp.classList.remove("err");
-}
-
-function setAnalisisActionButtonsLocked_(locked){
-  ["btnABorrador","btnAGuardar","btnAnalisisGen"].forEach(id=>{
-    const btn = $(id);
-    if(!btn) return;
-    btn.disabled = !!locked;
-  });
-}
-
-function syncPeriodoLockState_(locked){
-  setPeriodoInputState_(locked);
-  setAnalisisActionButtonsLocked_(locked);
-}
-
-function getPeriodicidadActualAnalisis(){
-  const codigo = $("a_Codigo")?.value || "";
-  const ficha = codigo ? fichaByCodigo(codigo) : null;
-  return String(ficha?.PeriodicidadMedicion || "").trim();
-}
 function scrollTopSmooth(){ window.scrollTo({top:0, behavior:"smooth"}); }
 </script>
 
@@ -842,10 +767,13 @@ function ensureSentenceEndingES_(value){
 
 function buildAnalisisEvidenceList_(evidencias){
   return (Array.isArray(evidencias) ? evidencias : []).map((ev, idx)=>{
+    const evidenciaTexto = normalizeLineText_(ev?.evidenciaTexto || ev?.EvidenciaTexto || ev?.evidencia || ev?.Evidencia || "");
     const figuraTexto = normalizeLineText_(ev?.figuraTexto || ev?.FiguraTexto || ev?.caption || ev?.Caption || "");
     const dataUrl = ev?.DataUrl || ev?.dataUrl || ev?.DataURL || "";
     return {
       Figura: idx + 1,
+      evidenciaTexto,
+      EvidenciaTexto: evidenciaTexto,
       figuraTexto,
       FiguraTexto: figuraTexto,
       caption: figuraTexto,
@@ -854,18 +782,17 @@ function buildAnalisisEvidenceList_(evidencias){
       dataUrl: dataUrl,
       FileName: ev?.FileName || ""
     };
-  }).filter(ev => ev.figuraTexto || ev.DataUrl);
+  }).filter(ev => ev.evidenciaTexto || ev.figuraTexto || ev.DataUrl);
 }
 
 function buildAnalisisInterpretacion(textoPrincipal, evidencias){
   const principal = String(textoPrincipal == null ? "" : textoPrincipal)
     .replace(/\r\n?/g, "\n")
-    .replace(/^(\s*\n)+/, "")
-    .trimStart()
     .split("\n")
     .map(l => normalizeLineText_(l))
     .filter((line, idx, arr) => !(line === "" && (idx === 0 || arr[idx-1] === "")))
     .join("\n")
+    .replace(/^\s+/, "")
     .trimEnd();
 
   return principal;
@@ -2232,10 +2159,8 @@ function renderAnalisis(){
     resetAnalisisUI(false);
   });
 
-  $("a_Codigo").addEventListener("change", async ()=>{
-    await refreshHistoryByCodigo_($("a_Codigo").value);
+  $("a_Codigo").addEventListener("change", ()=>{
     updatePeriodosRegistrados();
-    recalcResultadoAndUI();
   });
 
   $("btnACargar").addEventListener("click", ()=>cargarIndicadorAnalisis());
@@ -2292,7 +2217,6 @@ function resetAnalisisUI(full){
   $("a_FormBlock").classList.add("hidden");
   $("a_DupMsg").classList.add("hidden");
   $("a_SaveMsg").classList.add("hidden");
-  syncPeriodoLockState_(false);
   // hide proposals when resetting
   togglePropSection(false);
 
@@ -2358,12 +2282,7 @@ async function cargarIndicadorAnalisis(){
   $("a_FormulaHint").textContent = `Fórmula: (${ficha.FormulaNumerador||"N"}/${ficha.FormulaDenominador||"D"})*${f}  · Etiqueta: ${ficha.FormulaEtiqueta||""}`;
 
   await refreshHistoryByCodigo_(codigo);
-  const periodoSugerido = getNextPeriodoDisponible(codigo, ficha.PeriodicidadMedicion || "");
-  if(periodoSugerido){
-    $("a_PeriodoYM").value = periodoSugerido;
-  }
   updatePeriodosRegistrados();
-  checkDuplicadoPeriodo();
   recalcResultadoAndUI();
   // chart con históricos al cargar indicador
   const series = buildSeriesForCodigo(codigo);
@@ -2374,69 +2293,10 @@ async function refreshHistoryByCodigo_(codigo){
   const code = (codigo || "").trim();
   if(!code) return;
   window.__AN_HISTORY_BY_CODIGO = window.__AN_HISTORY_BY_CODIGO || {};
-
-  const normalizeRows = (input)=>{
-    const raw = Array.isArray(input)
-      ? input
-      : (Array.isArray(input?.items) ? input.items : []);
-    const rows = raw
-      .map(x=>({
-        ...x,
-        CodigoIndicador: x?.CodigoIndicador || x?.codigo || x?.codigoIndicador || "",
-        PeriodoYM: x?.PeriodoYM || x?.periodoYYYYMM || x?.periodo || "",
-        ResultadoObtenido: Number(x?.ResultadoObtenido ?? x?.Resultado ?? x?.resultado)
-      }))
-      .filter(x => String(x.CodigoIndicador||"").trim() === code)
-      .filter(x => String(x.Status || x.status || "").toUpperCase() !== "ELIMINADO")
-      .filter(x => /^\d{4}-\d{2}$/.test(String(x.PeriodoYM || "")));
-
-    const tsOf = (row, fallbackIdx) => {
-      const cand = row?.UpdatedAt || row?.updatedAt || row?.Timestamp || row?.timestamp || row?.Fecha || row?.fecha || "";
-      const t = Date.parse(String(cand || ""));
-      return Number.isFinite(t) ? t : fallbackIdx;
-    };
-
-    const byPeriodo = new Map();
-    rows.forEach((row, idx)=>{
-      const key = String(row.PeriodoYM);
-      const point = { ...row, __ts: tsOf(row, idx) };
-      const prev = byPeriodo.get(key);
-      if(!prev || point.__ts >= prev.__ts) byPeriodo.set(key, point);
-    });
-
-    return Array.from(byPeriodo.values())
-      .map(({__ts, ...rest})=>rest)
-      .sort((a,b)=>String(a.PeriodoYM).localeCompare(String(b.PeriodoYM)));
-  };
-
-  let rows = [];
-  let r = await apiFetch("getHistoryByCodigo", { CodigoIndicador: code });
-  if(r?.ok) rows = normalizeRows(r.data);
-
-  if(!rows.length){
-    r = await apiFetch("getAnalisisHistoryByCodigo", { CodigoIndicador: code });
-    if(r?.ok) rows = normalizeRows(r.data);
+  const r = await apiFetch("getHistoryByCodigo", { CodigoIndicador: code });
+  if(r?.ok && Array.isArray(r.data)){
+    window.__AN_HISTORY_BY_CODIGO[code] = r.data;
   }
-
-  if(!rows.length){
-    r = await apiFetch("analisis.list", {});
-    if(r?.ok) rows = normalizeRows(r.data);
-  }
-
-  window.__AN_HISTORY_BY_CODIGO[code] = rows;
-
-  const others = (CACHE.analisis || []).filter(x => String(x?.CodigoIndicador || "") !== code);
-  CACHE.analisis = others.concat(rows);
-}
-
-function getHistoryRowsForCodigo_(codigo){
-  const code = String(codigo || "").trim();
-  if(!code) return [];
-  const hist = window.__AN_HISTORY_BY_CODIGO?.[code];
-  if(Array.isArray(hist) && hist.length){
-    return hist.filter(x => String(x?.Status || x?.status || "").toUpperCase() !== "ELIMINADO");
-  }
-  return analisisByCodigo(code);
 }
 
 function updatePeriodosRegistrados(){
@@ -2445,10 +2305,13 @@ function updatePeriodosRegistrados(){
     $("a_PeriodosRegistrados").innerHTML = `Selecciona un código para ver periodos.`;
     return;
   }
-  const arr = getUniquePeriodosRegistradosByCodigo(codigo);
+  const arr = analisisByCodigo(codigo)
+    .map(x=>x.PeriodoYM)
+    .filter(Boolean)
+    .sort();
 
   if(!arr.length){
-    $("a_PeriodosRegistrados").innerHTML = `<span class="badge badge-gray">Aún no hay periodos registrados.</span>`;
+    $("a_PeriodosRegistrados").innerHTML = `<span class="badge badge-gray">Sin periodos registrados</span>`;
     return;
   }
 
@@ -2459,32 +2322,17 @@ function updatePeriodosRegistrados(){
 function checkDuplicadoPeriodo(){
   const codigo = $("a_Codigo").value;
   const per = $("a_PeriodoYM").value;
-  const periodicidad = getPeriodicidadActualAnalisis();
   const draft = window.__AN_DOC_DRAFT;
   if(draft && (draft.codigo !== codigo || draft.periodo !== per)){
     clearAnalisisDocDraft_();
   }
   if(!codigo || !per){
-    setPeriodoValidationMessage("");
-    syncPeriodoLockState_(false);
+    $("a_DupMsg").classList.add("hidden");
     return false;
   }
-
-  if(!isPeriodoAllowedByPeriodicidad(per, periodicidad)){
-    const allowed = periodicidadToAllowedMonths(periodicidad).map(m=>MESES[m-1]).join(", ");
-    setPeriodoValidationMessage(`Periodo no válido para periodicidad ${periodicidad || "seleccionada"}. Meses permitidos: ${allowed}.`);
-    syncPeriodoLockState_(true);
-    return true;
-  }
-
-  const dup = getUniquePeriodosRegistradosByCodigo(codigo).includes(per);
-  if(dup){
-    setPeriodoValidationMessage("Ese mes ya fue capturado. Si deseas recapturarlo, elimínalo primero en el Explorador.");
-    syncPeriodoLockState_(true);
-  } else {
-    setPeriodoValidationMessage("");
-    syncPeriodoLockState_(false);
-  }
+  const dup = !!findAnalisis(codigo, per);
+  if(dup) $("a_DupMsg").classList.remove("hidden");
+  else $("a_DupMsg").classList.add("hidden");
   return dup;
 }
 
@@ -2532,31 +2380,21 @@ function recalcResultadoAndUI(){
 }
 
 function buildSeriesForCodigo(codigo){
-  const source = getHistoryRowsForCodigo_(codigo);
+  const hist = window.__AN_HISTORY_BY_CODIGO?.[codigo];
+  const source = Array.isArray(hist) ? hist : analisisByCodigo(codigo);
   const byPeriodo = new Map();
-  const tsOf = (row, fallbackIdx) => {
-    const cand = row?.UpdatedAt || row?.updatedAt || row?.Timestamp || row?.timestamp || row?.Fecha || row?.fecha || "";
-    const t = Date.parse(String(cand || ""));
-    return Number.isFinite(t) ? t : fallbackIdx;
-  };
   source
-    .filter(x=>x.PeriodoYM)
-    .forEach((x, idx)=>{
-      const resultado = Number(x?.ResultadoObtenido ?? x?.Resultado ?? x?.resultado);
-      if(!Number.isFinite(resultado)) return;
+    .filter(x=>Number.isFinite(Number(x.ResultadoObtenido)) && x.PeriodoYM)
+    .forEach(x=>{
       const key = String(x.PeriodoYM);
-      const point = {
+      byPeriodo.set(key, {
         PeriodoYM: key,
         PeriodoLabel: periodoHuman(key),
-        Resultado: resultado,
-        __ts: tsOf(x, idx)
-      };
-      const prev = byPeriodo.get(key);
-      if(!prev || point.__ts >= prev.__ts) byPeriodo.set(key, point);
+        Resultado: Number(x.ResultadoObtenido)
+      });
     });
 
   return Array.from(byPeriodo.values())
-    .map(({__ts, ...rest})=>rest)
     .sort((a,b)=>String(a.PeriodoYM).localeCompare(String(b.PeriodoYM)));
 }
 
@@ -2644,6 +2482,8 @@ async function handleEvidenceFiles(e){
       Figura: window.__EVID.length + 1,
       FileName: f.name,
       DataUrl: dataUrl,
+      evidenciaTexto: "",
+      EvidenciaTexto: "",
       figuraTexto: "",
       FiguraTexto: "",
       caption: ""
@@ -2666,11 +2506,23 @@ function renderEvidenceList(){
       <div class="text-xs font-extrabold text-slate-600 mb-2">Figura ${i+1}</div>
       <img src="${x.DataUrl}" class="w-full h-40 object-cover rounded-xl border border-slate-100"/>
       <div class="text-xs text-slate-500 mt-2 truncate">${escapeHtml(x.FileName)}</div>
+      <label class="text-xs font-extrabold text-slate-600 mt-2 block">Texto evidencia</label>
+      <input class="input mt-1" data-evid-text="${i}" value="${escapeHtml(x.evidenciaTexto||x.EvidenciaTexto||"")}" placeholder="Ej. Se observó cumplimiento en el área..."/>
       <label class="text-xs font-extrabold text-slate-600 mt-2 block">Título de pie de foto</label>
       <input class="input mt-1" data-evid-cap="${i}" value="${escapeHtml(x.figuraTexto||x.FiguraTexto||x.caption||x.Caption||"")}" placeholder="Ej. Evidencia del evento"/>
       <button class="text-xs font-extrabold text-red-700 hover:underline mt-2" data-evid-del="${i}">Eliminar</button>
     </div>
   `).join("");
+
+  wrap.querySelectorAll("[data-evid-text]").forEach(inp=>{
+    inp.addEventListener("input", ()=>{
+      const idx = Number(inp.getAttribute("data-evid-text"));
+      if(!window.__EVID[idx]) return;
+      const value = inp.value || "";
+      window.__EVID[idx].evidenciaTexto = value;
+      window.__EVID[idx].EvidenciaTexto = value;
+    });
+  });
 
   wrap.querySelectorAll("[data-evid-cap]").forEach(inp=>{
     inp.addEventListener("input", ()=>{
@@ -3010,7 +2862,7 @@ async function generateAnalisisDoc(opts){
     const metaPrev = Number(fichaPrev?.MetaObjetivo);
     const resPrev = Number($("a_Resultado").value);
     const evidenciasPreview = buildAnalisisEvidenceList_(window.__EVID||[]);
-    const analisisPrincipal = ($("a_Analisis").value||"").replace(/^(\s*\n)+/, "").trimStart().trimEnd();
+    const analisisPrincipal = ($("a_Analisis").value||"").trim();
     const payloadPreview = {
       CodigoIndicador: codigo,
       AreaResponsable: $("a_Area").value,
@@ -3032,7 +2884,7 @@ async function generateAnalisisDoc(opts){
       GraficoDataUrl: getChartDataUrl(),
       Responsable: fichaPrev?.ResponsableIndicador || "",
       FirmaResponsableDataUrl: (window.__FIRMAS?.ResponsableDataUrl || ""),
-      Status: "BORRADOR",
+      Status: "FINAL",
       Evidencias: evidenciasPreview,
       Propuestas: (window.__PROP_ROWS||[])
         .filter(r => (r.Accion||"").trim() || (r.Responsable||"").trim() || (r.FechaCompromiso||"").trim())
@@ -3043,7 +2895,7 @@ async function generateAnalisisDoc(opts){
           FechaCompromiso:(r.FechaCompromiso||"").trim()
         })),
       PreviewOnly: true,
-      WEB_SNAPSHOT: safeJsonStringify_(buildAnalisisWebSnapshot_("BORRADOR"), ""),
+      WEB_SNAPSHOT: safeJsonStringify_(buildAnalisisWebSnapshot_("FINAL"), ""),
       UpdatedAt: nowISO()
     };
     Object.keys(payloadPreview).forEach(k=>{
