@@ -349,7 +349,7 @@ function setPeriodoInputState_(locked){
 }
 
 function setAnalisisActionButtonsLocked_(locked){
-  ["btnABorrador","btnAGuardar","btnAnalisisGen"].forEach(id=>{
+  ["btnABorrador","btnASaveAnalisis","btnAGuardar","btnAnalisisGen"].forEach(id=>{
     const btn = $(id);
     if(!btn) return;
     btn.disabled = !!locked;
@@ -2217,9 +2217,9 @@ function renderAnalisis(){
           <div class="flex flex-wrap gap-2">
             <button id="btnAIrFirmas" class="btn btn-soft hidden">Firmas</button>
             <button id="btnABorrador" class="btn btn-soft">Guardar borrador</button>
+            <button id="btnASaveAnalisis" class="btn btn-primary">Guardar análisis</button>
             <button id="btnAGuardar" class="btn btn-primary">Generar vista previa</button>
             <button id="btnAnalisisGen" class="btn btn-primary">Guardar definitivo (Word/PDF)</button>
-            <button id="btnAPDF" class="btn btn-soft">Vista previa</button>
             <button id="btnACancelar" class="btn btn-soft">Cerrar</button>
           </div>
 
@@ -2268,10 +2268,10 @@ function renderAnalisis(){
   $("a_Evidencias").addEventListener("change", (e)=>handleEvidenceFiles(e));
   $("a_FirmaResponsable").addEventListener("change", (e)=>handleFirmaFile(e, "Responsable"));
 
-  $("btnABorrador").addEventListener("click", ()=>guardarAnalisis("BORRADOR", { generatePreviewDoc:true }));
-  $("btnAGuardar").addEventListener("click", ()=>generateAnalisisDoc({ previewOnly:true }));
+  $("btnABorrador").addEventListener("click", ()=>guardarAnalisis("BORRADOR"));
+  $("btnASaveAnalisis").addEventListener("click", ()=>guardarAnalisis("FINAL"));
+  $("btnAGuardar").addEventListener("click", ()=>guardarAnalisis("FINAL", { generatePreviewDoc:true }));
   $("btnAnalisisGen").addEventListener("click", ()=>generateAnalisisDoc());
-  $("btnAPDF").addEventListener("click", ()=>openAnalisisDraftPreview_());
   $("btnAIrFirmas")?.addEventListener("click", ()=>{
     $("a_FirmasCard")?.scrollIntoView({ behavior:"smooth", block:"center" });
   });
@@ -2833,10 +2833,16 @@ async function guardarAnalisis(status, opts){
   opts = opts || {};
   // loading indicator for both save buttons
   const btn1 = $("btnABorrador");
+  const btnSave = $("btnASaveAnalisis");
   const btn2 = $("btnAGuardar");
   const orig1 = btn1.textContent;
+  const origSave = btnSave ? btnSave.textContent : "";
   const orig2 = btn2.textContent;
   btn1.disabled = true;
+  if(btnSave){
+    btnSave.disabled = true;
+    btnSave.textContent = "Guardando…";
+  }
   btn1.textContent = "Guardando…";
   btn2.textContent = "Guardando…";
 
@@ -2845,7 +2851,9 @@ async function guardarAnalisis(status, opts){
     toast("err","No se puede guardar", v.message);
     const locked = checkDuplicadoPeriodo();
     btn1.disabled = !!locked;
+    if(btnSave) btnSave.disabled = !!locked;
     btn2.disabled = !!locked;
+    if(btnSave) btnSave.textContent = origSave;
     btn1.textContent = orig1; btn2.textContent = orig2;
     return;
   }
@@ -2901,7 +2909,9 @@ async function guardarAnalisis(status, opts){
   } finally {
     // restore buttons even if API throws
     btn1.disabled = false;
+    if(btnSave) btnSave.disabled = false;
     btn2.disabled = false;
+    if(btnSave) btnSave.textContent = origSave;
     btn1.textContent = orig1;
     btn2.textContent = orig2;
   }
