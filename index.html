@@ -328,6 +328,26 @@ function setPeriodoValidationMessage(msg){
   box.classList.add("hidden");
 }
 
+function setPeriodoInputState_(locked){
+  const inp = $("a_PeriodoYM");
+  if(!inp) return;
+  if(locked) inp.classList.add("err");
+  else inp.classList.remove("err");
+}
+
+function setAnalisisActionButtonsLocked_(locked){
+  ["btnABorrador","btnAGuardar","btnAnalisisGen"].forEach(id=>{
+    const btn = $(id);
+    if(!btn) return;
+    btn.disabled = !!locked;
+  });
+}
+
+function syncPeriodoLockState_(locked){
+  setPeriodoInputState_(locked);
+  setAnalisisActionButtonsLocked_(locked);
+}
+
 function getPeriodicidadActualAnalisis(){
   const codigo = $("a_Codigo")?.value || "";
   const ficha = codigo ? fichaByCodigo(codigo) : null;
@@ -2272,6 +2292,7 @@ function resetAnalisisUI(full){
   $("a_FormBlock").classList.add("hidden");
   $("a_DupMsg").classList.add("hidden");
   $("a_SaveMsg").classList.add("hidden");
+  syncPeriodoLockState_(false);
   // hide proposals when resetting
   togglePropSection(false);
 
@@ -2397,6 +2418,11 @@ async function refreshHistoryByCodigo_(codigo){
     if(r?.ok) rows = normalizeRows(r.data);
   }
 
+  if(!rows.length){
+    r = await apiFetch("analisis.list", {});
+    if(r?.ok) rows = normalizeRows(r.data);
+  }
+
   window.__AN_HISTORY_BY_CODIGO[code] = rows;
 
   const others = (CACHE.analisis || []).filter(x => String(x?.CodigoIndicador || "") !== code);
@@ -2440,20 +2466,24 @@ function checkDuplicadoPeriodo(){
   }
   if(!codigo || !per){
     setPeriodoValidationMessage("");
+    syncPeriodoLockState_(false);
     return false;
   }
 
   if(!isPeriodoAllowedByPeriodicidad(per, periodicidad)){
     const allowed = periodicidadToAllowedMonths(periodicidad).map(m=>MESES[m-1]).join(", ");
     setPeriodoValidationMessage(`Periodo no válido para periodicidad ${periodicidad || "seleccionada"}. Meses permitidos: ${allowed}.`);
+    syncPeriodoLockState_(true);
     return true;
   }
 
   const dup = getUniquePeriodosRegistradosByCodigo(codigo).includes(per);
   if(dup){
     setPeriodoValidationMessage("Ese mes ya fue capturado. Si deseas recapturarlo, elimínalo primero en el Explorador.");
+    syncPeriodoLockState_(true);
   } else {
     setPeriodoValidationMessage("");
+    syncPeriodoLockState_(false);
   }
   return dup;
 }
@@ -2510,13 +2540,15 @@ function buildSeriesForCodigo(codigo){
     return Number.isFinite(t) ? t : fallbackIdx;
   };
   source
-    .filter(x=>Number.isFinite(Number(x.ResultadoObtenido)) && x.PeriodoYM)
+    .filter(x=>x.PeriodoYM)
     .forEach((x, idx)=>{
+      const resultado = Number(x?.ResultadoObtenido ?? x?.Resultado ?? x?.resultado);
+      if(!Number.isFinite(resultado)) return;
       const key = String(x.PeriodoYM);
       const point = {
         PeriodoYM: key,
         PeriodoLabel: periodoHuman(key),
-        Resultado: Number(x.ResultadoObtenido),
+        Resultado: resultado,
         __ts: tsOf(x, idx)
       };
       const prev = byPeriodo.get(key);
