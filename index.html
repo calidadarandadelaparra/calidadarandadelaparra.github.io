@@ -138,6 +138,7 @@ const LS_KEYS = {
 };
 
 const MESES = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
+const UI_BUILD = "IDX-2026-03-05-01";
 
 /* ===========================
    CATÁLOGO ÁREAS (COMPLETO)
@@ -1817,7 +1818,7 @@ function getAreaLabel(prefix){
 ========================================================= */
 function setModeTags(){
   const url = getWebAppUrl();
-  $("modeTag").textContent = USE_DEMO ? "DEMO localStorage" : "Google Sheets";
+  $("modeTag").textContent = (USE_DEMO ? "DEMO localStorage" : "Google Sheets") + " · " + UI_BUILD;
   if(USE_DEMO){
     $("homeMode").textContent = "DEMO (localStorage)";
   } else {
@@ -1825,7 +1826,7 @@ function setModeTags(){
     const short = url.length>40 ? url.slice(0,40)+"…" : url;
     $("homeMode").textContent = `Google Sheets (WebApp: ${short})`;
   }
-  $("footerMode").textContent = USE_DEMO ? "DEMO localStorage" : "Google Sheets";
+  $("footerMode").textContent = (USE_DEMO ? "DEMO localStorage" : "Google Sheets") + " · " + UI_BUILD;
 }
 
 function wireHeaderNav(){
@@ -2386,6 +2387,7 @@ async function refreshHistoryByCodigo_(codigo){
   const code = (codigo || "").trim();
   if(!code) return;
   window.__AN_HISTORY_BY_CODIGO = window.__AN_HISTORY_BY_CODIGO || {};
+  const prevRows = Array.isArray(window.__AN_HISTORY_BY_CODIGO[code]) ? window.__AN_HISTORY_BY_CODIGO[code] : [];
 
   const normalizeRows = (input)=>{
     const raw = Array.isArray(input)
@@ -2433,6 +2435,14 @@ async function refreshHistoryByCodigo_(codigo){
   if(!rows.length){
     r = await apiFetch("analisis.list", {});
     if(r?.ok) rows = normalizeRows(r.data);
+  }
+
+  if(!rows.length){
+    rows = normalizeRows(CACHE.analisis || []);
+  }
+
+  if(!rows.length && prevRows.length){
+    rows = prevRows.slice();
   }
 
   window.__AN_HISTORY_BY_CODIGO[code] = rows;
@@ -2510,6 +2520,12 @@ function checkDuplicadoPeriodo(){
     clearAnalisisDocDraft_();
   }
   if(!codigo || !per){
+    setPeriodoValidationMessage("");
+    syncPeriodoLockState_(false);
+    return false;
+  }
+
+  if(!/^\d{4}-\d{2}$/.test(per)){
     setPeriodoValidationMessage("");
     syncPeriodoLockState_(false);
     return false;
