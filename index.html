@@ -370,7 +370,7 @@ function scrollTopSmooth(){ window.scrollTo({top:0, behavior:"smooth"}); }
 </script>
 
 <!-- HEADER / NAV -->
-<header class="sticky top-0 z-50 bg-white/80 backdrop-blur border-b border-slate-200 no-print">
+<header id="appHeader" class="hidden sticky top-0 z-50 bg-white/80 backdrop-blur border-b border-slate-200 no-print">
   <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
     <div class="flex items-center gap-3">
       <div class="w-10 h-10 rounded-2xl bg-navy text-white flex items-center justify-center shadow-sm">
@@ -406,19 +406,24 @@ function scrollTopSmooth(){ window.scrollTo({top:0, behavior:"smooth"}); }
 <div id="loginModal" class="hidden modal-backdrop no-print">
   <div class="w-full max-w-md rounded-2xl bg-white shadow-xl border border-slate-200 overflow-hidden">
     <div class="px-5 py-4 bg-slate-50 border-b border-slate-200">
-      <div class="font-extrabold text-navy text-lg">Acceso restringido</div>
-      <div class="text-sm text-slate-500">Solo Calidad</div>
+      <div id="loginTitle" class="font-extrabold text-navy text-lg">Acceso restringido</div>
+      <div id="loginSub" class="text-sm text-slate-500">Solo Calidad</div>
     </div>
     <div class="p-5 space-y-4">
-      <div>
+      <div id="authOptionsRow" class="hidden grid grid-cols-2 gap-2">
+        <button id="btnAuthGoLogin" class="btn btn-primary">Iniciar sesión</button>
+        <button id="btnAuthGoRegister" class="btn btn-soft">Registrarme</button>
+      </div>
+
+      <div id="loginNameWrap">
         <label class="text-xs font-extrabold text-slate-600">Nombre *</label>
         <input id="loginName" class="input mt-1" placeholder="Ej. Luis Ángel"/>
       </div>
       <div>
-        <label class="text-xs font-extrabold text-slate-600">Correo corporativo *</label>
+        <label id="loginUserLabel" class="text-xs font-extrabold text-slate-600">Correo corporativo *</label>
         <input id="loginUser" class="input mt-1" placeholder="usuario@arandadelaparra.com"/>
       </div>
-      <div>
+      <div id="loginAreaWrap">
         <label class="text-xs font-extrabold text-slate-600">Área *</label>
         <input id="loginArea" class="input mt-1" placeholder="Ej. Calidad"/>
       </div>
@@ -427,7 +432,7 @@ function scrollTopSmooth(){ window.scrollTo({top:0, behavior:"smooth"}); }
         <input id="loginPass" type="password" class="input mt-1" placeholder="••••••••"/>
       </div>
 
-      <div>
+      <div id="loginCodeWrap">
         <label class="text-xs font-extrabold text-slate-600">Código de verificación *</label>
         <input id="loginCode" class="input mt-1" placeholder="Ej. 123456" maxlength="6"/>
       </div>
@@ -466,7 +471,7 @@ function scrollTopSmooth(){ window.scrollTo({top:0, behavior:"smooth"}); }
   </div>
 </div>
 
-<main class="max-w-7xl mx-auto px-4 py-6 space-y-6">
+<main id="appMain" class="hidden max-w-7xl mx-auto px-4 py-6 space-y-6">
 
   <!-- HERO -->
   <section class="rounded-2xl bg-navy text-white shadow-sm overflow-hidden">
@@ -610,7 +615,7 @@ function scrollTopSmooth(){ window.scrollTo({top:0, behavior:"smooth"}); }
 
 </main>
 
-<footer class="max-w-7xl mx-auto px-4 pb-10">
+<footer id="appFooter" class="hidden max-w-7xl mx-auto px-4 pb-10">
   <div class="text-xs text-slate-500 text-center mt-6">
     © Sistema interno · <span id="footerMode" class="font-semibold"></span> ·
     Desarrollado por <span class="font-semibold">I.I. Luis Angel Guillen Medina & I.I. Alejandra García Cerda</span>
@@ -668,6 +673,27 @@ async function apiFetch(action, payload={}){
 
 function ok_(data, message="OK"){ return { ok:true, data, message }; }
 function fail_(message="ERROR"){ return { ok:false, data:null, message }; }
+function normalizeCorpEmail_(value){
+  return String(value || "").trim().toLowerCase();
+}
+function isCorpEmail_(email){
+  return /@arandadelaparra\.com$/i.test(String(email || "").trim());
+}
+function humanAuthMessage_(code, fallback){
+  switch(String(code || "").trim().toUpperCase()){
+    case "USUARIO_EXISTE": return "Ese correo ya está registrado. Inicia sesión.";
+    case "CODIGO_REQUERIDO": return "Captura el código de verificación.";
+    case "CODIGO_INVALIDO": return "El código de verificación no es válido.";
+    case "CODIGO_EXPIRADO": return "El código expiró. Solicita uno nuevo.";
+    case "CREDENCIALES_INVALIDAS": return "Correo o contraseña incorrectos.";
+    case "USUARIO_INACTIVO": return "Tu usuario está inactivo. Contacta a Calidad.";
+    case "USUARIO_NO_VERIFICADO": return "Tu usuario no está verificado.";
+    case "FALTAN DATOS":
+    case "FALTAN CREDENCIALES": return "Completa los datos requeridos.";
+    case "SOLO CORREOS @ARANDADELAPARRA.COM": return "Solo correos @arandadelaparra.com";
+    default: return fallback || "No se pudo procesar la solicitud.";
+  }
+}
 
 function demoApi(action, payload){
   seedDemo();
@@ -679,15 +705,15 @@ function demoApi(action, payload){
   const users = lsRead(LS_KEYS.USERS, []);
   const authCodes = lsRead(LS_KEYS.AUTH_CODES, {});
 
-  const authCodeKey = (email)=>String(email||"").trim().toLowerCase();
+  const authCodeKey = (email)=>normalizeCorpEmail_(email);
 
   if(action==="auth.requestCode"){
-    const email = String(payload?.Email || payload?.email || "").trim().toLowerCase();
+    const email = normalizeCorpEmail_(payload?.Email || payload?.email || "");
     const nombre = String(payload?.Nombre || payload?.name || "").trim();
     const area = String(payload?.Area || payload?.area || "").trim();
     const password = String(payload?.Password || payload?.password || "");
     if(!nombre || !area || !email || !password) return fail_("Faltan datos");
-    if(!/@arandadelaparra\.com$/.test(email)) return fail_("Solo correos @arandadelaparra.com");
+    if(!isCorpEmail_(email)) return fail_("Solo correos @arandadelaparra.com");
     const exists = users.some(u=>String(u?.Email || "").toLowerCase()===email && String(u?.Status || "").toUpperCase()!=="ELIMINADO");
     if(exists) return fail_("USUARIO_EXISTE");
     const code = String(Math.floor(100000 + Math.random() * 900000));
@@ -697,14 +723,14 @@ function demoApi(action, payload){
   }
 
   if(action==="auth.register"){
-    const email = String(payload?.Email || payload?.email || "").trim().toLowerCase();
+    const email = normalizeCorpEmail_(payload?.Email || payload?.email || "");
     const nombre = String(payload?.Nombre || payload?.name || "").trim();
     const area = String(payload?.Area || payload?.area || "").trim();
     const password = String(payload?.Password || payload?.password || "");
     const code = String(payload?.Code || payload?.code || "").trim();
     if(!nombre || !area || !email || !password) return fail_("Faltan datos");
     if(!code) return fail_("CODIGO_REQUERIDO");
-    if(!/@arandadelaparra\.com$/.test(email)) return fail_("Solo correos @arandadelaparra.com");
+    if(!isCorpEmail_(email)) return fail_("Solo correos @arandadelaparra.com");
     const exists = users.some(u=>String(u?.Email || "").toLowerCase()===email && String(u?.Status || "").toUpperCase()!=="ELIMINADO");
     if(exists) return fail_("USUARIO_EXISTE");
     const codeRow = authCodes[authCodeKey(email)] || null;
@@ -727,9 +753,10 @@ function demoApi(action, payload){
   }
 
   if(action==="auth.login"){
-    const email = String(payload?.Email || payload?.email || "").trim().toLowerCase();
+    const email = normalizeCorpEmail_(payload?.Email || payload?.email || "");
     const password = String(payload?.Password || payload?.password || "");
     if(!email || !password) return fail_("Faltan credenciales");
+    if(!isCorpEmail_(email)) return fail_("Solo correos @arandadelaparra.com");
     const user = users.find(u=>String(u?.Email || "").toLowerCase()===email && String(u?.Status || "").toUpperCase()==="ACTIVO");
     if(!user || String(user.Password || "") !== password) return fail_("CREDENCIALES_INVALIDAS");
     if(String(user.Verificado).toLowerCase() !== "true") return fail_("USUARIO_NO_VERIFICADO");
@@ -1017,19 +1044,77 @@ function getSession(){
 }
 function setSession(obj){ localStorage.setItem(LS_KEYS.SESSION, JSON.stringify(obj)); }
 function clearSession(){ localStorage.removeItem(LS_KEYS.SESSION); }
+function isQualityArea_(area){
+  const txt = String(area || "").trim().toLowerCase();
+  return txt.includes("calidad");
+}
+function setUiLocked_(locked){
+  ["appHeader","appMain","appFooter"].forEach(id=>$(id)?.classList.toggle("hidden", !!locked));
+}
 function isQuality(){
   const s = getSession();
   if(!s) return false;
   const exp = new Date(s.expiresAt).getTime();
-  return !!(s.email && Date.now() < exp);
+  return !!(s.email && Date.now() < exp && isQualityArea_(s.area));
 }
 let pendingTarget = null;
+let authModalMode = "quality";
+let entryAuthAction = "login";
+
+function setEntryAuthAction_(action){
+  entryAuthAction = action === "register" ? "register" : "login";
+  const register = entryAuthAction === "register";
+
+  $("loginNameWrap")?.classList.toggle("hidden", !register);
+  $("loginAreaWrap")?.classList.toggle("hidden", !register);
+  $("loginCodeWrap")?.classList.toggle("hidden", !register);
+  $("btnSendCode")?.classList.toggle("hidden", !register);
+  $("btnRegister")?.classList.toggle("hidden", !register);
+  $("btnLogin")?.classList.toggle("hidden", register);
+
+  if($("btnAuthGoLogin")) $("btnAuthGoLogin").className = register ? "btn btn-soft" : "btn btn-primary";
+  if($("btnAuthGoRegister")) $("btnAuthGoRegister").className = register ? "btn btn-primary" : "btn btn-soft";
+}
+
+function setAuthModalMode_(mode){
+  authModalMode = mode === "entry" ? "entry" : "quality";
+  const entry = authModalMode === "entry";
+
+  if($("loginTitle")) $("loginTitle").textContent = entry ? "Registro de acceso" : "Acceso restringido";
+  if($("loginSub")) $("loginSub").textContent = entry
+    ? "Elige una opción para continuar"
+    : "Solo Calidad";
+  if($("loginUserLabel")) $("loginUserLabel").textContent = "Correo corporativo *";
+
+  $("authOptionsRow")?.classList.toggle("hidden", !entry);
+  $("btnLoginCancel")?.classList.toggle("hidden", entry);
+
+  if(entry) setEntryAuthAction_(entryAuthAction || "login");
+  else {
+    $("loginNameWrap")?.classList.add("hidden");
+    $("loginAreaWrap")?.classList.add("hidden");
+    $("loginCodeWrap")?.classList.add("hidden");
+    $("btnSendCode")?.classList.add("hidden");
+    $("btnRegister")?.classList.add("hidden");
+    $("btnLogin")?.classList.remove("hidden");
+  }
+
+  if($("loginMsg")){
+    $("loginMsg").textContent = "Datos incorrectos o incompletos.";
+    $("loginMsg").classList.add("hidden");
+  }
+}
+
+function openAuthModal_(mode, target){
+  if(target) pendingTarget = target;
+  setAuthModalMode_(mode || "quality");
+  setUiLocked_(true);
+  $("loginModal").classList.remove("hidden");
+}
 
 function requireQuality(target){
   if(isQuality()) return true;
-  pendingTarget = target;
-  $("loginMsg").classList.add("hidden");
-  $("loginModal").classList.remove("hidden");
+  openAuthModal_("quality", target);
   return false;
 }
 
@@ -1928,7 +2013,7 @@ function wireHeaderNav(){
   $("btnLogout").addEventListener("click", ()=>{
     clearSession();
     toast("ok","Sesión cerrada","Acceso de Calidad removido.");
-    showSection("secInicio");
+    openAuthModal_("entry");
   });
 
   // accesos rápidos en Inicio
@@ -1949,30 +2034,48 @@ function wireHeaderNav(){
   });
 
   // login modal
+  $("btnAuthGoLogin")?.addEventListener("click", ()=>setEntryAuthAction_("login"));
+  $("btnAuthGoRegister")?.addEventListener("click", ()=>setEntryAuthAction_("register"));
+
   $("btnLogin").addEventListener("click", async ()=>{
     const name = ($("loginName").value||"").trim();
-    const u = ($("loginUser").value||"").trim().toLowerCase();
+    const u = normalizeCorpEmail_(($("loginUser").value||"").trim().toLowerCase());
     const area = ($("loginArea").value||"").trim();
     const p = ($("loginPass").value||"").trim();
 
     if(!u || !p){
+      $("loginMsg").textContent = "Captura correo corporativo y contraseña.";
+      $("loginMsg").classList.remove("hidden");
+      return;
+    }
+    if(!isCorpEmail_(u)){
+      $("loginMsg").textContent = "Solo correos @arandadelaparra.com";
       $("loginMsg").classList.remove("hidden");
       return;
     }
 
     const r = await apiFetch("auth.login", { Email: u, Password: p });
     if(!r?.ok){
+      $("loginMsg").textContent = humanAuthMessage_(r?.message, "No se pudo iniciar sesión.");
       $("loginMsg").classList.remove("hidden");
       return;
     }
 
     const me = r.data || {};
+    const userArea = me.Area || area || "";
+    if(authModalMode === "quality" && !isQualityArea_(userArea)){
+      $("loginMsg").textContent = "Este acceso está restringido para usuarios del área de Calidad.";
+      $("loginMsg").classList.remove("hidden");
+      return;
+    }
+
     setSession({
       name: me.Nombre || name || "",
       email: me.Email || u,
-      area: me.Area || area || "",
+      area: userArea,
       expiresAt: new Date(Date.now()+SESSION_HOURS*3600*1000).toISOString()
     });
+    setUiLocked_(false);
     $("loginModal").classList.add("hidden");
     toast("ok","Acceso autorizado", `Bienvenido, ${me.Nombre || name || "usuario"}.`);
 
@@ -1984,7 +2087,7 @@ function wireHeaderNav(){
 
   $("btnSendCode").addEventListener("click", async ()=>{
     const name = ($("loginName").value||"").trim();
-    const email = ($("loginUser").value||"").trim().toLowerCase();
+    const email = normalizeCorpEmail_(($("loginUser").value||"").trim().toLowerCase());
     const area = ($("loginArea").value||"").trim();
     const pass = ($("loginPass").value||"").trim();
 
@@ -1996,7 +2099,7 @@ function wireHeaderNav(){
 
     const r = await apiFetch("auth.requestCode", { Nombre:name, Area:area, Email:email, Password:pass });
     if(!r?.ok){
-      $("loginMsg").textContent = r?.message || "No se pudo enviar el código.";
+      $("loginMsg").textContent = humanAuthMessage_(r?.message, "No se pudo enviar el código.");
       $("loginMsg").classList.remove("hidden");
       return;
     }
@@ -2006,7 +2109,7 @@ function wireHeaderNav(){
 
   $("btnRegister").addEventListener("click", async ()=>{
     const name = ($("loginName").value||"").trim();
-    const email = ($("loginUser").value||"").trim().toLowerCase();
+    const email = normalizeCorpEmail_(($("loginUser").value||"").trim().toLowerCase());
     const area = ($("loginArea").value||"").trim();
     const pass = ($("loginPass").value||"").trim();
     const code = ($("loginCode").value||"").trim();
@@ -2017,16 +2120,32 @@ function wireHeaderNav(){
     }
     const r = await apiFetch("auth.register", { Nombre:name, Area:area, Email:email, Password:pass, Code:code });
     if(!r?.ok){
-      $("loginMsg").textContent = r?.message || "No se pudo registrar.";
+      $("loginMsg").textContent = humanAuthMessage_(r?.message, "No se pudo registrar.");
       $("loginMsg").classList.remove("hidden");
       return;
     }
     $("loginMsg").classList.add("hidden");
+    const login = await apiFetch("auth.login", { Email: email, Password: pass });
+    if(login?.ok){
+      const me = login.data || {};
+      setSession({
+        name: me.Nombre || name || "",
+        email: me.Email || email,
+        area: me.Area || area || "",
+        expiresAt: new Date(Date.now()+SESSION_HOURS*3600*1000).toISOString()
+      });
+      setUiLocked_(false);
+      $("loginModal").classList.add("hidden");
+      toast("ok","Registro exitoso","Acceso habilitado." );
+      return;
+    }
     toast("ok","Registro exitoso","Usuario creado. Ahora inicia sesión.");
   });
   $("btnLoginCancel").addEventListener("click", ()=>{
+    if(authModalMode === "entry") return;
     pendingTarget=null;
     $("loginModal").classList.add("hidden");
+    setUiLocked_(false);
   });
 
   // PDF modal
@@ -2082,6 +2201,14 @@ document.addEventListener("DOMContentLoaded", async ()=>{
   initConfigUI();
   await loadAll();
   showSection("secInicio");
+  const s = getSession();
+  const active = !!(s && s.expiresAt && Date.now() < new Date(s.expiresAt).getTime());
+  if(!active){
+    clearSession();
+    openAuthModal_("entry");
+  } else {
+    setUiLocked_(false);
+  }
 });
 </script>
 
