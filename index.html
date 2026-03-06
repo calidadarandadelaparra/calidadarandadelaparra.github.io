@@ -1615,6 +1615,30 @@ function cleanFormulaText(s){
   return s;
 }
 
+function normalizeFormulaOperandForHint_(value, fallback){
+  const fb = fallback || "";
+  let txt = cleanFormulaText(value).trim();
+  if(!txt) return fb;
+
+  if((txt.startsWith("{") && txt.endsWith("}")) || (txt.startsWith("[") && txt.endsWith("]"))){
+    try {
+      const parsed = JSON.parse(txt);
+      if(parsed && typeof parsed === "object" && !Array.isArray(parsed)){
+        const nested = cleanFormulaText(parsed.FormulaNumerador || parsed.FormulaDenominador || parsed.NumeradorTxt || parsed.DenominadorTxt || "").trim();
+        if(nested) txt = nested;
+        else return fb;
+      } else {
+        return fb;
+      }
+    } catch(_){
+      return fb;
+    }
+  }
+
+  if(txt.length > 120) return fb;
+  return txt;
+}
+
 function updateFormulaPreview(){
   const numT = cleanFormulaText($("f_NumTxt")?.value).trim() || "N";
   const denT = cleanFormulaText($("f_DenTxt")?.value).trim() || "D";
@@ -2731,7 +2755,10 @@ async function cargarIndicadorAnalisis(){
 
   // hint fórmula
   const f = getFichaFactor(ficha);
-  $("a_FormulaHint").textContent = `Fórmula: (${ficha.FormulaNumerador||"N"}/${ficha.FormulaDenominador||"D"})*${f}  · Etiqueta: ${ficha.FormulaEtiqueta||""}`;
+  const formulaNum = normalizeFormulaOperandForHint_(ficha.FormulaNumerador, "N");
+  const formulaDen = normalizeFormulaOperandForHint_(ficha.FormulaDenominador, "D");
+  const formulaEtiqueta = normalizeFormulaOperandForHint_(ficha.FormulaEtiqueta, "");
+  $("a_FormulaHint").textContent = `Fórmula: (${formulaNum||"N"}/${formulaDen||"D"})*${f}  · Etiqueta: ${formulaEtiqueta||""}`;
 
   await refreshHistoryByCodigo_(codigo);
   const periodoSugerido = getNextPeriodoDisponible(codigo, ficha.PeriodicidadMedicion || "");
@@ -3600,6 +3627,8 @@ async function generateAnalisisDoc(opts){
           Responsable:(r.Responsable||"").trim(),
           FechaCompromiso:(r.FechaCompromiso||"").trim()
         })),
+      FillSeguimiento: true,
+      LlenarSeguimiento: true,
       PreviewOnly: true,
       WEB_SNAPSHOT: safeJsonStringify_(buildAnalisisWebSnapshot_("BORRADOR"), ""),
       UpdatedAt: nowISO()
