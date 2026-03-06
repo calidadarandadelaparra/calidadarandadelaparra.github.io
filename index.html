@@ -1813,7 +1813,11 @@ async function saveFicha(opts){
   if(!opts.silent){
     $("f_SaveMsg").classList.remove("hidden");
     scrollTopSmooth();
-    toast("ok","Guardado","Ficha técnica guardada correctamente.");
+    toast(
+      "ok",
+      opts.successTitle || "Guardado",
+      opts.successMessage || "Ficha técnica guardada correctamente."
+    );
 
     if(opts.redirectAfterSave !== false){
       setTimeout(()=>{
@@ -1832,14 +1836,26 @@ async function saveFichaAndFile(){
   const periodo = nowYM();
   const draft = window.__FT_DOC_DRAFT;
   const hasDraft = !!(draft && draft.codigo === codigo && draft.periodo === periodo && draft.docId);
+
   if(!hasDraft){
-    toast("warn","Vista previa requerida","Primero genera la vista previa del Word-PDF para habilitar el guardado del archivo.");
+    const savedOnly = await saveFicha({
+      silent:false,
+      redirectAfterSave:false,
+      successTitle:"Ficha capturada",
+      successMessage:"Ficha capturada en el sistema. Para guardar Word/PDF primero genera la vista previa."
+    });
+    if(savedOnly){
+      toast("warn","Falta vista previa","Genera la vista previa y luego pulsa de nuevo 'Guardar ficha/Guardar archivo'.");
+    }
     return;
   }
 
   const saved = await saveFicha({ silent:true, redirectAfterSave:false });
   if(!saved) return;
-  await generateFichaDoc();
+  const docOk = await generateFichaDoc({ showSuccessToast:false });
+  if(docOk){
+    toast("ok","Proceso completo","Ficha capturada en el sistema y documento Word/PDF guardado correctamente.");
+  }
 }
 
 /* =========================================================
@@ -1892,7 +1908,8 @@ function openFichaPreviewPDF(){
 // ------------------------------------------------
 // Generación de documentos usando backend Apps Script
 // ------------------------------------------------
-async function generateFichaDoc(){
+async function generateFichaDoc(opts){
+  opts = opts || {};
   if(!validateFicha()) return toast("err","Faltan datos","Revisa la ficha");
 
   const btn = $("btnFichaSave");
@@ -1902,8 +1919,8 @@ async function generateFichaDoc(){
   const draft = window.__FT_DOC_DRAFT;
   const hasDraft = !!(draft && draft.codigo === codigo && draft.periodo === periodo && draft.docId);
   if(!hasDraft){
-    toast("warn","Sin vista previa","Primero presiona 'Generar vista previa del Word-PDF'.");
-    return;
+    toast("warn","Vista previa requerida","Primero genera la vista previa del Word-PDF para habilitar el guardado del archivo.");
+    return false;
   }
 
   try {
@@ -1925,15 +1942,19 @@ async function generateFichaDoc(){
       try { docWin && !docWin.closed && docWin.close(); } catch(_) {}
       try { pdfWin && !pdfWin.closed && pdfWin.close(); } catch(_) {}
       toast("err","Error", r.message || "Falló guardado definitivo");
-      return;
+      return false;
     }
     const links = r.data || {};
     if(links.linkDocx){ if(docWin && !docWin.closed) docWin.location.href = links.linkDocx; else window.open(links.linkDocx, "_blank"); }
     if(links.linkPdf){ if(pdfWin && !pdfWin.closed) pdfWin.location.href = links.linkPdf; else window.open(links.linkPdf, "_blank"); }
-    toast("ok","Ficha guardada","Word y PDF generados correctamente.");
+    if(opts.showSuccessToast !== false){
+      toast("ok","Documento de ficha guardado","Word y PDF generados correctamente.");
+    }
     clearFichaDocDraft_();
+    return true;
   } catch(e){
     toast("err","Error de red", String(e));
+    return false;
   } finally {
     btn.disabled = false;
     btn.textContent = orig;
@@ -3328,7 +3349,9 @@ async function guardarAnalisis(status, opts){
   CACHE.analisis = othersCache.concat([row]);
 
   // success feedback
-  toast("ok","Guardado","Análisis capturado correctamente.");
+  if(!opts.silentSuccessToast){
+    toast("ok","Guardado","Análisis capturado correctamente.");
+  }
 
   // Propuestas (si hay)
   const c = cumple;
@@ -3359,12 +3382,14 @@ async function guardarAnalisis(status, opts){
   updatePeriodosRegistrados();
   recalcResultadoAndUI();
 
-  $("a_SaveMsg").classList.remove("hidden");
-  scrollTopSmooth();
+  if(!opts.silentSaveMsg){
+    $("a_SaveMsg").classList.remove("hidden");
+    scrollTopSmooth();
 
-  setTimeout(()=>{
-    $("a_SaveMsg").classList.add("hidden");
-  }, 1600);
+    setTimeout(()=>{
+      $("a_SaveMsg").classList.add("hidden");
+    }, 1600);
+  }
 
   if(opts.generatePreviewDoc){
     await generateAnalisisDoc({ previewOnly:true, previewWindow: opts.previewWindow || null });
@@ -3390,11 +3415,21 @@ async function saveAnalisisAndFile(){
   const draft = window.__AN_DOC_DRAFT;
   const hasCurrentDraft = !!(draft && draft.codigo === codigo && draft.periodo === perYM && draft.docId);
   if(!hasCurrentDraft){
-    toast("warn","Vista previa requerida","Primero genera la vista previa del Word-PDF para habilitar el guardado del archivo.");
+    const savedOnly = await guardarAnalisis("FINAL", {
+      silentSuccessToast:true,
+      silentSaveMsg:true
+    });
+    if(savedOnly){
+      toast("ok","Análisis capturado","Análisis capturado en el sistema. Para guardar Word/PDF primero genera la vista previa.");
+      toast("warn","Falta vista previa","Genera la vista previa y luego pulsa de nuevo 'Guardar análisis/Guardar archivo'.");
+    }
     return;
   }
 
-  await generateAnalisisDoc();
+  const docOk = await generateAnalisisDoc({ showSuccessToast:false });
+  if(docOk){
+    toast("ok","Proceso completo","Análisis capturado en el sistema y documento Word/PDF guardado correctamente.");
+  }
 }
 
 function openAnalisisDraftPreview_(){
@@ -3502,7 +3537,7 @@ async function generateAnalisisDoc(opts){
       else window.location.href = draft.linkDocx;
     }
     else toast("warn","Sin vista previa","No se encontró el enlace del borrador actual.");
-    return;
+    return !!draft.linkDocx;
   }
 
   if(!hasCurrentDraft){
@@ -3561,7 +3596,7 @@ async function generateAnalisisDoc(opts){
       if(!rp.ok){
         try { previewWin && !previewWin.closed && previewWin.close(); } catch(_) {}
         toast("err","Error", rp.message || "No se pudo generar borrador en Drive");
-        return;
+        return false;
       }
 
       const d = rp.data || {};
@@ -3580,18 +3615,18 @@ async function generateAnalisisDoc(opts){
       }
       btn.textContent = "Guardar análisis/Guardar archivo";
       toast("ok","Borrador en Drive","Revisa/ajusta el formato en Drive y luego presiona de nuevo este botón para confirmar guardado final.");
-      return;
+      return true;
     } catch(e){
       try { previewWin && !previewWin.closed && previewWin.close(); } catch(_) {}
       toast("err","Error de red", String(e));
-      return;
+      return false;
     } finally {
       btn.disabled = false;
       if(btn.textContent === "Generando borrador…") btn.textContent = origTxt;
     }
   }
 
-  if(opts.previewOnly) return;
+  if(opts.previewOnly) return true;
 
   const ok = confirm("¿Confirmas que el documento en Drive ya está correcto para guardarlo de forma final (Word + PDF)?");
   if(!ok) return;
@@ -3613,6 +3648,7 @@ async function generateAnalisisDoc(opts){
       try { docWin && !docWin.closed && docWin.close(); } catch(_) {}
       try { pdfWin && !pdfWin.closed && pdfWin.close(); } catch(_) {}
       toast("err","Error", r.message || "Falló confirmación final");
+      return false;
     } else {
       const links = r.data;
       $("pdfModal")?.classList.add("hidden");
@@ -3629,13 +3665,17 @@ async function generateAnalisisDoc(opts){
         try { pdfWin && !pdfWin.closed && pdfWin.close(); } catch(_) {}
       }
       alert(`Documento listo:\nWord: ${links.linkDocx}\nPDF: ${links.linkPdf}`);
-      toast("ok","Documento confirmado","Se guardó como siempre (Word y PDF) y se abrieron en pestañas nuevas.");
+      if(opts.showSuccessToast !== false){
+        toast("ok","Documento confirmado","Se guardó como siempre (Word y PDF) y se abrieron en pestañas nuevas.");
+      }
       clearAnalisisDocDraft_();
+      return true;
     }
   } catch(e){
     try { docWin && !docWin.closed && docWin.close(); } catch(_) {}
     try { pdfWin && !pdfWin.closed && pdfWin.close(); } catch(_) {}
     toast("err","Error de red", String(e));
+    return false;
   } finally {
     btn.disabled = false;
     btn.textContent = "Guardar análisis/Guardar archivo";
