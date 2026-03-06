@@ -352,7 +352,7 @@ function setPeriodoInputState_(locked){
 }
 
 function setAnalisisActionButtonsLocked_(locked){
-  ["btnABorrador","btnASaveAnalisis","btnAGuardar","btnAnalisisGen"].forEach(id=>{
+  ["btnABorrador","btnASaveAnalisis","btnAGuardar"].forEach(id=>{
     const btn = $(id);
     if(!btn) return;
     btn.disabled = !!locked;
@@ -532,14 +532,6 @@ function scrollTopSmooth(){ window.scrollTo({top:0, behavior:"smooth"}); }
       </div>
     </div>
 
-    <div class="card">
-      <div class="card-b space-y-2">
-        <div class="font-extrabold text-navy">Modo actual</div>
-        <div class="text-sm text-slate-600">
-          Estás en: <span class="font-extrabold text-navy" id="homeMode"></span>.
-        </div>
-      </div>
-    </div>
   </section>
 
   <!-- FICHA TÉCNICA (placeholder en PARTE 1) -->
@@ -1170,10 +1162,12 @@ const CACHE = {
 };
 
 async function loadAll(){
-  const f = await apiFetch("fichas.list");
-  const a = await apiFetch("analisis.list");
-  const d = await apiFetch("docs.list");
-  const s = await apiFetch("seg.list");
+  const [f, a, d, s] = await Promise.all([
+    apiFetch("fichas.list"),
+    apiFetch("analisis.list"),
+    apiFetch("docs.list"),
+    apiFetch("seg.list")
+  ]);
 
   // map ficha rows to new property names (and parse JSON lists)
   CACHE.fichas = f.ok ? (f.data||[]).map(r=>{
@@ -1197,6 +1191,8 @@ async function loadAll(){
     .filter(r => String(r?.Status || r?.status || "").toUpperCase() !== "ELIMINADO")
     .map(r=>({
       ...r,
+      PeriodoYM: String(r?.PeriodoYM || r?.periodo || "").trim(),
+      PeriodoLabel: String(r?.PeriodoLabel || "").trim() || periodoHuman(String(r?.PeriodoYM || r?.periodo || "").trim()),
       WEB_SNAPSHOT: safeJsonParse_(r.WEB_SNAPSHOT, r.WEB_SNAPSHOT || null)
     })) : [];
   CACHE.docs = d.ok ? (d.data||[]).map(x=>({
@@ -1400,9 +1396,8 @@ function renderFichaForm(){
         </div>
 
         <div class="flex flex-wrap gap-2">
-          <button id="btnFichaSave" class="btn btn-primary">Guardar ficha</button>
+          <button id="btnFichaSave" class="btn btn-primary">Guardar ficha/Guardar archivo</button>
           <button id="btnFichaDoc" class="btn btn-soft">Generar vista previa del Word-PDF</button>
-          <button id="btnFichaGen" class="btn btn-primary">Guardar documento en Word-PDF</button>
           <button id="btnFichaClear" class="btn btn-soft">Limpiar</button>
         </div>
 
@@ -1438,9 +1433,8 @@ function renderFichaForm(){
   wireListBlock("f_Observaciones","f_ObservacionesList", true);
 
   $("btnFichaClear").addEventListener("click", clearFichaForm);
-  $("btnFichaSave").addEventListener("click", saveFicha);
+  $("btnFichaSave").addEventListener("click", saveFichaAndFile);
   $("btnFichaDoc").addEventListener("click", ()=>generateFichaPreviewDoc());
-  $("btnFichaGen").addEventListener("click", ()=>generateFichaDoc());
 
   // init defaults
   updateFactorEtiqueta();
@@ -1715,14 +1709,15 @@ function clearFichaForm(){
 
 function clearFichaDocDraft_(){
   window.__FT_DOC_DRAFT = null;
-  const btn = $("btnFichaGen");
-  if(btn) btn.textContent = "Guardar documento en Word-PDF";
+  const btn = $("btnFichaSave");
+  if(btn) btn.textContent = "Guardar ficha/Guardar archivo";
 }
 
 /* =========================================================
    GUARDAR FICHA
 ========================================================= */
-async function saveFicha(){
+async function saveFicha(opts){
+  opts = opts || {};
   if(!validateFicha()) return;
 
   // show loading indicator
@@ -1807,19 +1802,41 @@ async function saveFicha(){
   }
   if(!r.ok){
     toast("err","No se guardó", r.message || "Error");
-    return;
+    return false;
   }
 
   await loadAll();
 
-  $("f_SaveMsg").classList.remove("hidden");
-  scrollTopSmooth();
-  toast("ok","Guardado","Ficha técnica guardada correctamente.");
+  if(!opts.silent){
+    $("f_SaveMsg").classList.remove("hidden");
+    scrollTopSmooth();
+    toast("ok","Guardado","Ficha técnica guardada correctamente.");
 
-  setTimeout(()=>{
-    $("f_SaveMsg").classList.add("hidden");
-    showSection("secInicio");
-  }, 1800);
+    if(opts.redirectAfterSave !== false){
+      setTimeout(()=>{
+        $("f_SaveMsg").classList.add("hidden");
+        showSection("secInicio");
+      }, 1800);
+    }
+  }
+  return true;
+}
+
+async function saveFichaAndFile(){
+  if(!validateFicha()) return;
+
+  const codigo = ($("f_CodigoIndicador").value||"").trim();
+  const periodo = nowYM();
+  const draft = window.__FT_DOC_DRAFT;
+  const hasDraft = !!(draft && draft.codigo === codigo && draft.periodo === periodo && draft.docId);
+  if(!hasDraft){
+    toast("warn","Vista previa requerida","Primero genera la vista previa del Word-PDF para habilitar el guardado del archivo.");
+    return;
+  }
+
+  const saved = await saveFicha({ silent:true, redirectAfterSave:false });
+  if(!saved) return;
+  await generateFichaDoc();
 }
 
 /* =========================================================
@@ -1875,7 +1892,7 @@ function openFichaPreviewPDF(){
 async function generateFichaDoc(){
   if(!validateFicha()) return toast("err","Faltan datos","Revisa la ficha");
 
-  const btn = $("btnFichaGen");
+  const btn = $("btnFichaSave");
   const orig = btn.textContent;
   const codigo = ($("f_CodigoIndicador").value||"").trim();
   const periodo = nowYM();
@@ -1916,7 +1933,7 @@ async function generateFichaDoc(){
     toast("err","Error de red", String(e));
   } finally {
     btn.disabled = false;
-    btn.textContent = "Guardar documento en Word-PDF";
+    btn.textContent = orig;
   }
 }
 
@@ -1972,7 +1989,7 @@ async function generateFichaPreviewDoc(){
       if(previewWin && !previewWin.closed) previewWin.location.href = d.linkDocx;
       else window.open(d.linkDocx, "_blank");
     }
-    toast("ok","Vista previa lista","Ahora pulsa 'Guardar documento en Word-PDF'.");
+    toast("ok","Vista previa lista","Ahora pulsa 'Guardar ficha/Guardar archivo'.");
   } catch(e){
     toast("err","Error de red", String(e));
   } finally {
@@ -2006,15 +2023,7 @@ function getAreaLabel(prefix){
 ========================================================= */
 function setModeTags(){
   refreshApiMode_();
-  const url = getWebAppUrl();
   $("modeTag").textContent = (USE_DEMO ? "DEMO localStorage" : "Google Sheets") + " · " + UI_BUILD;
-  if(USE_DEMO){
-    $("homeMode").textContent = "DEMO (localStorage)";
-  } else {
-    // mostrar la URL o una versión corta
-    const short = url.length>40 ? url.slice(0,40)+"…" : url;
-    $("homeMode").textContent = `Google Sheets (WebApp: ${short})`;
-  }
   $("footerMode").textContent = (USE_DEMO ? "DEMO localStorage" : "Google Sheets") + " · " + UI_BUILD;
 }
 
@@ -2231,9 +2240,9 @@ function setPdfGenerateAction_(show){
 
 function clearAnalisisDocDraft_(){
   window.__AN_DOC_DRAFT = null;
-  const btn = $("btnAnalisisGen");
+  const btn = $("btnASaveAnalisis");
   if(btn){
-    btn.textContent = "Guardar definitivo (Word/PDF)";
+    btn.textContent = "Guardar análisis/Guardar archivo";
   }
 }
 
@@ -2527,9 +2536,8 @@ function renderAnalisis(){
           <div class="flex flex-wrap gap-2">
             <button id="btnAIrFirmas" class="btn btn-soft hidden">Firmas</button>
             <button id="btnABorrador" class="btn btn-soft">Limpiar</button>
-            <button id="btnASaveAnalisis" class="btn btn-primary">Guardar análisis</button>
+            <button id="btnASaveAnalisis" class="btn btn-primary">Guardar análisis/Guardar archivo</button>
             <button id="btnAGuardar" class="btn btn-primary">Generar vista previa del Word-PDF</button>
-            <button id="btnAnalisisGen" class="btn btn-primary">Guardar documento en Word-PDF</button>
           </div>
 
           <div id="a_SaveMsg" class="hidden rounded-2xl border border-emerald-200 bg-emerald-50 text-emerald-900 p-3 text-sm">
@@ -2578,9 +2586,8 @@ function renderAnalisis(){
   $("a_FirmaResponsable").addEventListener("change", (e)=>handleFirmaFile(e, "Responsable"));
 
   $("btnABorrador").addEventListener("click", ()=>resetAnalisisUI(false));
-  $("btnASaveAnalisis").addEventListener("click", ()=>guardarAnalisis("FINAL"));
+  $("btnASaveAnalisis").addEventListener("click", ()=>saveAnalisisAndFile());
   $("btnAGuardar").addEventListener("click", ()=>guardarAnalisis("FINAL", { generatePreviewDoc:true }));
-  $("btnAnalisisGen").addEventListener("click", ()=>generateAnalisisDoc());
   $("btnAIrFirmas")?.addEventListener("click", ()=>{
     $("a_FirmasCard")?.scrollIntoView({ behavior:"smooth", block:"center" });
   });
@@ -3172,7 +3179,7 @@ async function guardarAnalisis(status, opts){
   // loading indicator for save/preview/doc buttons
   const btnSave = $("btnASaveAnalisis");
   const btnPreview = $("btnAGuardar");
-  const btnDoc = $("btnAnalisisGen");
+  const btnDoc = null;
   const origSave = btnSave ? btnSave.textContent : "";
   const origPreview = btnPreview ? btnPreview.textContent : "";
   const origDoc = btnDoc ? btnDoc.textContent : "";
@@ -3208,7 +3215,7 @@ async function guardarAnalisis(status, opts){
     toast("err","No se puede guardar", v.message);
     const locked = checkDuplicadoPeriodo();
     restoreSaveButtons_(locked);
-    return;
+    return false;
   }
 
   const codigo = $("a_Codigo").value;
@@ -3220,7 +3227,7 @@ async function guardarAnalisis(status, opts){
     toast("err","Duplicado","Ese mes ya fue capturado. Si deseas recapturarlo, elimínalo primero en el Explorador.");
     const locked = checkDuplicadoPeriodo();
     restoreSaveButtons_(locked);
-    return;
+    return false;
   }
 
   const alreadyRemote = await apiFetch("getAnalisisById", { CodigoIndicador: codigo, PeriodoYM: periodo });
@@ -3229,7 +3236,7 @@ async function guardarAnalisis(status, opts){
     toast("err","Duplicado","Ese mes ya fue capturado. Si deseas recapturarlo, elimínalo primero en el Explorador.");
     const locked = checkDuplicadoPeriodo();
     restoreSaveButtons_(locked);
-    return;
+    return false;
   }
 
   const ficha = fichaByCodigo(codigo);
@@ -3294,10 +3301,10 @@ async function guardarAnalisis(status, opts){
       $("a_DupMsg").classList.remove("hidden");
       toast("err","Duplicado","Ese mes ya fue capturado. Si deseas recapturarlo, elimínalo primero en el Explorador.");
       checkDuplicadoPeriodo();
-      return;
+      return false;
     }
     toast("err","Error", r.message || "No se guardó.");
-    return;
+    return false;
   }
 
   // reflejo inmediato en UI aunque haya latencia de lectura remota
@@ -3351,13 +3358,33 @@ async function guardarAnalisis(status, opts){
 
   if(opts.generatePreviewDoc){
     await generateAnalisisDoc({ previewOnly:true });
-    return;
+    return true;
   }
 
   // flujo claro: tras guardar FINAL, abrir vista previa para generar Word/PDF
   if(status === "FINAL" && opts.openPreviewAfterSave){
     openAnalisisPreviewPDF({ forGeneration:true });
   }
+  return true;
+}
+
+async function saveAnalisisAndFile(){
+  const v = validateAnalisis();
+  if(!v.ok){
+    toast("err","No se puede guardar", v.message);
+    return;
+  }
+
+  const codigo = $("a_Codigo").value;
+  const perYM = $("a_PeriodoYM").value;
+  const draft = window.__AN_DOC_DRAFT;
+  const hasCurrentDraft = !!(draft && draft.codigo === codigo && draft.periodo === perYM && draft.docId);
+  if(!hasCurrentDraft){
+    toast("warn","Vista previa requerida","Primero genera la vista previa del Word-PDF para habilitar el guardado del archivo.");
+    return;
+  }
+
+  await generateAnalisisDoc();
 }
 
 function openAnalisisDraftPreview_(){
@@ -3453,7 +3480,7 @@ async function generateAnalisisDoc(opts){
 
   const codigo = $("a_Codigo").value;
   const perYM = $("a_PeriodoYM").value;
-  const btn = $("btnAnalisisGen");
+  const btn = $("btnASaveAnalisis");
 
   const draft = window.__AN_DOC_DRAFT;
   const hasCurrentDraft = !!(draft && draft.codigo === codigo && draft.periodo === perYM && draft.docId);
@@ -3537,7 +3564,7 @@ async function generateAnalisisDoc(opts){
       } else {
         try { previewWin && !previewWin.closed && previewWin.close(); } catch(_) {}
       }
-      btn.textContent = "Guardar definitivo (Word/PDF)";
+      btn.textContent = "Guardar análisis/Guardar archivo";
       toast("ok","Borrador en Drive","Revisa/ajusta el formato en Drive y luego presiona de nuevo este botón para confirmar guardado final.");
       return;
     } catch(e){
@@ -3597,9 +3624,7 @@ async function generateAnalisisDoc(opts){
     toast("err","Error de red", String(e));
   } finally {
     btn.disabled = false;
-    btn.textContent = window.__AN_DOC_DRAFT
-      ? "Guardar definitivo (Word/PDF)"
-      : "Guardar definitivo (Word/PDF)";
+    btn.textContent = "Guardar análisis/Guardar archivo";
   }
 }
 
