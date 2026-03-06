@@ -2622,6 +2622,10 @@ function renderAnalisis(){
     recalcResultadoAndUI();
   });
 
+  $("a_Analisis").addEventListener("input", ()=>{
+    // mantiene la gráfica visible mientras se redacta interpretación
+    recalcResultadoAndUI();
+  });
   $("a_Analisis").addEventListener("blur", ()=>suggestRedaction("a_Analisis","a_AnalisisSug","a_AnalisisSugTxt"));
 
   $("btnPropAdd").addEventListener("click", ()=>addPropRow());
@@ -2633,7 +2637,7 @@ function renderAnalisis(){
   $("btnASaveAnalisis").addEventListener("click", ()=>saveAnalisisAndFile());
   $("btnAGuardar").addEventListener("click", ()=>{
     const preOpened = window.open("about:blank", "_blank");
-    guardarAnalisis("FINAL", { generatePreviewDoc:true, previewWindow: preOpened });
+    generateAnalisisDoc({ previewOnly:true, previewWindow: preOpened });
   });
   $("btnAIrFirmas")?.addEventListener("click", ()=>{
     $("a_FirmasCard")?.scrollIntoView({ behavior:"smooth", block:"center" });
@@ -3431,15 +3435,17 @@ async function saveAnalisisAndFile(){
   const draft = window.__AN_DOC_DRAFT;
   const hasCurrentDraft = !!(draft && draft.codigo === codigo && draft.periodo === perYM && draft.docId);
   if(!hasCurrentDraft){
+    toast("warn","Vista previa requerida","Primero genera la vista previa del Word-PDF para confirmar el guardado final.");
+    return;
+  }
+
+  const existsLocal = !!getAnalisisByCodigoPeriodo_(codigo, perYM);
+  if(!existsLocal){
     const savedOnly = await guardarAnalisis("FINAL", {
       silentSuccessToast:true,
       silentSaveMsg:true
     });
-    if(savedOnly){
-      toast("ok","Análisis capturado","Análisis capturado en el sistema. Para guardar Word/PDF primero genera la vista previa.");
-      toast("warn","Falta vista previa","Genera la vista previa y luego pulsa de nuevo 'Guardar análisis/Guardar archivo'.");
-    }
-    return;
+    if(!savedOnly) return;
   }
 
   const docOk = await generateAnalisisDoc({ showSuccessToast:false });
