@@ -104,6 +104,12 @@ function setSavedWebAppUrl(url){
     localStorage.removeItem(CONFIG_KEY_WEBAPP_URL);
   }
   SHEETS_WEBAPP_URL = url;
+  refreshApiMode_();
+}
+
+function isLikelyGasWebAppUrl_(url){
+  const u = String(url || "").trim();
+  return /^https:\/\/(script\.google(?:usercontent)?\.com)\//i.test(u);
 }
 
 function getWebAppUrl(){
@@ -114,15 +120,19 @@ function getWebAppUrl(){
   // si se está ejecutando dentro de la WebApp de GAS, la propia
   // ubicación actual es el endpoint
   if(typeof location !== 'undefined' && location.href){
-    return location.href;
+    const href = String(location.href || "").trim();
+    if(isLikelyGasWebAppUrl_(href)) return href;
   }
-  // fallback placeholder (modo demo)
-  return "PON_AQUI_TU_URL";
+  // sin URL válida: se usará DEMO hasta que el usuario la configure
+  return "";
 }
 
-// bandera de demo. si la URL contiene el texto de placeholder
-// o no se ha inicializado todavía, se tomará como demo.
-const USE_DEMO = getWebAppUrl().includes("PON_AQUI");
+let USE_DEMO = true;
+function refreshApiMode_(){
+  USE_DEMO = !isLikelyGasWebAppUrl_(getWebAppUrl());
+  return USE_DEMO;
+}
+refreshApiMode_();
 
 const SESSION_HOURS = 8;
 
@@ -644,17 +654,38 @@ function seedDemo(){
 }
 
 async function apiFetch(action, payload={}){
+  refreshApiMode_();
   if(USE_DEMO) return demoApi(action, payload);
   const url = SHEETS_WEBAPP_URL || getWebAppUrl();
+  if(!url) return fail_("CONFIG_WEBAPP_URL_MISSING");
+
+  const parseJsonSafe_ = async (res) => {
+    const txt = await res.text();
+    try {
+      return JSON.parse(txt);
+    } catch(_) {
+      return fail_("RESPUESTA_INVALIDA_API");
+    }
+  };
+
+  const fetchWithTimeout_ = async (targetUrl, opts, timeoutMs=12000) => {
+    const ctrl = new AbortController();
+    const timer = setTimeout(()=>ctrl.abort(), timeoutMs);
+    try {
+      return await fetch(targetUrl, { ...(opts||{}), signal: ctrl.signal });
+    } finally {
+      clearTimeout(timer);
+    }
+  };
 
   // first try the preferred POST (text/plain avoids preflight)
   try {
-    const res = await fetch(url, {
+    const res = await fetchWithTimeout_(url, {
       method:"POST",
       headers: { "Content-Type":"text/plain" },
       body: JSON.stringify({ action, payload })
     });
-    return await res.json();
+    return await parseJsonSafe_(res);
   } catch(err) {
     console.warn("apiFetch POST failed, attempting GET fallback", err);
     // if network/CORS issue, attempt again with GET query string
@@ -663,8 +694,8 @@ async function apiFetch(action, payload={}){
   try {
     const qp = `?action=${encodeURIComponent(action)}` +
                `&payload=${encodeURIComponent(JSON.stringify(payload))}`;
-    const res2 = await fetch(url + qp);
-    return await res2.json();
+    const res2 = await fetchWithTimeout_(url + qp, { method:"GET" });
+    return await parseJsonSafe_(res2);
   } catch(err2) {
     console.error("apiFetch GET fallback also failed", err2);
     return fail_("network:", err2.message || err2);
@@ -694,6 +725,8 @@ function humanAuthMessage_(code, fallback){
     case "FALTAN DATOS":
     case "FALTAN CREDENCIALES": return "Completa los datos requeridos.";
     case "SOLO CORREOS @ARANDADELAPARRA.COM": return "Solo correos @arandadelaparra.com";
+    case "CONFIG_WEBAPP_URL_MISSING": return "Falta configurar la URL del Web App de Apps Script en Configuración.";
+    case "RESPUESTA_INVALIDA_API": return "La URL configurada no responde como API JSON. Verifica que sea el /exec del Web App.";
     case "MAIL_SERVICE_NO_AUTORIZADO": return "El servicio de correo no está autorizado en Apps Script. Hay que reautorizar y volver a desplegar.";
     case "EMAIL_ENVIO_FALLIDO": return "No se pudo enviar el correo. Intenta nuevamente en un minuto.";
     default: return fallback || "No se pudo procesar la solicitud.";
@@ -1985,6 +2018,7 @@ function getAreaLabel(prefix){
    WIRES PRINCIPALES (PARTE 2)
 ========================================================= */
 function setModeTags(){
+  refreshApiMode_();
   const url = getWebAppUrl();
   $("modeTag").textContent = (USE_DEMO ? "DEMO localStorage" : "Google Sheets") + " · " + UI_BUILD;
   if(USE_DEMO){
@@ -2091,6 +2125,7 @@ function wireHeaderNav(){
       area: userArea,
       expiresAt: new Date(Date.now()+SESSION_HOURS*3600*1000).toISOString()
     });
+    await loadAll();
     setUiLocked_(false);
     $("loginModal").classList.add("hidden");
     toast("ok","Acceso autorizado", `Bienvenido, ${me.Nombre || name || "usuario"}.`);
@@ -2152,6 +2187,7 @@ function wireHeaderNav(){
         area: me.Area || area || "",
         expiresAt: new Date(Date.now()+SESSION_HOURS*3600*1000).toISOString()
       });
+      await loadAll();
       setUiLocked_(false);
       $("loginModal").classList.add("hidden");
       toast("ok","Registro exitoso","Acceso habilitado." );
@@ -2214,19 +2250,21 @@ function initConfigUI(){
 // init
 document.addEventListener("DOMContentLoaded", async ()=>{
   seedDemo();
+  refreshApiMode_();
   setModeTags();
   wireHeaderNav();
   initConfigUI();
-  await loadAll();
   showSection("secInicio");
   const s = getSession();
   const active = !!(s && s.expiresAt && Date.now() < new Date(s.expiresAt).getTime());
   if(!active){
     clearSession();
     openAuthModal_("entry");
+    return;
   } else {
     setUiLocked_(false);
   }
+  await loadAll();
 });
 </script>
 
