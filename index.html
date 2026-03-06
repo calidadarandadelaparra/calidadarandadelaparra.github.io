@@ -434,7 +434,7 @@ function scrollTopSmooth(){ window.scrollTo({top:0, behavior:"smooth"}); }
 
       <div id="loginCodeWrap">
         <label class="text-xs font-extrabold text-slate-600">Código de verificación *</label>
-        <input id="loginCode" class="input mt-1" placeholder="Ej. 123456" maxlength="6"/>
+        <input id="loginCode" class="input mt-1" placeholder="Ej. 123456" maxlength="6" inputmode="numeric" autocomplete="one-time-code"/>
       </div>
 
       <div id="loginMsg" class="hidden rounded-2xl border border-red-200 bg-red-50 text-red-900 p-3 text-sm">
@@ -679,6 +679,9 @@ function normalizeCorpEmail_(value){
 function isCorpEmail_(email){
   return /@arandadelaparra\.com$/i.test(String(email || "").trim());
 }
+function normalizeVerificationCode_(value){
+  return String(value || "").replace(/\D/g, "").slice(0, 6);
+}
 function humanAuthMessage_(code, fallback){
   switch(String(code || "").trim().toUpperCase()){
     case "USUARIO_EXISTE": return "Ese correo ya está registrado. Inicia sesión.";
@@ -691,6 +694,8 @@ function humanAuthMessage_(code, fallback){
     case "FALTAN DATOS":
     case "FALTAN CREDENCIALES": return "Completa los datos requeridos.";
     case "SOLO CORREOS @ARANDADELAPARRA.COM": return "Solo correos @arandadelaparra.com";
+    case "MAIL_SERVICE_NO_AUTORIZADO": return "El servicio de correo no está autorizado en Apps Script. Hay que reautorizar y volver a desplegar.";
+    case "EMAIL_ENVIO_FALLIDO": return "No se pudo enviar el correo. Intenta nuevamente en un minuto.";
     default: return fallback || "No se pudo procesar la solicitud.";
   }
 }
@@ -2037,6 +2042,17 @@ function wireHeaderNav(){
   $("btnAuthGoLogin")?.addEventListener("click", ()=>setEntryAuthAction_("login"));
   $("btnAuthGoRegister")?.addEventListener("click", ()=>setEntryAuthAction_("register"));
 
+  const codeInput = $("loginCode");
+  codeInput?.addEventListener("input", ()=>{
+    codeInput.value = normalizeVerificationCode_(codeInput.value);
+  });
+  codeInput?.addEventListener("paste", (e)=>{
+    e.preventDefault();
+    const clip = (e.clipboardData || window.clipboardData);
+    const txt = clip ? clip.getData("text") : "";
+    codeInput.value = normalizeVerificationCode_(txt);
+  });
+
   $("btnLogin").addEventListener("click", async ()=>{
     const name = ($("loginName").value||"").trim();
     const u = normalizeCorpEmail_(($("loginUser").value||"").trim().toLowerCase());
@@ -2099,7 +2115,9 @@ function wireHeaderNav(){
 
     const r = await apiFetch("auth.requestCode", { Nombre:name, Area:area, Email:email, Password:pass });
     if(!r?.ok){
-      $("loginMsg").textContent = humanAuthMessage_(r?.message, "No se pudo enviar el código.");
+      const baseMsg = humanAuthMessage_(r?.message, "No se pudo enviar el código.");
+      const detail = String(r?.data?.reason || "").trim();
+      $("loginMsg").textContent = detail ? `${baseMsg} (${detail})` : baseMsg;
       $("loginMsg").classList.remove("hidden");
       return;
     }
@@ -2112,7 +2130,7 @@ function wireHeaderNav(){
     const email = normalizeCorpEmail_(($("loginUser").value||"").trim().toLowerCase());
     const area = ($("loginArea").value||"").trim();
     const pass = ($("loginPass").value||"").trim();
-    const code = ($("loginCode").value||"").trim();
+    const code = normalizeVerificationCode_(($("loginCode").value||"").trim());
     if(!name || !email || !area || !pass || !code){
       $("loginMsg").textContent = "Completa nombre, área, correo corporativo, contraseña y código.";
       $("loginMsg").classList.remove("hidden");
