@@ -133,6 +133,7 @@ const LS_KEYS = {
   DOCS: "HAP_BD_DOCUMENTOS",
   SEG: "HAP_BD_SEGUIMIENTO",
   USERS: "HAP_BD_USUARIOS",
+  AUTH_CODES: "HAP_AUTH_CODES",
   SESSION: "HAP_SESSION",
 };
 
@@ -426,12 +427,18 @@ function scrollTopSmooth(){ window.scrollTo({top:0, behavior:"smooth"}); }
         <input id="loginPass" type="password" class="input mt-1" placeholder="••••••••"/>
       </div>
 
+      <div>
+        <label class="text-xs font-extrabold text-slate-600">Código de verificación *</label>
+        <input id="loginCode" class="input mt-1" placeholder="Ej. 123456" maxlength="6"/>
+      </div>
+
       <div id="loginMsg" class="hidden rounded-2xl border border-red-200 bg-red-50 text-red-900 p-3 text-sm">
         Datos incorrectos o incompletos.
       </div>
 
       <div class="flex gap-2">
         <button id="btnLogin" class="flex-1 btn btn-primary">Entrar</button>
+        <button id="btnSendCode" class="btn btn-soft">Enviar código</button>
         <button id="btnRegister" class="btn btn-soft">Registrarme</button>
         <button id="btnLoginCancel" class="btn btn-soft">Cancelar</button>
       </div>
@@ -628,6 +635,7 @@ function seedDemo(){
   if(!localStorage.getItem(LS_KEYS.DOCS)) lsWrite(LS_KEYS.DOCS, []);
   if(!localStorage.getItem(LS_KEYS.SEG)) lsWrite(LS_KEYS.SEG, []);
   if(!localStorage.getItem(LS_KEYS.USERS)) lsWrite(LS_KEYS.USERS, []);
+  if(!localStorage.getItem(LS_KEYS.AUTH_CODES)) lsWrite(LS_KEYS.AUTH_CODES, {});
 }
 
 async function apiFetch(action, payload={}){
@@ -669,8 +677,11 @@ function demoApi(action, payload){
   let docs = lsRead(LS_KEYS.DOCS, []);
   const seg = lsRead(LS_KEYS.SEG, []);
   const users = lsRead(LS_KEYS.USERS, []);
+  const authCodes = lsRead(LS_KEYS.AUTH_CODES, {});
 
-  if(action==="auth.register"){
+  const authCodeKey = (email)=>String(email||"").trim().toLowerCase();
+
+  if(action==="auth.requestCode"){
     const email = String(payload?.Email || payload?.email || "").trim().toLowerCase();
     const nombre = String(payload?.Nombre || payload?.name || "").trim();
     const area = String(payload?.Area || payload?.area || "").trim();
@@ -679,6 +690,28 @@ function demoApi(action, payload){
     if(!/@arandadelaparra\.com$/.test(email)) return fail_("Solo correos @arandadelaparra.com");
     const exists = users.some(u=>String(u?.Email || "").toLowerCase()===email && String(u?.Status || "").toUpperCase()!=="ELIMINADO");
     if(exists) return fail_("USUARIO_EXISTE");
+    const code = String(Math.floor(100000 + Math.random() * 900000));
+    authCodes[authCodeKey(email)] = { code, exp: Date.now() + (10*60*1000) };
+    lsWrite(LS_KEYS.AUTH_CODES, authCodes);
+    return ok_(true, "CODIGO_ENVIADO");
+  }
+
+  if(action==="auth.register"){
+    const email = String(payload?.Email || payload?.email || "").trim().toLowerCase();
+    const nombre = String(payload?.Nombre || payload?.name || "").trim();
+    const area = String(payload?.Area || payload?.area || "").trim();
+    const password = String(payload?.Password || payload?.password || "");
+    const code = String(payload?.Code || payload?.code || "").trim();
+    if(!nombre || !area || !email || !password) return fail_("Faltan datos");
+    if(!code) return fail_("CODIGO_REQUERIDO");
+    if(!/@arandadelaparra\.com$/.test(email)) return fail_("Solo correos @arandadelaparra.com");
+    const exists = users.some(u=>String(u?.Email || "").toLowerCase()===email && String(u?.Status || "").toUpperCase()!=="ELIMINADO");
+    if(exists) return fail_("USUARIO_EXISTE");
+    const codeRow = authCodes[authCodeKey(email)] || null;
+    if(!codeRow || Date.now() > Number(codeRow.exp || 0)) return fail_("CODIGO_EXPIRADO");
+    if(String(codeRow.code || "") !== code) return fail_("CODIGO_INVALIDO");
+    delete authCodes[authCodeKey(email)];
+    lsWrite(LS_KEYS.AUTH_CODES, authCodes);
     users.push({
       UserId: "USR-" + Date.now(),
       Email: email,
@@ -699,6 +732,7 @@ function demoApi(action, payload){
     if(!email || !password) return fail_("Faltan credenciales");
     const user = users.find(u=>String(u?.Email || "").toLowerCase()===email && String(u?.Status || "").toUpperCase()==="ACTIVO");
     if(!user || String(user.Password || "") !== password) return fail_("CREDENCIALES_INVALIDAS");
+    if(String(user.Verificado).toLowerCase() !== "true") return fail_("USUARIO_NO_VERIFICADO");
     return ok_({
       Email: user.Email,
       Nombre: user.Nombre,
@@ -1948,17 +1982,40 @@ function wireHeaderNav(){
     }
   });
 
+  $("btnSendCode").addEventListener("click", async ()=>{
+    const name = ($("loginName").value||"").trim();
+    const email = ($("loginUser").value||"").trim().toLowerCase();
+    const area = ($("loginArea").value||"").trim();
+    const pass = ($("loginPass").value||"").trim();
+
+    if(!name || !email || !area || !pass){
+      $("loginMsg").textContent = "Completa nombre, área, correo corporativo y contraseña para enviar código.";
+      $("loginMsg").classList.remove("hidden");
+      return;
+    }
+
+    const r = await apiFetch("auth.requestCode", { Nombre:name, Area:area, Email:email, Password:pass });
+    if(!r?.ok){
+      $("loginMsg").textContent = r?.message || "No se pudo enviar el código.";
+      $("loginMsg").classList.remove("hidden");
+      return;
+    }
+    $("loginMsg").classList.add("hidden");
+    toast("ok","Código enviado","Revisa tu correo corporativo y captura el código para completar registro.");
+  });
+
   $("btnRegister").addEventListener("click", async ()=>{
     const name = ($("loginName").value||"").trim();
     const email = ($("loginUser").value||"").trim().toLowerCase();
     const area = ($("loginArea").value||"").trim();
     const pass = ($("loginPass").value||"").trim();
-    if(!name || !email || !area || !pass){
-      $("loginMsg").textContent = "Completa nombre, área, correo corporativo y contraseña.";
+    const code = ($("loginCode").value||"").trim();
+    if(!name || !email || !area || !pass || !code){
+      $("loginMsg").textContent = "Completa nombre, área, correo corporativo, contraseña y código.";
       $("loginMsg").classList.remove("hidden");
       return;
     }
-    const r = await apiFetch("auth.register", { Nombre:name, Area:area, Email:email, Password:pass });
+    const r = await apiFetch("auth.register", { Nombre:name, Area:area, Email:email, Password:pass, Code:code });
     if(!r?.ok){
       $("loginMsg").textContent = r?.message || "No se pudo registrar.";
       $("loginMsg").classList.remove("hidden");
