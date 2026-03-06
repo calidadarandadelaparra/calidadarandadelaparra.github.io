@@ -1434,7 +1434,10 @@ function renderFichaForm(){
 
   $("btnFichaClear").addEventListener("click", clearFichaForm);
   $("btnFichaSave").addEventListener("click", saveFichaAndFile);
-  $("btnFichaDoc").addEventListener("click", ()=>generateFichaPreviewDoc());
+  $("btnFichaDoc").addEventListener("click", ()=>{
+    const preOpened = window.open("about:blank", "_blank");
+    generateFichaPreviewDoc(preOpened);
+  });
 
   // init defaults
   updateFactorEtiqueta();
@@ -1937,8 +1940,11 @@ async function generateFichaDoc(){
   }
 }
 
-async function generateFichaPreviewDoc(){
-  if(!validateFicha()) return toast("err","Faltan datos","Revisa la ficha");
+async function generateFichaPreviewDoc(previewWin){
+  if(!validateFicha()){
+    try { previewWin && !previewWin.closed && previewWin.close(); } catch(_) {}
+    return toast("err","Faltan datos","Revisa la ficha");
+  }
 
   const btn = $("btnFichaDoc");
   const orig = btn.textContent;
@@ -1969,10 +1975,10 @@ async function generateFichaPreviewDoc(){
     payload.PreviewOnly = true;
     payload.UpdatedAt = nowISO();
 
-    const previewWin = window.open("about:blank", "_blank");
+    const win = previewWin || window.open("about:blank", "_blank");
     const r = await apiFetch("docs.generarFichaFromUI", payload);
     if(!r.ok){
-      try { previewWin && !previewWin.closed && previewWin.close(); } catch(_) {}
+      try { win && !win.closed && win.close(); } catch(_) {}
       toast("err","Error", r.message || "No se pudo generar vista previa");
       return;
     }
@@ -1986,11 +1992,12 @@ async function generateFichaPreviewDoc(){
       folderId: d.folderId || ""
     };
     if(d.linkDocx){
-      if(previewWin && !previewWin.closed) previewWin.location.href = d.linkDocx;
-      else window.open(d.linkDocx, "_blank");
+      if(win && !win.closed) win.location.href = d.linkDocx;
+      else window.location.href = d.linkDocx;
     }
     toast("ok","Vista previa lista","Ahora pulsa 'Guardar ficha/Guardar archivo'.");
   } catch(e){
+    try { previewWin && !previewWin.closed && previewWin.close(); } catch(_) {}
     toast("err","Error de red", String(e));
   } finally {
     btn.disabled = false;
@@ -2587,7 +2594,10 @@ function renderAnalisis(){
 
   $("btnABorrador").addEventListener("click", ()=>resetAnalisisUI(false));
   $("btnASaveAnalisis").addEventListener("click", ()=>saveAnalisisAndFile());
-  $("btnAGuardar").addEventListener("click", ()=>guardarAnalisis("FINAL", { generatePreviewDoc:true }));
+  $("btnAGuardar").addEventListener("click", ()=>{
+    const preOpened = window.open("about:blank", "_blank");
+    guardarAnalisis("FINAL", { generatePreviewDoc:true, previewWindow: preOpened });
+  });
   $("btnAIrFirmas")?.addEventListener("click", ()=>{
     $("a_FirmasCard")?.scrollIntoView({ behavior:"smooth", block:"center" });
   });
@@ -3357,7 +3367,7 @@ async function guardarAnalisis(status, opts){
   }, 1600);
 
   if(opts.generatePreviewDoc){
-    await generateAnalisisDoc({ previewOnly:true });
+    await generateAnalisisDoc({ previewOnly:true, previewWindow: opts.previewWindow || null });
     return true;
   }
 
@@ -3484,15 +3494,19 @@ async function generateAnalisisDoc(opts){
 
   const draft = window.__AN_DOC_DRAFT;
   const hasCurrentDraft = !!(draft && draft.codigo === codigo && draft.periodo === perYM && draft.docId);
+  const extWin = opts.previewWindow || null;
 
   if(opts.previewOnly && hasCurrentDraft){
-    if(draft.linkDocx) window.open(draft.linkDocx, "_blank");
+    if(draft.linkDocx){
+      if(extWin && !extWin.closed) extWin.location.href = draft.linkDocx;
+      else window.location.href = draft.linkDocx;
+    }
     else toast("warn","Sin vista previa","No se encontró el enlace del borrador actual.");
     return;
   }
 
   if(!hasCurrentDraft){
-    const previewWin = window.open("about:blank", "_blank");
+    const previewWin = extWin || window.open("about:blank", "_blank");
     const fichaPrev = fichaByCodigo(codigo);
     const metaPrev = Number(fichaPrev?.MetaObjetivo);
     const resPrev = Number($("a_Resultado").value);
@@ -3560,7 +3574,7 @@ async function generateAnalisisDoc(opts){
       };
       if(d.linkDocx){
         if(previewWin && !previewWin.closed) previewWin.location.href = d.linkDocx;
-        else window.open(d.linkDocx, "_blank");
+        else window.location.href = d.linkDocx;
       } else {
         try { previewWin && !previewWin.closed && previewWin.close(); } catch(_) {}
       }
