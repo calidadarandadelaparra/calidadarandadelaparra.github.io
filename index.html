@@ -90,7 +90,7 @@
      forzar un valor concreto o usar DEMO.
 =========================== */
 // principal: la URL del web‑app (se evalúa en runtime)
-let SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbxEc2XKqQJohfguF36ygyf6BxBMmggExM1LNNc6upHl977QOHpWsNmaL3um_mFJdndR7w/exec";
+let SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbwHBEgwpqAsvjh43ZF5erLaQhXjOUn_aNbgUIT81sAFxS_UNQ_VtHNUcO5u_wxpvEOfng/exec";
 const CONFIG_KEY_WEBAPP_URL = "CONFIG_SHEETS_WEBAPP_URL";
 
 function getSavedWebAppUrl(){
@@ -1223,7 +1223,10 @@ async function loadAll(){
     PdfUrl: x.PdfUrl || "",
     FileId: x.FileId || x.Key || ""
   })) : [];
-  CACHE.seg = s.ok ? s.data : [];
+  CACHE.seg = s.ok ? (s.data||[]).map(x=>({
+    ...x,
+    Items: Array.isArray(x?.Items) ? x.Items : safeJsonParse_(x?.Items, x?.Items || [])
+  })) : [];
 
   fillAreaSelects();
 }
@@ -2137,6 +2140,8 @@ function wireHeaderNav(){
   });
 
   $("btnSendCode").addEventListener("click", async ()=>{
+    const btnSendCode = $("btnSendCode");
+    if(btnSendCode?.disabled) return;
     const name = ($("loginName").value||"").trim();
     const email = normalizeCorpEmail_(($("loginUser").value||"").trim().toLowerCase());
     const area = ($("loginArea").value||"").trim();
@@ -2148,19 +2153,33 @@ function wireHeaderNav(){
       return;
     }
 
-    const r = await apiFetch("auth.requestCode", { Nombre:name, Area:area, Email:email, Password:pass });
-    if(!r?.ok){
-      const baseMsg = humanAuthMessage_(r?.message, "No se pudo enviar el código.");
-      const detail = String(r?.data?.reason || "").trim();
-      $("loginMsg").textContent = detail ? `${baseMsg} (${detail})` : baseMsg;
-      $("loginMsg").classList.remove("hidden");
-      return;
+    const prevLabel = btnSendCode ? btnSendCode.textContent : "Enviar código";
+    if(btnSendCode){
+      btnSendCode.disabled = true;
+      btnSendCode.textContent = "Enviando...";
     }
-    $("loginMsg").classList.add("hidden");
-    toast("ok","Código enviado","Revisa tu correo corporativo y captura el código para completar registro.");
+    try {
+      const r = await apiFetch("auth.requestCode", { Nombre:name, Area:area, Email:email, Password:pass });
+      if(!r?.ok){
+        const baseMsg = humanAuthMessage_(r?.message, "No se pudo enviar el código.");
+        const detail = String(r?.data?.reason || "").trim();
+        $("loginMsg").textContent = detail ? `${baseMsg} (${detail})` : baseMsg;
+        $("loginMsg").classList.remove("hidden");
+        return;
+      }
+      $("loginMsg").classList.add("hidden");
+      toast("ok","Código enviado","Revisa tu correo corporativo y captura el código para completar registro.");
+    } finally {
+      if(btnSendCode){
+        btnSendCode.disabled = false;
+        btnSendCode.textContent = prevLabel;
+      }
+    }
   });
 
   $("btnRegister").addEventListener("click", async ()=>{
+    const btnRegister = $("btnRegister");
+    if(btnRegister?.disabled) return;
     const name = ($("loginName").value||"").trim();
     const email = normalizeCorpEmail_(($("loginUser").value||"").trim().toLowerCase());
     const area = ($("loginArea").value||"").trim();
@@ -2171,29 +2190,37 @@ function wireHeaderNav(){
       $("loginMsg").classList.remove("hidden");
       return;
     }
-    const r = await apiFetch("auth.register", { Nombre:name, Area:area, Email:email, Password:pass, Code:code });
-    if(!r?.ok){
-      $("loginMsg").textContent = humanAuthMessage_(r?.message, "No se pudo registrar.");
+    if(code.length !== 6){
+      $("loginMsg").textContent = "El código debe tener 6 dígitos.";
       $("loginMsg").classList.remove("hidden");
       return;
     }
-    $("loginMsg").classList.add("hidden");
-    const login = await apiFetch("auth.login", { Email: email, Password: pass });
-    if(login?.ok){
-      const me = login.data || {};
-      setSession({
-        name: me.Nombre || name || "",
-        email: me.Email || email,
-        area: me.Area || area || "",
-        expiresAt: new Date(Date.now()+SESSION_HOURS*3600*1000).toISOString()
-      });
-      await loadAll();
-      setUiLocked_(false);
-      $("loginModal").classList.add("hidden");
-      toast("ok","Registro exitoso","Acceso habilitado." );
-      return;
+
+    const prevLabel = btnRegister ? btnRegister.textContent : "Registrarme";
+    if(btnRegister){
+      btnRegister.disabled = true;
+      btnRegister.textContent = "Creando cuenta...";
     }
-    toast("ok","Registro exitoso","Usuario creado. Ahora inicia sesión.");
+    try {
+      const r = await apiFetch("auth.register", { Nombre:name, Area:area, Email:email, Password:pass, Code:code });
+      if(!r?.ok){
+        $("loginMsg").textContent = humanAuthMessage_(r?.message, "No se pudo registrar.");
+        $("loginMsg").classList.remove("hidden");
+        return;
+      }
+
+      setEntryAuthAction_("login");
+      $("loginPass").value = "";
+      $("loginCode").value = "";
+      $("loginMsg").textContent = "Cuenta creada satisfactoriamente. Ahora inicia sesión.";
+      $("loginMsg").classList.remove("hidden");
+      toast("ok","Registro exitoso","Cuenta creada. Inicia sesión para continuar.");
+    } finally {
+      if(btnRegister){
+        btnRegister.disabled = false;
+        btnRegister.textContent = prevLabel;
+      }
+    }
   });
   $("btnLoginCancel").addEventListener("click", ()=>{
     if(authModalMode === "entry") return;
@@ -2705,7 +2732,12 @@ async function refreshHistoryByCodigo_(codigo){
   const code = (codigo || "").trim();
   if(!code) return;
   window.__AN_HISTORY_BY_CODIGO = window.__AN_HISTORY_BY_CODIGO || {};
+  window.__AN_HISTORY_TS_BY_CODIGO = window.__AN_HISTORY_TS_BY_CODIGO || {};
   const prevRows = Array.isArray(window.__AN_HISTORY_BY_CODIGO[code]) ? window.__AN_HISTORY_BY_CODIGO[code] : [];
+  const prevTs = Number(window.__AN_HISTORY_TS_BY_CODIGO[code] || 0);
+  if(prevRows.length && (Date.now() - prevTs) < 45000){
+    return;
+  }
 
   const normalizeRows = (input)=>{
     const raw = Array.isArray(input)
@@ -2742,18 +2774,8 @@ async function refreshHistoryByCodigo_(codigo){
   };
 
   let rows = [];
-  let r = await apiFetch("getHistoryByCodigo", { CodigoIndicador: code });
+  let r = await apiFetch("getAnalisisHistoryByCodigo", { CodigoIndicador: code });
   if(r?.ok) rows = normalizeRows(r.data);
-
-  if(!rows.length){
-    r = await apiFetch("getAnalisisHistoryByCodigo", { CodigoIndicador: code });
-    if(r?.ok) rows = normalizeRows(r.data);
-  }
-
-  if(!rows.length){
-    r = await apiFetch("analisis.list", {});
-    if(r?.ok) rows = normalizeRows(r.data);
-  }
 
   if(!rows.length){
     rows = normalizeRows(CACHE.analisis || []);
@@ -2764,6 +2786,7 @@ async function refreshHistoryByCodigo_(codigo){
   }
 
   window.__AN_HISTORY_BY_CODIGO[code] = rows;
+  window.__AN_HISTORY_TS_BY_CODIGO[code] = Date.now();
 
   const others = (CACHE.analisis || []).filter(x => String(x?.CodigoIndicador || "") !== code);
   CACHE.analisis = others.concat(rows);
@@ -2777,6 +2800,13 @@ function getHistoryRowsForCodigo_(codigo){
     return hist.filter(x => String(x?.Status || x?.status || "").toUpperCase() !== "ELIMINADO");
   }
   return analisisByCodigo(code);
+}
+
+function getAnalisisByCodigoPeriodo_(codigo, periodoYM){
+  const c = String(codigo || "").trim();
+  const p = String(periodoYM || "").trim();
+  if(!c || !p) return null;
+  return getAllRowsForCodigo_(c).find(x => String(x?.PeriodoYM || "") === p) || null;
 }
 
 function getAllRowsForCodigo_(codigo){
@@ -3186,6 +3216,16 @@ async function guardarAnalisis(status, opts){
   const orig1 = btn1.textContent;
   const origSave = btnSave ? btnSave.textContent : "";
   const orig2 = btn2.textContent;
+  const restoreSaveButtons_ = (locked)=>{
+    btn1.disabled = !!locked;
+    if(btnSave){
+      btnSave.disabled = !!locked;
+      btnSave.textContent = origSave;
+    }
+    btn2.disabled = !!locked;
+    btn1.textContent = orig1;
+    btn2.textContent = orig2;
+  };
   btn1.disabled = true;
   if(btnSave){
     btnSave.disabled = true;
@@ -3198,15 +3238,31 @@ async function guardarAnalisis(status, opts){
   if(!v.ok){
     toast("err","No se puede guardar", v.message);
     const locked = checkDuplicadoPeriodo();
-    btn1.disabled = !!locked;
-    if(btnSave) btnSave.disabled = !!locked;
-    btn2.disabled = !!locked;
-    if(btnSave) btnSave.textContent = origSave;
-    btn1.textContent = orig1; btn2.textContent = orig2;
+    restoreSaveButtons_(locked);
     return;
   }
 
   const codigo = $("a_Codigo").value;
+  const periodo = $("a_PeriodoYM").value;
+
+  const alreadyLocal = getAnalisisByCodigoPeriodo_(codigo, periodo);
+  if(alreadyLocal){
+    $("a_DupMsg").classList.remove("hidden");
+    toast("err","Duplicado","Ese mes ya fue capturado. Si deseas recapturarlo, elimínalo primero en el Explorador.");
+    const locked = checkDuplicadoPeriodo();
+    restoreSaveButtons_(locked);
+    return;
+  }
+
+  const alreadyRemote = await apiFetch("getAnalisisById", { CodigoIndicador: codigo, PeriodoYM: periodo });
+  if(alreadyRemote?.ok && alreadyRemote?.data){
+    $("a_DupMsg").classList.remove("hidden");
+    toast("err","Duplicado","Ese mes ya fue capturado. Si deseas recapturarlo, elimínalo primero en el Explorador.");
+    const locked = checkDuplicadoPeriodo();
+    restoreSaveButtons_(locked);
+    return;
+  }
+
   const ficha = fichaByCodigo(codigo);
   const meta = Number(ficha?.MetaObjetivo ?? 0);
   const resultado = Number($("a_Resultado").value);
@@ -3217,8 +3273,8 @@ async function guardarAnalisis(status, opts){
   let row = {
     CodigoIndicador: codigo,
     AreaResponsable: $("a_Area").value,
-    PeriodoYM: $("a_PeriodoYM").value,
-    PeriodoLabel: periodoHuman($("a_PeriodoYM").value),
+    PeriodoYM: periodo,
+    PeriodoLabel: periodoHuman(periodo),
     NumValor: Number($("a_Num").value),
     DenValor: Number($("a_Den").value),
     ResultadoObtenido: resultado,
@@ -4743,6 +4799,8 @@ function renderSeguimiento(){
                   <th class="p-2">Periodo</th>
                   <th class="p-2">Resultado</th>
                   <th class="p-2">Meta</th>
+                  <th class="p-2">Propuestas</th>
+                  <th class="p-2">Seguimiento</th>
                   <th class="p-2">Acción</th>
                 </tr>
               </thead>
@@ -4802,11 +4860,76 @@ function getUltimoAnalisisPorCodigo(){
   const map = new Map();
   for(const a of (CACHE.analisis||[])){
     const key = a.CodigoIndicador;
+    if(!key) continue;
     const cur = map.get(key);
     if(!cur) map.set(key, a);
     else if(String(a.PeriodoYM||"") > String(cur.PeriodoYM||"")) map.set(key, a);
   }
   return map;
+}
+
+function isNoCumple_(value){
+  const v = String(value == null ? "" : value).trim().toLowerCase();
+  return v === "false" || v === "0" || v === "no cumple" || value === false;
+}
+
+function getSegByCodigoPeriodo_(codigo, periodoYM){
+  const keyNew = `SEG-${codigo}-${periodoYM}`;
+  const keyLegacy = `SEG|${codigo}|${periodoYM}`;
+  return (CACHE.seg || []).find(x =>
+    String(x?.Key || "") === keyNew ||
+    String(x?.Key || "") === keyLegacy ||
+    (String(x?.CodigoIndicador || "") === String(codigo || "") && String(x?.PeriodoYM || "") === String(periodoYM || ""))
+  ) || null;
+}
+
+function getPropuestasFromAnalisisSnapshot_(analisisRow){
+  const snap = analisisRow?.WEB_SNAPSHOT;
+  const arr = Array.isArray(snap?.Propuestas) ? snap.Propuestas : [];
+  return arr.slice(0,5).map(x=>(
+    {
+      Accion: String(x?.Accion || "").trim(),
+      Responsable: String(x?.Responsable || "").trim(),
+      FechaCompromiso: String(x?.FechaCompromiso || "").trim()
+    }
+  ));
+}
+
+function buildSeguimientoRowsFromExisting_(existing, propuestas){
+  const baseCount = Math.max(1, Math.min(5, propuestas.length || 1));
+  const existingItems = Array.isArray(existing?.Items) ? existing.Items.slice(0,5) : [];
+  const rows = [];
+  for(let i=0; i<baseCount; i++){
+    const ex = existingItems[i] || {};
+    rows.push({
+      Fecha: String(ex?.Fecha || ""),
+      Resultado: String(ex?.Resultado || ""),
+      CierreEfectiva: String(ex?.CierreEfectiva || ""),
+      EvidenciaSi: String(ex?.EvidenciaSi || ""),
+      EvidenciaNo: String(ex?.EvidenciaNo || "")
+    });
+  }
+  if(existingItems.length > rows.length){
+    existingItems.slice(rows.length, 5).forEach(ex=>{
+      rows.push({
+        Fecha: String(ex?.Fecha || ""),
+        Resultado: String(ex?.Resultado || ""),
+        CierreEfectiva: String(ex?.CierreEfectiva || ""),
+        EvidenciaSi: String(ex?.EvidenciaSi || ""),
+        EvidenciaNo: String(ex?.EvidenciaNo || "")
+      });
+    });
+  }
+  return rows.slice(0,5);
+}
+
+function isSeguimientoComplete_(seg, expectedCount){
+  const need = Math.max(1, Math.min(5, Number(expectedCount || 1)));
+  const items = Array.isArray(seg?.Items) ? seg.Items.slice(0, need) : [];
+  if(items.length < need) return false;
+  const verif = String(seg?.VerificadorAcciones || "").trim();
+  if(!verif) return false;
+  return items.every(r => String(r?.Fecha || "").trim() && String(r?.Resultado || "").trim() && String(r?.CierreEfectiva || "").trim());
 }
 
 function buildNoCumplenTable(){
@@ -4815,8 +4938,11 @@ function buildNoCumplenTable(){
   const rows = [];
 
   for(const [codigo, a] of lastMap.entries()){
-    if(a.Cumple === false || a.Cumple === "false"){
+    if(isNoCumple_(a?.Cumple)){
       const f = fichaByCodigo(codigo);
+      const propuestas = getPropuestasFromAnalisisSnapshot_(a);
+      const seg = getSegByCodigoPeriodo_(codigo, a.PeriodoYM);
+      const complete = isSeguimientoComplete_(seg, propuestas.length || 1);
       rows.push({
         Codigo: codigo,
         Nombre: f?.NombreIndicador || "",
@@ -4825,7 +4951,9 @@ function buildNoCumplenTable(){
         PeriodoYM: a.PeriodoYM,
         PeriodoLabel: a.PeriodoLabel || periodoHuman(a.PeriodoYM),
         Resultado: Number(a.ResultadoObtenido),
-        Meta: Number(a.MetaObjetivo ?? f?.MetaObjetivo ?? null)
+        Meta: Number(a.MetaObjetivo ?? f?.MetaObjetivo ?? null),
+        Propuestas: propuestas.length || 0,
+        Complete: complete
       });
     }
   }
@@ -4833,7 +4961,7 @@ function buildNoCumplenTable(){
   rows.sort((x,y)=>(x.AreaLabel||"").localeCompare(y.AreaLabel||"") || (x.Codigo||"").localeCompare(y.Codigo||""));
 
   if(!rows.length){
-    tb.innerHTML = `<tr><td class="p-3 text-slate-400" colspan="7">No hay indicadores en NO CUMPLE.</td></tr>`;
+    tb.innerHTML = `<tr><td class="p-3 text-slate-400" colspan="9">No hay indicadores en NO CUMPLE.</td></tr>`;
     return;
   }
 
@@ -4845,8 +4973,10 @@ function buildNoCumplenTable(){
       <td class="p-2">${escapeHtml(r.PeriodoLabel)}</td>
       <td class="p-2">${fmtNum(r.Resultado)}</td>
       <td class="p-2">${fmtNum(r.Meta)}</td>
+      <td class="p-2">${r.Propuestas || 0}</td>
+      <td class="p-2">${r.Complete ? '<span class="badge badge-ok">Completo</span>' : '<span class="badge badge-warn">Pendiente</span>'}</td>
       <td class="p-2">
-        <button class="btn btn-soft" data-seg-open="${escapeHtml(r.Codigo)}" data-seg-per="${escapeHtml(r.PeriodoYM)}">Abrir seguimiento</button>
+        <button class="btn btn-soft" data-seg-open="${escapeHtml(r.Codigo)}" data-seg-per="${escapeHtml(r.PeriodoYM)}">${r.Complete ? 'Ver / actualizar' : 'Completar seguimiento'}</button>
       </td>
     </tr>
   `).join("");
@@ -4861,27 +4991,27 @@ function buildNoCumplenTable(){
 }
 
 function segKey(codigo, periodoYM){
-  return `SEG|${codigo}|${periodoYM}`;
+  return `SEG-${codigo}-${periodoYM}`;
 }
 
 function openSeguimientoForm(codigo, periodoYM){
   const f = fichaByCodigo(codigo);
   const key = segKey(codigo, periodoYM);
+  const analisis = getAnalisisByCodigoPeriodo_(codigo, periodoYM) || {};
+  const propuestas = getPropuestasFromAnalisisSnapshot_(analisis);
 
   $("s_Form").classList.remove("hidden");
   $("s_SaveMsg").classList.add("hidden");
   $("s_Sub").textContent = `${codigo} · ${f?.NombreIndicador||""} · ${periodoHuman(periodoYM)}`;
 
   // load existing seg record if exists
-  const existing = (CACHE.seg||[]).find(x=>x.Key===key) || null;
+  const existing = getSegByCodigoPeriodo_(codigo, periodoYM);
 
   $("s_Verificador").value = existing?.VerificadorAcciones || "";
 
-  window.__SEG_CTX = { codigo, periodoYM, key };
+  window.__SEG_CTX = { codigo, periodoYM, key, propuestas };
 
-  window.__SEG_ROWS = (existing?.Items && Array.isArray(existing.Items) && existing.Items.length)
-    ? existing.Items.slice(0,5)
-    : [];
+  window.__SEG_ROWS = buildSeguimientoRowsFromExisting_(existing, propuestas);
 
   if(!window.__SEG_ROWS.length) addSegRow();
 
@@ -4904,6 +5034,7 @@ function addSegRow(){
 function renderSegRows(){
   const wrap = $("s_Rows");
   if(!wrap) return;
+  const propuestas = Array.isArray(window.__SEG_CTX?.propuestas) ? window.__SEG_CTX.propuestas : [];
 
   wrap.innerHTML = (window.__SEG_ROWS||[]).map((r,i)=>`
     <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
@@ -4911,6 +5042,13 @@ function renderSegRows(){
         <div class="font-extrabold text-navy">Seguimiento ${i+1}</div>
         <button class="text-xs font-extrabold text-red-700 hover:underline" data-sdel="${i}">Eliminar</button>
       </div>
+      ${propuestas[i] ? `
+        <div class="mt-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
+          <div><span class="font-extrabold text-slate-700">Acción:</span> ${escapeHtml(propuestas[i].Accion || "—")}</div>
+          <div><span class="font-extrabold text-slate-700">Responsable:</span> ${escapeHtml(propuestas[i].Responsable || "—")}</div>
+          <div><span class="font-extrabold text-slate-700">Compromiso:</span> ${escapeHtml(propuestas[i].FechaCompromiso || "—")}</div>
+        </div>
+      ` : ""}
 
       <div class="grid grid-cols-1 md:grid-cols-5 gap-3 mt-3">
         <div>
@@ -4999,6 +5137,7 @@ async function saveSeguimiento(){
   if(!r.ok) return toast("err","Error", r.message||"No se guardó");
 
   await loadAll();
+  buildNoCumplenTable();
   $("s_SaveMsg").classList.remove("hidden");
   toast("ok","Guardado","Seguimiento guardado correctamente.");
 }
