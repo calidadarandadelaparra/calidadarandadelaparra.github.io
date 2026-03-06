@@ -124,8 +124,6 @@ function getWebAppUrl(){
 // o no se ha inicializado todavía, se tomará como demo.
 const USE_DEMO = getWebAppUrl().includes("PON_AQUI");
 
-const QUALITY_USER = "calidad";
-const QUALITY_PASS = "Aranda2026!";
 const SESSION_HOURS = 8;
 
 const LS_KEYS = {
@@ -134,6 +132,7 @@ const LS_KEYS = {
   PROP: "HAP_BD_PROPUESTAS",
   DOCS: "HAP_BD_DOCUMENTOS",
   SEG: "HAP_BD_SEGUIMIENTO",
+  USERS: "HAP_BD_USUARIOS",
   SESSION: "HAP_SESSION",
 };
 
@@ -415,8 +414,12 @@ function scrollTopSmooth(){ window.scrollTo({top:0, behavior:"smooth"}); }
         <input id="loginName" class="input mt-1" placeholder="Ej. Luis Ángel"/>
       </div>
       <div>
-        <label class="text-xs font-extrabold text-slate-600">Usuario *</label>
-        <input id="loginUser" class="input mt-1" placeholder="calidad"/>
+        <label class="text-xs font-extrabold text-slate-600">Correo corporativo *</label>
+        <input id="loginUser" class="input mt-1" placeholder="usuario@arandadelaparra.com"/>
+      </div>
+      <div>
+        <label class="text-xs font-extrabold text-slate-600">Área *</label>
+        <input id="loginArea" class="input mt-1" placeholder="Ej. Calidad"/>
       </div>
       <div>
         <label class="text-xs font-extrabold text-slate-600">Contraseña *</label>
@@ -429,6 +432,7 @@ function scrollTopSmooth(){ window.scrollTo({top:0, behavior:"smooth"}); }
 
       <div class="flex gap-2">
         <button id="btnLogin" class="flex-1 btn btn-primary">Entrar</button>
+        <button id="btnRegister" class="btn btn-soft">Registrarme</button>
         <button id="btnLoginCancel" class="btn btn-soft">Cancelar</button>
       </div>
 
@@ -623,6 +627,7 @@ function seedDemo(){
   if(!localStorage.getItem(LS_KEYS.PROP)) lsWrite(LS_KEYS.PROP, []);
   if(!localStorage.getItem(LS_KEYS.DOCS)) lsWrite(LS_KEYS.DOCS, []);
   if(!localStorage.getItem(LS_KEYS.SEG)) lsWrite(LS_KEYS.SEG, []);
+  if(!localStorage.getItem(LS_KEYS.USERS)) lsWrite(LS_KEYS.USERS, []);
 }
 
 async function apiFetch(action, payload={}){
@@ -663,6 +668,44 @@ function demoApi(action, payload){
   const prop = lsRead(LS_KEYS.PROP, []);
   let docs = lsRead(LS_KEYS.DOCS, []);
   const seg = lsRead(LS_KEYS.SEG, []);
+  const users = lsRead(LS_KEYS.USERS, []);
+
+  if(action==="auth.register"){
+    const email = String(payload?.Email || payload?.email || "").trim().toLowerCase();
+    const nombre = String(payload?.Nombre || payload?.name || "").trim();
+    const area = String(payload?.Area || payload?.area || "").trim();
+    const password = String(payload?.Password || payload?.password || "");
+    if(!nombre || !area || !email || !password) return fail_("Faltan datos");
+    if(!/@arandadelaparra\.com$/.test(email)) return fail_("Solo correos @arandadelaparra.com");
+    const exists = users.some(u=>String(u?.Email || "").toLowerCase()===email && String(u?.Status || "").toUpperCase()!=="ELIMINADO");
+    if(exists) return fail_("USUARIO_EXISTE");
+    users.push({
+      UserId: "USR-" + Date.now(),
+      Email: email,
+      Nombre: nombre,
+      Area: area,
+      Password: password,
+      Verificado: true,
+      Status: "ACTIVO",
+      UpdatedAt: nowISO()
+    });
+    lsWrite(LS_KEYS.USERS, users);
+    return ok_(true, "REGISTRO_OK");
+  }
+
+  if(action==="auth.login"){
+    const email = String(payload?.Email || payload?.email || "").trim().toLowerCase();
+    const password = String(payload?.Password || payload?.password || "");
+    if(!email || !password) return fail_("Faltan credenciales");
+    const user = users.find(u=>String(u?.Email || "").toLowerCase()===email && String(u?.Status || "").toUpperCase()==="ACTIVO");
+    if(!user || String(user.Password || "") !== password) return fail_("CREDENCIALES_INVALIDAS");
+    return ok_({
+      Email: user.Email,
+      Nombre: user.Nombre,
+      Area: user.Area,
+      Verificado: true
+    }, "LOGIN_OK");
+  }
 
   // fichas
   if(action==="fichas.list") return ok_(fichas);
@@ -944,7 +987,7 @@ function isQuality(){
   const s = getSession();
   if(!s) return false;
   const exp = new Date(s.expiresAt).getTime();
-  return s.user===QUALITY_USER && Date.now() < exp;
+  return !!(s.email && Date.now() < exp);
 }
 let pendingTarget = null;
 
@@ -1872,23 +1915,57 @@ function wireHeaderNav(){
   });
 
   // login modal
-  $("btnLogin").addEventListener("click", ()=>{
+  $("btnLogin").addEventListener("click", async ()=>{
     const name = ($("loginName").value||"").trim();
     const u = ($("loginUser").value||"").trim().toLowerCase();
+    const area = ($("loginArea").value||"").trim();
     const p = ($("loginPass").value||"").trim();
 
-    if(name && u===QUALITY_USER && p===QUALITY_PASS){
-      setSession({ name, user: QUALITY_USER, expiresAt: new Date(Date.now()+SESSION_HOURS*3600*1000).toISOString() });
-      $("loginModal").classList.add("hidden");
-      toast("ok","Acceso autorizado", `Bienvenido, ${name}.`);
-
-      if(pendingTarget){
-        const t=pendingTarget; pendingTarget=null;
-        showSection(t);
-      }
-    }else{
+    if(!u || !p){
       $("loginMsg").classList.remove("hidden");
+      return;
     }
+
+    const r = await apiFetch("auth.login", { Email: u, Password: p });
+    if(!r?.ok){
+      $("loginMsg").classList.remove("hidden");
+      return;
+    }
+
+    const me = r.data || {};
+    setSession({
+      name: me.Nombre || name || "",
+      email: me.Email || u,
+      area: me.Area || area || "",
+      expiresAt: new Date(Date.now()+SESSION_HOURS*3600*1000).toISOString()
+    });
+    $("loginModal").classList.add("hidden");
+    toast("ok","Acceso autorizado", `Bienvenido, ${me.Nombre || name || "usuario"}.`);
+
+    if(pendingTarget){
+      const t=pendingTarget; pendingTarget=null;
+      showSection(t);
+    }
+  });
+
+  $("btnRegister").addEventListener("click", async ()=>{
+    const name = ($("loginName").value||"").trim();
+    const email = ($("loginUser").value||"").trim().toLowerCase();
+    const area = ($("loginArea").value||"").trim();
+    const pass = ($("loginPass").value||"").trim();
+    if(!name || !email || !area || !pass){
+      $("loginMsg").textContent = "Completa nombre, área, correo corporativo y contraseña.";
+      $("loginMsg").classList.remove("hidden");
+      return;
+    }
+    const r = await apiFetch("auth.register", { Nombre:name, Area:area, Email:email, Password:pass });
+    if(!r?.ok){
+      $("loginMsg").textContent = r?.message || "No se pudo registrar.";
+      $("loginMsg").classList.remove("hidden");
+      return;
+    }
+    $("loginMsg").classList.add("hidden");
+    toast("ok","Registro exitoso","Usuario creado. Ahora inicia sesión.");
   });
   $("btnLoginCancel").addEventListener("click", ()=>{
     pendingTarget=null;
