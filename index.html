@@ -90,20 +90,15 @@
      forzar un valor concreto o usar DEMO.
 =========================== */
 // principal: la URL del web‑app (se evalúa en runtime)
-let SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbwHBEgwpqAsvjh43ZF5erLaQhXjOUn_aNbgUIT81sAFxS_UNQ_VtHNUcO5u_wxpvEOfng/exec";
+let SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbzc6aapGeYPwhtnKkMVKHQYFBgsnpcqYdAOoqkJwqn1YDY334UrwnxsZwzOAkPhP5Cs/exec";
 const CONFIG_KEY_WEBAPP_URL = "CONFIG_SHEETS_WEBAPP_URL";
 
 function getSavedWebAppUrl(){
-  return localStorage.getItem(CONFIG_KEY_WEBAPP_URL) || "";
+  return "";
 }
 function setSavedWebAppUrl(url){
   url = (url||"").trim();
-  if(url){
-    localStorage.setItem(CONFIG_KEY_WEBAPP_URL, url);
-  } else {
-    localStorage.removeItem(CONFIG_KEY_WEBAPP_URL);
-  }
-  SHEETS_WEBAPP_URL = url;
+  if(url) SHEETS_WEBAPP_URL = url;
   refreshApiMode_();
 }
 
@@ -113,10 +108,8 @@ function isLikelyGasWebAppUrl_(url){
 }
 
 function getWebAppUrl(){
-  // prioridad: variable explícita > guardada en localStorage > deducida
+  // prioridad: variable explícita > deducida
   if(SHEETS_WEBAPP_URL) return SHEETS_WEBAPP_URL;
-  const saved = getSavedWebAppUrl();
-  if(saved) return saved;
   // si se está ejecutando dentro de la WebApp de GAS, la propia
   // ubicación actual es el endpoint
   if(typeof location !== 'undefined' && location.href){
@@ -544,15 +537,6 @@ function scrollTopSmooth(){ window.scrollTo({top:0, behavior:"smooth"}); }
         <div class="font-extrabold text-navy">Modo actual</div>
         <div class="text-sm text-slate-600">
           Estás en: <span class="font-extrabold text-navy" id="homeMode"></span>.
-        </div>
-        <!-- configuration input for web‑app URL -->
-        <div class="text-sm text-slate-600">
-          <label class="font-semibold">URL WebApp de Sheets:</label>
-          <div class="flex gap-2 mt-1">
-            <input id="confWebAppUrl" class="input flex-1" placeholder="https://script.google.com/macros/s/.../exec" />
-            <button id="btnSaveUrl" class="btn btn-soft">Guardar</button>
-          </div>
-          <div class="text-xs text-slate-500">Este valor se almacena en localStorage y se usará cuando la página esté hospedada en GitHub Pages u otro dominio.</div>
         </div>
       </div>
     </div>
@@ -1417,8 +1401,8 @@ function renderFichaForm(){
 
         <div class="flex flex-wrap gap-2">
           <button id="btnFichaSave" class="btn btn-primary">Guardar ficha</button>
-          <button id="btnFichaDoc" class="btn btn-soft">Generar vista previa</button>
-          <button id="btnFichaGen" class="btn btn-primary">Guardar definitivo (Word/PDF)</button>
+          <button id="btnFichaDoc" class="btn btn-soft">Generar vista previa del Word-PDF</button>
+          <button id="btnFichaGen" class="btn btn-primary">Guardar documento en Word-PDF</button>
           <button id="btnFichaClear" class="btn btn-soft">Limpiar</button>
         </div>
 
@@ -1732,7 +1716,7 @@ function clearFichaForm(){
 function clearFichaDocDraft_(){
   window.__FT_DOC_DRAFT = null;
   const btn = $("btnFichaGen");
-  if(btn) btn.textContent = "Guardar definitivo (Word/PDF)";
+  if(btn) btn.textContent = "Guardar documento en Word-PDF";
 }
 
 /* =========================================================
@@ -1898,7 +1882,7 @@ async function generateFichaDoc(){
   const draft = window.__FT_DOC_DRAFT;
   const hasDraft = !!(draft && draft.codigo === codigo && draft.periodo === periodo && draft.docId);
   if(!hasDraft){
-    toast("warn","Sin vista previa","Primero presiona 'Generar vista previa'.");
+    toast("warn","Sin vista previa","Primero presiona 'Generar vista previa del Word-PDF'.");
     return;
   }
 
@@ -1932,7 +1916,7 @@ async function generateFichaDoc(){
     toast("err","Error de red", String(e));
   } finally {
     btn.disabled = false;
-    btn.textContent = "Guardar definitivo (Word/PDF)";
+    btn.textContent = "Guardar documento en Word-PDF";
   }
 }
 
@@ -1988,7 +1972,7 @@ async function generateFichaPreviewDoc(){
       if(previewWin && !previewWin.closed) previewWin.location.href = d.linkDocx;
       else window.open(d.linkDocx, "_blank");
     }
-    toast("ok","Vista previa lista","Ahora pulsa 'Guardar definitivo (Word/PDF)'.");
+    toast("ok","Vista previa lista","Ahora pulsa 'Guardar documento en Word-PDF'.");
   } catch(e){
     toast("err","Error de red", String(e));
   } finally {
@@ -2257,30 +2241,12 @@ function clearAnalisisDocDraft_(){
    INIT PARTE 2
 ========================================================= */
 
-// configuración UI para URL WebApp
-function initConfigUI(){
-  const inp = $("confWebAppUrl");
-  if(!inp) return;
-  inp.value = getSavedWebAppUrl();
-  inp.addEventListener("input", ()=>{
-    // live update so users can copy/paste conveniently
-    setSavedWebAppUrl(inp.value);
-    setModeTags();
-  });
-  $("btnSaveUrl").addEventListener("click", ()=>{
-    setSavedWebAppUrl(inp.value);
-    setModeTags();
-    toast("ok","URL guardada","Se usará para comunicarse con Sheets.");
-  });
-}
-
 // init
 document.addEventListener("DOMContentLoaded", async ()=>{
   seedDemo();
   refreshApiMode_();
   setModeTags();
   wireHeaderNav();
-  initConfigUI();
   showSection("secInicio");
   const s = getSession();
   const active = !!(s && s.expiresAt && Date.now() < new Date(s.expiresAt).getTime());
@@ -2560,11 +2526,10 @@ function renderAnalisis(){
 
           <div class="flex flex-wrap gap-2">
             <button id="btnAIrFirmas" class="btn btn-soft hidden">Firmas</button>
-            <button id="btnABorrador" class="btn btn-soft">Guardar borrador</button>
+            <button id="btnABorrador" class="btn btn-soft">Limpiar</button>
             <button id="btnASaveAnalisis" class="btn btn-primary">Guardar análisis</button>
-            <button id="btnAGuardar" class="btn btn-primary">Generar vista previa</button>
-            <button id="btnAnalisisGen" class="btn btn-primary">Guardar definitivo (Word/PDF)</button>
-            <button id="btnACancelar" class="btn btn-soft">Cerrar</button>
+            <button id="btnAGuardar" class="btn btn-primary">Generar vista previa del Word-PDF</button>
+            <button id="btnAnalisisGen" class="btn btn-primary">Guardar documento en Word-PDF</button>
           </div>
 
           <div id="a_SaveMsg" class="hidden rounded-2xl border border-emerald-200 bg-emerald-50 text-emerald-900 p-3 text-sm">
@@ -2612,18 +2577,13 @@ function renderAnalisis(){
   $("a_Evidencias").addEventListener("change", (e)=>handleEvidenceFiles(e));
   $("a_FirmaResponsable").addEventListener("change", (e)=>handleFirmaFile(e, "Responsable"));
 
-  $("btnABorrador").addEventListener("click", ()=>guardarAnalisis("BORRADOR"));
+  $("btnABorrador").addEventListener("click", ()=>resetAnalisisUI(false));
   $("btnASaveAnalisis").addEventListener("click", ()=>guardarAnalisis("FINAL"));
   $("btnAGuardar").addEventListener("click", ()=>guardarAnalisis("FINAL", { generatePreviewDoc:true }));
   $("btnAnalisisGen").addEventListener("click", ()=>generateAnalisisDoc());
   $("btnAIrFirmas")?.addEventListener("click", ()=>{
     $("a_FirmasCard")?.scrollIntoView({ behavior:"smooth", block:"center" });
   });
-  $("btnACancelar").addEventListener("click", ()=>{
-    resetAnalisisUI(true);
-    showSection("secInicio");
-  });
-
   // init: props starts with 1 row
   resetAnalisisUI(true);
 }
@@ -3209,30 +3169,39 @@ function validateAnalisis(){
 
 async function guardarAnalisis(status, opts){
   opts = opts || {};
-  // loading indicator for both save buttons
-  const btn1 = $("btnABorrador");
+  // loading indicator for save/preview/doc buttons
   const btnSave = $("btnASaveAnalisis");
-  const btn2 = $("btnAGuardar");
-  const orig1 = btn1.textContent;
+  const btnPreview = $("btnAGuardar");
+  const btnDoc = $("btnAnalisisGen");
   const origSave = btnSave ? btnSave.textContent : "";
-  const orig2 = btn2.textContent;
+  const origPreview = btnPreview ? btnPreview.textContent : "";
+  const origDoc = btnDoc ? btnDoc.textContent : "";
   const restoreSaveButtons_ = (locked)=>{
-    btn1.disabled = !!locked;
     if(btnSave){
       btnSave.disabled = !!locked;
       btnSave.textContent = origSave;
     }
-    btn2.disabled = !!locked;
-    btn1.textContent = orig1;
-    btn2.textContent = orig2;
+    if(btnPreview){
+      btnPreview.disabled = !!locked;
+      btnPreview.textContent = origPreview;
+    }
+    if(btnDoc){
+      btnDoc.disabled = !!locked;
+      btnDoc.textContent = origDoc;
+    }
   };
-  btn1.disabled = true;
   if(btnSave){
     btnSave.disabled = true;
     btnSave.textContent = "Guardando…";
   }
-  btn1.textContent = "Guardando…";
-  btn2.textContent = "Guardando…";
+  if(btnPreview){
+    btnPreview.disabled = true;
+    btnPreview.textContent = "Guardando…";
+  }
+  if(btnDoc){
+    btnDoc.disabled = true;
+    btnDoc.textContent = "Guardando…";
+  }
 
   const v = validateAnalisis();
   if(!v.ok){
@@ -3312,12 +3281,12 @@ async function guardarAnalisis(status, opts){
     r = await apiFetch("analisis.insert", row);
   } finally {
     // restore buttons even if API throws
-    btn1.disabled = false;
     if(btnSave) btnSave.disabled = false;
-    btn2.disabled = false;
     if(btnSave) btnSave.textContent = origSave;
-    btn1.textContent = orig1;
-    btn2.textContent = orig2;
+    if(btnPreview) btnPreview.disabled = false;
+    if(btnPreview) btnPreview.textContent = origPreview;
+    if(btnDoc) btnDoc.disabled = false;
+    if(btnDoc) btnDoc.textContent = origDoc;
   }
 
   if(!r.ok){
