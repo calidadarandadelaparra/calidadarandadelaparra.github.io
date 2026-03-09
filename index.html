@@ -4998,14 +4998,27 @@ function buildSeguimientoRowsFromExisting_(existing, propuestas){
   const baseCount = Math.max(1, Math.min(5, propuestas.length || 1));
   const existingItems = Array.isArray(existing?.Items) ? existing.Items.slice(0,5) : [];
   const rows = [];
+  const resolveSiNo_ = (item)=>{
+    const direct = String(item?.EvidenciaMostrada || "").trim();
+    if(direct === "Si" || direct === "No") return direct;
+    if(String(item?.EvidenciaSi || "").trim()) return "Si";
+    if(String(item?.EvidenciaNo || "").trim()) return "No";
+    return "";
+  };
+  const resolveCierre_ = (item)=>{
+    const direct = String(item?.CierreAccion || "").trim();
+    if(direct === "Efectiva" || direct === "No efectiva") return direct;
+    if(String(item?.CierreNoEfectiva || "").trim()) return "No efectiva";
+    if(String(item?.CierreEfectiva || "").trim()) return "Efectiva";
+    return "";
+  };
   for(let i=0; i<baseCount; i++){
     const ex = existingItems[i] || {};
     rows.push({
       Fecha: String(ex?.Fecha || ""),
       Resultado: String(ex?.Resultado || ""),
-      CierreEfectiva: String(ex?.CierreEfectiva || ""),
-      EvidenciaSi: String(ex?.EvidenciaSi || ""),
-      EvidenciaNo: String(ex?.EvidenciaNo || "")
+      EvidenciaMostrada: resolveSiNo_(ex),
+      CierreAccion: resolveCierre_(ex)
     });
   }
   if(existingItems.length > rows.length){
@@ -5013,9 +5026,8 @@ function buildSeguimientoRowsFromExisting_(existing, propuestas){
       rows.push({
         Fecha: String(ex?.Fecha || ""),
         Resultado: String(ex?.Resultado || ""),
-        CierreEfectiva: String(ex?.CierreEfectiva || ""),
-        EvidenciaSi: String(ex?.EvidenciaSi || ""),
-        EvidenciaNo: String(ex?.EvidenciaNo || "")
+        EvidenciaMostrada: resolveSiNo_(ex),
+        CierreAccion: resolveCierre_(ex)
       });
     });
   }
@@ -5123,9 +5135,8 @@ function addSegRow(){
   window.__SEG_ROWS.push({
     Fecha:"",
     Resultado:"",
-    CierreEfectiva:"", // Si/No
-    EvidenciaSi:"",
-    EvidenciaNo:""
+    EvidenciaMostrada:"", // Si/No
+    CierreAccion:"" // Efectiva/No efectiva
   });
   renderSegRows();
 }
@@ -5149,7 +5160,7 @@ function renderSegRows(){
         </div>
       ` : ""}
 
-      <div class="grid grid-cols-1 md:grid-cols-5 gap-3 mt-3">
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-3 mt-3">
         <div>
           <label class="text-xs font-extrabold text-slate-600">Fecha *</label>
           <input type="date" class="input mt-1" data-s="Fecha" data-i="${i}" value="${escapeHtml(r.Fecha||"")}"/>
@@ -5159,19 +5170,20 @@ function renderSegRows(){
           <input class="input mt-1" data-s="Resultado" data-i="${i}" value="${escapeHtml(r.Resultado||"")}" placeholder="Ej. 92"/>
         </div>
         <div>
-          <label class="text-xs font-extrabold text-slate-600">Cierre efectiva *</label>
-          <select class="input mt-1" data-s="CierreEfectiva" data-i="${i}">
+          <label class="text-xs font-extrabold text-slate-600">Se mostró evidencia *</label>
+          <select class="input mt-1" data-s="EvidenciaMostrada" data-i="${i}">
             <option value="">Selecciona...</option>
-            <option ${r.CierreEfectiva==="Si"?"selected":""}>Si</option>
-            <option ${r.CierreEfectiva==="No"?"selected":""}>No</option>
+            <option ${r.EvidenciaMostrada==="Si"?"selected":""}>Si</option>
+            <option ${r.EvidenciaMostrada==="No"?"selected":""}>No</option>
           </select>
         </div>
-        <div class="md:col-span-2">
-          <label class="text-xs font-extrabold text-slate-600">Evidencia (si aplica)</label>
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mt-1">
-            <input class="input" data-s="EvidenciaSi" data-i="${i}" value="${escapeHtml(r.EvidenciaSi||"")}" placeholder="Link evidencia SI"/>
-            <input class="input" data-s="EvidenciaNo" data-i="${i}" value="${escapeHtml(r.EvidenciaNo||"")}" placeholder="Link evidencia NO"/>
-          </div>
+        <div>
+          <label class="text-xs font-extrabold text-slate-600">Cierre de la acción *</label>
+          <select class="input mt-1" data-s="CierreAccion" data-i="${i}">
+            <option value="">Selecciona...</option>
+            <option ${r.CierreAccion==="Efectiva"?"selected":""}>Efectiva</option>
+            <option ${r.CierreAccion==="No efectiva"?"selected":""}>No efectiva</option>
+          </select>
         </div>
       </div>
     </div>
@@ -5210,7 +5222,8 @@ function validateSeguimiento(){
   for(const r of rows){
     if(!(r.Fecha||"").trim()) return fail_("Falta fecha en un seguimiento.");
     if(!(r.Resultado||"").trim()) return fail_("Falta resultado en un seguimiento.");
-    if(!(r.CierreEfectiva||"").trim()) return fail_("Falta cierre efectiva (Si/No).");
+    if(!(r.EvidenciaMostrada||"").trim()) return fail_("Falta indicar si se mostró evidencia (Si/No).");
+    if(!(r.CierreAccion||"").trim()) return fail_("Falta cierre de la acción (Efectiva/No efectiva).");
   }
   return ok_(true);
 }
@@ -5232,7 +5245,20 @@ async function saveSeguimiento(opts){
     PeriodoYM: ctx.periodoYM,
     PeriodoLabel: periodoHuman(ctx.periodoYM),
     VerificadorAcciones: ($("s_Verificador").value||"").trim(),
-    Items: (window.__SEG_ROWS||[]).slice(0,5),
+    Items: (window.__SEG_ROWS||[]).slice(0,5).map((it)=>(
+      {
+        Fecha: String(it?.Fecha || "").trim(),
+        Fech: String(it?.Fecha || "").trim(),
+        Resultado: String(it?.Resultado || "").trim(),
+        Resul: String(it?.Resultado || "").trim(),
+        EvidenciaMostrada: String(it?.EvidenciaMostrada || "").trim(),
+        CierreAccion: String(it?.CierreAccion || "").trim(),
+        EvidenciaSi: String(it?.EvidenciaMostrada || "").trim() === "Si" ? "✔" : "",
+        EvidenciaNo: String(it?.EvidenciaMostrada || "").trim() === "No" ? "✔" : "",
+        CierreEfectiva: String(it?.CierreAccion || "").trim() === "Efectiva" ? "✔" : "",
+        CierreNoEfectiva: String(it?.CierreAccion || "").trim() === "No efectiva" ? "✔" : ""
+      }
+    )),
     UpdatedAt: nowISO()
   };
 
