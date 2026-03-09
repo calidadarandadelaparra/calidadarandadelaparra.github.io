@@ -644,7 +644,7 @@ async function apiFetch(action, payload={}){
     }
   };
 
-  const fetchWithTimeout_ = async (targetUrl, opts, timeoutMs=12000) => {
+  const fetchWithTimeout_ = async (targetUrl, opts, timeoutMs=35000) => {
     const ctrl = new AbortController();
     const timer = setTimeout(()=>ctrl.abort(), timeoutMs);
     try {
@@ -654,27 +654,34 @@ async function apiFetch(action, payload={}){
     }
   };
 
+  const payloadJson = JSON.stringify(payload || {});
+  const isHeavyAction = /^docs\./i.test(String(action||"")) || /^seg\./i.test(String(action||""));
+  const timeoutMs = isHeavyAction ? 90000 : 35000;
+  const allowGetFallback = payloadJson.length <= 1800;
+
   // first try the preferred POST (text/plain avoids preflight)
   try {
     const res = await fetchWithTimeout_(url, {
       method:"POST",
       headers: { "Content-Type":"text/plain" },
       body: JSON.stringify({ action, payload })
-    });
+    }, timeoutMs);
     return await parseJsonSafe_(res);
   } catch(err) {
     console.warn("apiFetch POST failed, attempting GET fallback", err);
-    // if network/CORS issue, attempt again with GET query string
+    if(!allowGetFallback){
+      return fail_("Error de red al conectar con Apps Script. Intenta de nuevo en unos segundos.");
+    }
   }
 
   try {
     const qp = `?action=${encodeURIComponent(action)}` +
-               `&payload=${encodeURIComponent(JSON.stringify(payload))}`;
-    const res2 = await fetchWithTimeout_(url + qp, { method:"GET" });
+               `&payload=${encodeURIComponent(payloadJson)}`;
+    const res2 = await fetchWithTimeout_(url + qp, { method:"GET" }, timeoutMs);
     return await parseJsonSafe_(res2);
   } catch(err2) {
     console.error("apiFetch GET fallback also failed", err2);
-    return fail_("network:", err2.message || err2);
+    return fail_("Error de red al conectar con Apps Script. Verifica el despliegue /exec y vuelve a intentar.");
   }
 }
 
