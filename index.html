@@ -5318,6 +5318,23 @@ function buildSeguimientoDocPayload_(ctx){
       }
     ));
 
+  const seguimientoItems = (Array.isArray(window.__SEG_ROWS) ? window.__SEG_ROWS : [])
+    .slice(0,5)
+    .map(it=>{
+      const evidencia = String(it?.EvidenciaMostrada || "").trim();
+      const cierre = String(it?.CierreAccion || "").trim();
+      return {
+        Fecha: String(it?.Fecha || "").trim(),
+        Fech: String(it?.Fecha || "").trim(),
+        Resultado: String(it?.Resultado || "").trim(),
+        Resul: String(it?.Resultado || "").trim(),
+        EvidenciaSi: evidencia === "Si" ? "✔" : "",
+        EvidenciaNo: evidencia === "No" ? "✔" : "",
+        CierreEfectiva: cierre === "Efectiva" ? "✔" : "",
+        CierreNoEfectiva: cierre === "No efectiva" ? "✔" : ""
+      };
+    });
+
   return {
     CodigoIndicador: codigo,
     AreaResponsable: String(analisis?.AreaResponsable || ficha?.AreaResponsable || ""),
@@ -5341,6 +5358,8 @@ function buildSeguimientoDocPayload_(ctx){
     FirmaResponsableDataUrl: String(snapshot?.FirmaResponsableDataUrl || analisis?.FirmaResponsableDataUrl || ""),
     Evidencias: evidencias,
     Propuestas: propuestas,
+    VerificadorAcciones: String($("s_Verificador")?.value || "").trim(),
+    SeguimientoItems: seguimientoItems,
     FillSeguimiento: true,
     LlenarSeguimiento: true,
     PreviewOnly: true,
