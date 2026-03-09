@@ -90,7 +90,7 @@
      forzar un valor concreto o usar DEMO.
 =========================== */
 // principal: la URL del web‑app (se evalúa en runtime)
-let SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbzVDDgCY2eARDN7xZ-3T-0dw_213djDJkgFGPaFZsU9pcCD91rgKy6WxlAnLIOiZqMwkg/exec";
+let SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbwlLBTcl-wzMudisIkfDE-rCX1PfnDQ_DaiCEaRiQ9y7w7jqmWimytpL-4ekz1LVlEiTg/exec";
 const CONFIG_KEY_WEBAPP_URL = "CONFIG_SHEETS_WEBAPP_URL";
 
 function getSavedWebAppUrl(){
@@ -830,6 +830,7 @@ function demoApi(action, payload){
   }
 
   // propuestas
+  if(action==="prop.list") return ok_(prop);
   if(action==="prop.upsertMany"){
     const { CodigoIndicador, PeriodoYM, Items } = payload || {};
     if(!CodigoIndicador || !PeriodoYM) return fail_("Falta clave propuestas");
@@ -1169,9 +1170,10 @@ const CACHE = {
 };
 
 async function loadAll(){
-  const [f, a, d, s] = await Promise.all([
+  const [f, a, p, d, s] = await Promise.all([
     apiFetch("fichas.list"),
     apiFetch("analisis.list"),
+    apiFetch("prop.list"),
     apiFetch("docs.list"),
     apiFetch("seg.list")
   ]);
@@ -1202,6 +1204,17 @@ async function loadAll(){
       PeriodoLabel: String(r?.PeriodoLabel || "").trim() || periodoHuman(String(r?.PeriodoYM || r?.periodo || "").trim()),
       WEB_SNAPSHOT: safeJsonParse_(r.WEB_SNAPSHOT, r.WEB_SNAPSHOT || null)
     })) : [];
+  CACHE.prop = p.ok ? (p.data||[]).map(x=>(
+    {
+      ...x,
+      CodigoIndicador: String(x?.CodigoIndicador || "").trim(),
+      PeriodoYM: String(x?.PeriodoYM || "").trim(),
+      Index: Number(x?.Index || 0) || 0,
+      Accion: String(x?.Accion || "").trim(),
+      Responsable: String(x?.Responsable || "").trim(),
+      FechaCompromiso: String(x?.FechaCompromiso || "").trim()
+    }
+  )) : [];
   CACHE.docs = d.ok ? (d.data||[]).map(x=>({
     ...x,
     TipoDocumento: x.TipoDocumento || x.Tipo || "Otro",
@@ -4991,8 +5004,16 @@ function getSegByCodigoPeriodo_(codigo, periodoYM){
 
 function getPropuestasFromAnalisisSnapshot_(analisisRow){
   const snap = analisisRow?.WEB_SNAPSHOT;
-  const arr = Array.isArray(snap?.Propuestas) ? snap.Propuestas : [];
-  return arr.slice(0,5).map(x=>(
+  const fromSnapshot = Array.isArray(snap?.Propuestas) ? snap.Propuestas : [];
+  const codigo = String(analisisRow?.CodigoIndicador || "").trim();
+  const periodo = String(analisisRow?.PeriodoYM || "").trim();
+  let arr = fromSnapshot;
+  if(!arr.length && codigo && periodo){
+    arr = (CACHE.prop || [])
+      .filter(x=>String(x?.CodigoIndicador || "") === codigo && String(x?.PeriodoYM || "") === periodo)
+      .sort((a,b)=> Number(a?.Index || 0) - Number(b?.Index || 0));
+  }
+  return (Array.isArray(arr) ? arr : []).slice(0,5).map(x=>(
     {
       Accion: String(x?.Accion || "").trim(),
       Responsable: String(x?.Responsable || "").trim(),
@@ -5005,9 +5026,13 @@ function buildSeguimientoRowsFromExisting_(existing, propuestas){
   const baseCount = Math.max(1, Math.min(5, propuestas.length || 1));
   const existingItems = Array.isArray(existing?.Items) ? existing.Items.slice(0,5) : [];
   const rows = [];
+  const pickDate_ = (item)=> String(item?.Fecha || item?.Fech || "").trim();
+  const pickRes_ = (item)=> String(item?.Resultado || item?.Resul || "").trim();
   const resolveSiNo_ = (item)=>{
     const direct = String(item?.EvidenciaMostrada || "").trim();
     if(direct === "Si" || direct === "No") return direct;
+    if(/^si$/i.test(direct) || /^sí$/i.test(direct)) return "Si";
+    if(/^no$/i.test(direct)) return "No";
     if(String(item?.EvidenciaSi || "").trim()) return "Si";
     if(String(item?.EvidenciaNo || "").trim()) return "No";
     return "";
@@ -5022,8 +5047,8 @@ function buildSeguimientoRowsFromExisting_(existing, propuestas){
   for(let i=0; i<baseCount; i++){
     const ex = existingItems[i] || {};
     rows.push({
-      Fecha: String(ex?.Fecha || ""),
-      Resultado: String(ex?.Resultado || ""),
+      Fecha: pickDate_(ex),
+      Resultado: pickRes_(ex),
       EvidenciaMostrada: resolveSiNo_(ex),
       CierreAccion: resolveCierre_(ex)
     });
@@ -5031,8 +5056,8 @@ function buildSeguimientoRowsFromExisting_(existing, propuestas){
   if(existingItems.length > rows.length){
     existingItems.slice(rows.length, 5).forEach(ex=>{
       rows.push({
-        Fecha: String(ex?.Fecha || ""),
-        Resultado: String(ex?.Resultado || ""),
+        Fecha: pickDate_(ex),
+        Resultado: pickRes_(ex),
         EvidenciaMostrada: resolveSiNo_(ex),
         CierreAccion: resolveCierre_(ex)
       });
@@ -5225,13 +5250,22 @@ function validateSeguimiento(){
   const rows = (window.__SEG_ROWS||[]);
   if(!rows.length) return fail_("Agrega al menos 1 seguimiento.");
 
-  // valida que todos los campos requeridos por fila estén completos
+  // regla: al menos 1 fila completa; filas adicionales son opcionales,
+  // pero si se empieza una fila, debe quedar completa.
+  let completeCount = 0;
   for(const r of rows){
-    if(!(r.Fecha||"").trim()) return fail_("Falta fecha en un seguimiento.");
-    if(!(r.Resultado||"").trim()) return fail_("Falta resultado en un seguimiento.");
-    if(!(r.EvidenciaMostrada||"").trim()) return fail_("Falta indicar si se mostró evidencia (Si/No).");
-    if(!(r.CierreAccion||"").trim()) return fail_("Falta cierre de la acción (Efectiva/No efectiva).");
+    const fecha = (r?.Fecha||"").trim();
+    const res = (r?.Resultado||"").trim();
+    const evid = (r?.EvidenciaMostrada||"").trim();
+    const cierre = (r?.CierreAccion||"").trim();
+    const hasAny = !!(fecha || res || evid || cierre);
+    const full = !!(fecha && res && evid && cierre);
+    if(hasAny && !full){
+      return fail_("Si capturas una fila de seguimiento, completa Fecha, Resultado, Evidencia y Cierre.");
+    }
+    if(full) completeCount++;
   }
+  if(completeCount < 1) return fail_("Captura al menos 1 seguimiento completo.");
   return ok_(true);
 }
 
