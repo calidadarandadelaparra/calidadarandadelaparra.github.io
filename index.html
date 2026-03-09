@@ -4931,7 +4931,7 @@ function renderSeguimiento(){
 
             <div class="flex flex-wrap gap-2">
               <button id="btnSSave" class="btn btn-primary">Guardar seguimiento</button>
-              <button id="btnSPDF" class="btn btn-soft">Generar documento (Vista PDF)</button>
+              <button id="btnSPDF" class="btn btn-soft">Generar vista previa del Word-PDF</button>
               <button id="btnSClose" class="btn btn-soft">Cerrar</button>
             </div>
 
@@ -4952,7 +4952,7 @@ function renderSeguimiento(){
   $("btnSClose").addEventListener("click", ()=>$("s_Form").classList.add("hidden"));
   $("btnSAdd").addEventListener("click", ()=>addSegRow());
   $("btnSSave").addEventListener("click", ()=>saveSeguimiento());
-  $("btnSPDF").addEventListener("click", ()=>openSeguimientoPreviewPDF());
+  $("btnSPDF").addEventListener("click", ()=>generateSeguimientoPreviewDoc());
 }
 
 function getUltimoAnalisisPorCodigo(){
@@ -5215,12 +5215,16 @@ function validateSeguimiento(){
   return ok_(true);
 }
 
-async function saveSeguimiento(){
+async function saveSeguimiento(opts){
+  opts = opts || {};
   const v = validateSeguimiento();
-  if(!v.ok) return toast("err","No se puede guardar", v.message);
+  if(!v.ok){
+    if(!opts.silentToast) toast("err","No se puede guardar", v.message);
+    return false;
+  }
 
   const ctx = window.__SEG_CTX;
-  if(!ctx) return;
+  if(!ctx) return false;
 
   const rec = {
     Key: ctx.key,
@@ -5233,70 +5237,139 @@ async function saveSeguimiento(){
   };
 
   const r = await apiFetch("seg.upsert", rec);
-  if(!r.ok) return toast("err","Error", r.message||"No se guardó");
+  if(!r.ok){
+    if(!opts.silentToast) toast("err","Error", r.message||"No se guardó");
+    return false;
+  }
 
-  await loadAll();
+  // reflejo local para no depender de recarga completa
+  CACHE.seg = CACHE.seg || [];
+  const idx = CACHE.seg.findIndex(x => String(x?.Key || "") === String(rec.Key || ""));
+  if(idx >= 0) CACHE.seg[idx] = { ...(CACHE.seg[idx] || {}), ...rec };
+  else CACHE.seg.push(rec);
+
+  if(!opts.skipReload){
+    await loadAll();
+  }
   buildNoCumplenTable();
-  $("s_SaveMsg").classList.remove("hidden");
-  toast("ok","Guardado","Seguimiento guardado correctamente.");
+
+  if(!opts.silentSaveMsg){
+    $("s_SaveMsg").classList.remove("hidden");
+  }
+  if(!opts.silentToast){
+    toast("ok","Guardado","Seguimiento guardado correctamente.");
+  }
+  return true;
 }
 
-function openSeguimientoPreviewPDF(){
+function buildSeguimientoDocPayload_(ctx){
+  const codigo = String(ctx?.codigo || "");
+  const periodoYM = String(ctx?.periodoYM || "");
+  const ficha = fichaByCodigo(codigo) || {};
+  const analisis = getAnalisisByCodigoPeriodo_(codigo, periodoYM) || {};
+  const snapshot = analisis?.WEB_SNAPSHOT && typeof analisis.WEB_SNAPSHOT === "object"
+    ? analisis.WEB_SNAPSHOT
+    : safeJsonParse_(analisis?.WEB_SNAPSHOT, {}) || {};
+
+  const evidencias = Array.isArray(analisis?.Evidencias)
+    ? analisis.Evidencias
+    : (Array.isArray(snapshot?.Evidencias) ? snapshot.Evidencias : []);
+
+  const propuestas = (Array.isArray(ctx?.propuestas) ? ctx.propuestas : [])
+    .slice(0,5)
+    .map(x=>(
+      {
+        Accion: String(x?.Accion || "").trim(),
+        Responsable: String(x?.Responsable || "").trim(),
+        FechaCompromiso: String(x?.FechaCompromiso || "").trim()
+      }
+    ));
+
+  return {
+    CodigoIndicador: codigo,
+    AreaResponsable: String(analisis?.AreaResponsable || ficha?.AreaResponsable || ""),
+    AreaLabel: getAreaLabel(String(analisis?.AreaResponsable || ficha?.AreaResponsable || "")),
+    NombreIndicador: String(ficha?.NombreIndicador || ""),
+    TipoIndicador: String(ficha?.TipoIndicador || ""),
+    Objetivo: String(ficha?.ObjetivoIndicador || ""),
+    PeriodoYM: periodoYM,
+    PeriodoLabel: String(analisis?.PeriodoLabel || periodoHuman(periodoYM)),
+    Periodo: String(analisis?.PeriodoLabel || periodoHuman(periodoYM)),
+    NumValor: Number(analisis?.NumValor ?? snapshot?.NumValor ?? 0),
+    DenValor: Number(analisis?.DenValor ?? snapshot?.DenValor ?? 0),
+    ResultadoObtenido: Number(analisis?.ResultadoObtenido ?? snapshot?.ResultadoObtenido ?? snapshot?.Resultado ?? 0),
+    Resultado: Number(analisis?.ResultadoObtenido ?? snapshot?.ResultadoObtenido ?? snapshot?.Resultado ?? 0),
+    MetaObjetivo: Number(analisis?.MetaObjetivo ?? ficha?.MetaObjetivo ?? 0),
+    Cumple: false,
+    AnalisisPrincipal: String(snapshot?.AnalisisPrincipal || analisis?.AnalisisPrincipal || analisis?.AnalisisInterpretacion || "").trim(),
+    AnalisisInterpretacion: String(snapshot?.AnalisisPrincipal || analisis?.AnalisisPrincipal || analisis?.AnalisisInterpretacion || "").trim(),
+    GraficoDataUrl: String(snapshot?.GraficoDataUrl || snapshot?.GraficaDataUrl || snapshot?.Grafica || snapshot?.Grafico || ""),
+    Responsable: String(ficha?.ResponsableIndicador || snapshot?.Responsable || ""),
+    FirmaResponsableDataUrl: String(snapshot?.FirmaResponsableDataUrl || analisis?.FirmaResponsableDataUrl || ""),
+    Evidencias: evidencias,
+    Propuestas: propuestas,
+    FillSeguimiento: true,
+    LlenarSeguimiento: true,
+    PreviewOnly: true,
+    WEB_SNAPSHOT: safeJsonStringify_(snapshot, ""),
+    UpdatedAt: nowISO()
+  };
+}
+
+async function generateSeguimientoPreviewDoc(){
   const v = validateSeguimiento();
   if(!v.ok) return toast("err","Faltan datos", v.message);
-  setPdfGenerateAction_(false);
-
   const ctx = window.__SEG_CTX;
-  const f = fichaByCodigo(ctx.codigo);
+  if(!ctx) return toast("err","Error","No hay contexto de seguimiento cargado.");
 
-  $("pdfSub").textContent = `Seguimiento · ${ctx.codigo} · ${periodoHuman(ctx.periodoYM)}`;
+  const btn = $("btnSPDF");
+  const orig = btn?.textContent || "";
+  const preOpened = window.open("about:blank", "_blank");
 
-  const rows = (window.__SEG_ROWS||[]).slice(0,5).map((r,i)=>`
-    <tr class="border-b border-slate-200">
-      <td class="p-2 font-extrabold">${i+1}</td>
-      <td class="p-2">${escapeHtml(r.Fecha)}</td>
-      <td class="p-2">${escapeHtml(r.Resultado)}</td>
-      <td class="p-2">${escapeHtml(r.CierreEfectiva)}</td>
-      <td class="p-2">${escapeHtml(r.EvidenciaSi||"")}</td>
-      <td class="p-2">${escapeHtml(r.EvidenciaNo||"")}</td>
-    </tr>
-  `).join("");
+  try {
+    if(btn){
+      btn.disabled = true;
+      btn.textContent = "Generando…";
+    }
 
-  $("pdfContent").innerHTML = `
-    <div class="space-y-4 print-card">
-      <div class="text-2xl font-extrabold text-navy">${escapeHtml(f?.NombreIndicador||"")}</div>
-      <div class="text-sm text-slate-600">
-        <span class="font-extrabold">Código:</span> ${escapeHtml(ctx.codigo)} ·
-        <span class="font-extrabold">Área:</span> ${escapeHtml(getAreaLabel(f?.AreaResponsable||""))} ·
-        <span class="font-extrabold">Periodo:</span> ${escapeHtml(periodoHuman(ctx.periodoYM))}
-      </div>
+    const saved = await saveSeguimiento({
+      silentToast:true,
+      silentSaveMsg:true,
+      skipReload:true
+    });
+    if(!saved){
+      try { preOpened && !preOpened.closed && preOpened.close(); } catch(_) {}
+      toast("err","Error","No se pudo guardar el seguimiento antes de generar la vista previa.");
+      return;
+    }
 
-      <div class="card">
-        <div class="card-h"><div class="font-extrabold text-navy">Verificador de acciones</div></div>
-        <div class="card-b text-sm text-slate-700">${escapeHtml(($("s_Verificador").value||"").trim())}</div>
-      </div>
+    const payload = buildSeguimientoDocPayload_(ctx);
+    const r = await apiFetch("docs.generarAnalisisFromUI", payload);
+    if(!r.ok){
+      try { preOpened && !preOpened.closed && preOpened.close(); } catch(_) {}
+      toast("err","Error", r.message || "No se pudo generar la vista previa de seguimiento.");
+      return;
+    }
 
-      <div class="card">
-        <div class="card-h"><div class="font-extrabold text-navy">Registros de seguimiento</div></div>
-        <div class="card-b">
-          <table class="w-full text-sm">
-            <thead>
-              <tr class="text-left text-xs text-slate-500 border-b border-slate-200">
-                <th class="p-2">#</th>
-                <th class="p-2">Fecha</th>
-                <th class="p-2">Resultado</th>
-                <th class="p-2">Cierre efectiva</th>
-                <th class="p-2">Evidencia SI</th>
-                <th class="p-2">Evidencia NO</th>
-              </tr>
-            </thead>
-            <tbody>${rows}</tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  `;
-  $("pdfModal").classList.remove("hidden");
+    const d = r.data || {};
+    const link = d.linkDocx || "";
+    if(link){
+      if(preOpened && !preOpened.closed) preOpened.location.href = link;
+      else window.open(link, "_blank");
+      toast("ok","Vista previa lista","Seguimiento guardado y documento NO CUMPLE rellenado con propuestas/seguimiento.");
+    } else {
+      try { preOpened && !preOpened.closed && preOpened.close(); } catch(_) {}
+      toast("warn","Sin enlace","Se generó el borrador, pero no llegó el enlace de vista previa.");
+    }
+  } catch(e){
+    try { preOpened && !preOpened.closed && preOpened.close(); } catch(_) {}
+    toast("err","Error de red", String(e));
+  } finally {
+    if(btn){
+      btn.disabled = false;
+      btn.textContent = orig || "Generar vista previa del Word-PDF";
+    }
+  }
 }
 
 /* =========================================================
