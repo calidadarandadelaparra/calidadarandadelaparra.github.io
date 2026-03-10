@@ -90,7 +90,7 @@
      forzar un valor concreto o usar DEMO.
 =========================== */
 // principal: la URL del web‑app (se evalúa en runtime)
-let SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbxmEVWCS7wtS7K_DIUNLwNIvBt8ZRDJaSqAnePsCEQ3Z7tTDTUKBrkYi6a2dCCAQ5a-0Q/exec";
+let SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbzNC9lJO8pAuxKKGOlRFBIGxcyI2WbLBZ5BpcZSnBkXaKIeZN3tsApRfL-kaco8lkC23w/exec";
 const CONFIG_KEY_WEBAPP_URL = "CONFIG_SHEETS_WEBAPP_URL";
 
 function getSavedWebAppUrl(){
@@ -5142,6 +5142,13 @@ function openSeguimientoForm(codigo, periodoYM){
   const key = segKey(codigo, periodoYM);
   const analisis = getAnalisisByCodigoPeriodo_(codigo, periodoYM) || {};
   const propuestas = getPropuestasFromAnalisisSnapshot_(analisis);
+  const analisisId = String(
+    analisis?.ID_ANALISIS ||
+    analisis?.IdAnalisis ||
+    analisis?.AnalisisId ||
+    analisis?.Key ||
+    (codigo && periodoYM ? (codigo + '|' + periodoYM) : '')
+  ).trim();
 
   $("s_Form").classList.remove("hidden");
   $("s_SaveMsg").classList.add("hidden");
@@ -5152,7 +5159,7 @@ function openSeguimientoForm(codigo, periodoYM){
 
   $("s_Verificador").value = existing?.VerificadorAcciones || "";
 
-  window.__SEG_CTX = { codigo, periodoYM, key, propuestas };
+  window.__SEG_CTX = { codigo, periodoYM, key, propuestas, analisisId };
 
   window.__SEG_ROWS = buildSeguimientoRowsFromExisting_(existing, propuestas);
 
@@ -5370,6 +5377,7 @@ function buildSeguimientoDocPayload_(ctx){
     });
 
   return {
+    ID_ANALISIS: String(ctx?.analisisId || (codigo && periodoYM ? (codigo + '|' + periodoYM) : '')).trim(),
     CodigoIndicador: codigo,
     AreaResponsable: String(analisis?.AreaResponsable || ficha?.AreaResponsable || ""),
     AreaLabel: getAreaLabel(String(analisis?.AreaResponsable || ficha?.AreaResponsable || "")),
