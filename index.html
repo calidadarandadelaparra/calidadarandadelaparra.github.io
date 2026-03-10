@@ -4403,6 +4403,24 @@ function drawBars(canvasId, rows){
       lsWrite(LS_KEYS.DOCS, out);
       return ok_({ deletedDoc:true, deletedPdf:true, updatedSheet:true, warnings:[], logs:["DEMO soft-delete"] }, "Registro eliminado");
     }
+    if(action==="explorer.deleteArchivo"){
+      const id = String(payload?.idRegistro || "").trim();
+      const fileKind = String(payload?.fileKind || "").trim().toUpperCase();
+      if(!id) return fail_("Falta idRegistro");
+      if(fileKind !== "WORD" && fileKind !== "PDF") return fail_("fileKind invalido");
+      const docs = lsRead(LS_KEYS.DOCS, []);
+      const hit = docs.find(d => String(d?.Key || "").trim() === id) || null;
+      if(!hit) return fail_("No se encontro registro");
+      const out = docs.map(d => {
+        if(String(d?.Key || "").trim() !== id) return d;
+        if(fileKind === "WORD"){
+          return { ...d, WordUrl:"", Link:"", DocId:"", FileId:"", UpdatedAt: nowISO() };
+        }
+        return { ...d, PdfUrl:"", PdfId:"", UpdatedAt: nowISO() };
+      });
+      lsWrite(LS_KEYS.DOCS, out);
+      return ok_({ deletedFile:true, fileKind:fileKind, updatedSheet:true, warnings:[], logs:["DEMO delete archivo"] }, "Archivo eliminado");
+    }
     return old(action, payload);
   };
 })();
@@ -4416,15 +4434,17 @@ function renderExplorador(){
   sec.innerHTML = `
     <div class="card">
       <div class="card-h">
-        <div class="font-extrabold text-navy text-lg">Explorador (Calidad)</div>
-        <div class="text-sm text-slate-500">Búsqueda por tabs: Fichas Técnicas y Análisis.</div>
+      <div class="font-extrabold text-navy text-lg">Explorador (Calidad)</div>
+      <div class="text-sm text-slate-500">Búsqueda por tabs: lógicos y archivos Word/PDF.</div>
       </div>
 
       <div class="card-b space-y-5">
 
         <div class="flex flex-wrap gap-2">
           <button id="e_TabFichas" class="btn btn-soft">Fichas Técnicas</button>
+          <button id="e_TabFichasFiles" class="btn btn-soft">Fichas técnicas - Word/PDF</button>
           <button id="e_TabAnalisis" class="btn btn-soft">Análisis</button>
+          <button id="e_TabAnalisisFiles" class="btn btn-soft">Análisis - Word/PDF</button>
         </div>
 
         <!-- FILTROS -->
@@ -4576,7 +4596,9 @@ function renderExplorador(){
   $("e_Search").addEventListener("input", ()=>refreshExplorador());
 
   $("e_TabFichas").addEventListener("click", ()=>setExplorerTab_("FichasTecnicas"));
+  $("e_TabFichasFiles").addEventListener("click", ()=>setExplorerTab_("FichasWordPdf"));
   $("e_TabAnalisis").addEventListener("click", ()=>setExplorerTab_("AnalisisIndicador"));
+  $("e_TabAnalisisFiles").addEventListener("click", ()=>setExplorerTab_("AnalisisWordPdf"));
 
   $("btnEApply").addEventListener("click", refreshExplorador);
   $("btnEClear").addEventListener("click", ()=>{
@@ -4594,25 +4616,38 @@ function renderExplorador(){
 }
 
 function setExplorerTab_(tab){
-  window.__EX_TAB = (tab === "AnalisisIndicador") ? "AnalisisIndicador" : "FichasTecnicas";
-  const isFicha = window.__EX_TAB === "FichasTecnicas";
-  $("e_TabFichas")?.classList.toggle("btn-primary", isFicha);
-  $("e_TabFichas")?.classList.toggle("btn-soft", !isFicha);
-  $("e_TabAnalisis")?.classList.toggle("btn-primary", !isFicha);
-  $("e_TabAnalisis")?.classList.toggle("btn-soft", isFicha);
+  const allowed = {
+    FichasTecnicas: true,
+    FichasWordPdf: true,
+    AnalisisIndicador: true,
+    AnalisisWordPdf: true
+  };
+  window.__EX_TAB = allowed[tab] ? tab : "FichasTecnicas";
+  [
+    ["e_TabFichas", "FichasTecnicas"],
+    ["e_TabFichasFiles", "FichasWordPdf"],
+    ["e_TabAnalisis", "AnalisisIndicador"],
+    ["e_TabAnalisisFiles", "AnalisisWordPdf"]
+  ].forEach(([id, key]) => {
+    const active = window.__EX_TAB === key;
+    $(id)?.classList.toggle("btn-primary", active);
+    $(id)?.classList.toggle("btn-soft", !active);
+  });
   refreshExplorador();
+}
+
+function isExplorerAnalisisTab_(tab){
+  return tab === "AnalisisIndicador" || tab === "AnalisisWordPdf";
+}
+
+function isExplorerFilesTab_(tab){
+  return tab === "FichasWordPdf" || tab === "AnalisisWordPdf";
 }
 
 function fillExplorerCodigo(){
   const area = $("e_Area").value;
   const dd = $("e_Codigo");
-  const wantAnalisis = window.__EX_TAB === "AnalisisIndicador";
-  const rows = (CACHE.explorer || [])
-    .filter(r => area ? r.AREA === area : true)
-    .filter(r => wantAnalisis
-      ? /ANALISIS/i.test(String(r.TIPO || ""))
-      : /FICHA/i.test(String(r.TIPO || ""))
-    );
+  const rows = getExplorerRows_().filter(r => area ? r.AreaResponsable === area : true);
 
   const seen = new Set();
   const codigos = rows
@@ -4630,15 +4665,14 @@ function fillExplorerCodigo(){
 }
 
 function getExplorerRows_(){
-  const wantAnalisis = window.__EX_TAB === "AnalisisIndicador";
+  const wantAnalisis = isExplorerAnalisisTab_(window.__EX_TAB);
+  const wantFiles = isExplorerFilesTab_(window.__EX_TAB);
   const rowsRaw = (CACHE.explorer || []);
   const rows = rowsRaw.filter(r => wantAnalisis
     ? /ANALISIS/i.test(String(r.TIPO || ""))
     : /FICHA/i.test(String(r.TIPO || ""))
   );
-  console.log("[GET_EXPLORER_ROWS] tab=", window.__EX_TAB, "rowsAntes=", rowsRaw.length, "rowsDespues=", rows.length);
-
-  return rows.map(r => {
+  const mapped = rows.map(r => {
     const codigo = String(r.CODIGO || "").trim();
     const periodo = String(r.PERIODO || "").trim();
     const analisisData = (CACHE.analisis || []).find(a =>
@@ -4649,7 +4683,7 @@ function getExplorerRows_(){
       String(f?.CodigoIndicador || "").trim() === codigo
     ) || null;
 
-    return {
+    const base = {
       __key: String(r.ID_REGISTRO || "").trim(),
       __recordId: String(r.ID_REGISTRO || "").trim(),
       __type: wantAnalisis ? "AnalisisIndicador" : "FichasTecnicas",
@@ -4659,9 +4693,45 @@ function getExplorerRows_(){
       PeriodoYM: wantAnalisis ? periodo : "",
       PeriodoLabel: wantAnalisis ? periodoHuman(periodo) : "—",
       TIPO: String(r.TIPO || "").trim(),
+      DOC_ID: String(r.DOC_ID || "").trim(),
+      PDF_ID: String(r.PDF_ID || "").trim(),
+      WordUrl: String(r.WordUrl || "").trim(),
+      PdfUrl: String(r.PdfUrl || "").trim(),
+      __deleteMode: "logical",
+      __assetKind: "",
+      __rowTipoLabel: wantAnalisis ? "Análisis" : "Ficha técnica",
       Data: wantAnalisis ? (analisisData || {}) : (fichaData || {})
     };
+
+    if(!wantFiles) return [base];
+
+    const rowsOut = [];
+    if(base.DOC_ID || base.WordUrl){
+      rowsOut.push({
+        ...base,
+        __key: base.__key + "::WORD",
+        Nombre: (base.Nombre || "Registro") + " [WORD]",
+        __deleteMode: "physical",
+        __assetKind: "WORD",
+        __rowTipoLabel: "Archivo Word"
+      });
+    }
+    if(base.PDF_ID || base.PdfUrl){
+      rowsOut.push({
+        ...base,
+        __key: base.__key + "::PDF",
+        Nombre: (base.Nombre || "Registro") + " [PDF]",
+        __deleteMode: "physical",
+        __assetKind: "PDF",
+        __rowTipoLabel: "Archivo PDF"
+      });
+    }
+    return rowsOut;
   });
+
+  const flat = mapped.flat();
+  console.log("[GET_EXPLORER_ROWS] tab=", window.__EX_TAB, "rowsAntes=", rowsRaw.length, "rowsDespues=", flat.length);
+  return flat;
 }
 
 function getActiveDocRecordForRow_(row){
@@ -4718,14 +4788,28 @@ async function recargarExplorador(){
   refreshExplorador();
 }
 
-function confirmarEliminacion(idRegistro, btn){
+function confirmarEliminacion(delRef, btn){
+  const ref = (typeof delRef === "object" && delRef)
+    ? {
+        idRegistro: String(delRef.idRegistro || "").trim(),
+        mode: String(delRef.mode || "logical").trim(),
+        fileKind: String(delRef.fileKind || "").trim().toUpperCase()
+      }
+    : {
+        idRegistro: String(delRef || "").trim(),
+        mode: "logical",
+        fileKind: ""
+      };
+
   const modal = $("confirmDeleteModal");
   const txt = $("confirmDeleteText");
   const btnCancel = $("btnCancelDeleteModal");
   const btnConfirm = $("btnConfirmDeleteModal");
-  if(!modal || !btnConfirm || !btnCancel) return eliminarDocumento(idRegistro, btn);
+  if(!modal || !btnConfirm || !btnCancel) return eliminarDocumento(ref, btn);
 
-  if(txt) txt.textContent = "Esta accion eliminara el registro y enviara sus archivos asociados a la papelera. Deseas continuar?";
+  if(txt) txt.textContent = ref.mode === "physical"
+    ? ("Esta accion eliminara el archivo " + (ref.fileKind || "") + " asociado y actualizara el registro documental. Deseas continuar?")
+    : "Esta accion eliminara el registro y enviara sus archivos asociados a la papelera. Deseas continuar?";
   modal.classList.remove("hidden");
 
   const close = ()=>{
@@ -4737,12 +4821,24 @@ function confirmarEliminacion(idRegistro, btn){
   btnCancel.onclick = close;
   btnConfirm.onclick = async ()=>{
     close();
-    await eliminarDocumento(idRegistro, btn);
+    await eliminarDocumento(ref, btn);
   };
 }
 
-async function eliminarDocumento(idRegistro, btn){
-  const id = String(idRegistro || "").trim();
+async function eliminarDocumento(delRef, btn){
+  const ref = (typeof delRef === "object" && delRef)
+    ? {
+        idRegistro: String(delRef.idRegistro || "").trim(),
+        mode: String(delRef.mode || "logical").trim(),
+        fileKind: String(delRef.fileKind || "").trim().toUpperCase()
+      }
+    : {
+        idRegistro: String(delRef || "").trim(),
+        mode: "logical",
+        fileKind: ""
+      };
+
+  const id = ref.idRegistro;
   if(!id){
     mostrarToast("No se encontro el ID unico del registro para eliminar.", "err");
     return;
@@ -4754,10 +4850,15 @@ async function eliminarDocumento(idRegistro, btn){
     button.disabled = true;
     button.textContent = "Eliminando...";
   }
-  mostrarLoaderEliminacion("Eliminando documento...");
+  mostrarLoaderEliminacion(ref.mode === "physical" ? "Eliminando archivo..." : "Eliminando documento...");
 
   try {
-    const r = await apiFetch("explorer.deleteRegistro", { idRegistro: id });
+    const isPhysical = ref.mode === "physical";
+    const action = isPhysical ? "explorer.deleteArchivo" : "explorer.deleteRegistro";
+    const payload = isPhysical
+      ? { idRegistro: id, fileKind: ref.fileKind }
+      : { idRegistro: id };
+    const r = await apiFetch(action, payload);
     if(!r?.ok){
       mostrarToast(r?.message || "No se pudo eliminar el registro.", "err");
       return;
@@ -4767,7 +4868,7 @@ async function eliminarDocumento(idRegistro, btn){
     if(warn.length){
       mostrarToast("Registro eliminado con advertencias. Revisa logs del backend.", "warn");
     } else {
-      mostrarToast("Registro eliminado correctamente.", "ok");
+      mostrarToast(isPhysical ? "Archivo eliminado correctamente." : "Registro eliminado correctamente.", "ok");
     }
 
     await recargarExplorador();
@@ -4819,13 +4920,21 @@ function renderExplorerDetail_(row){
   if(links.pdf) actions.push(`<a href="${links.pdf}" target="_blank" class="btn btn-soft">Abrir PDF</a>`);
   if(links.carpeta) actions.push(`<a href="${links.carpeta}" target="_blank" class="btn btn-soft">Abrir Carpeta</a>`);
   if(docRecord?.Key){
-    actions.push(`<button class="btn btn-danger" id="btnExplorerDeleteNow" data-recordid="${escapeHtml(docRecord.Key)}">Eliminar</button>`);
+    if(row?.__deleteMode === "physical" && row?.__assetKind){
+      actions.push(`<button class="btn btn-danger" id="btnExplorerDeleteNow" data-recordid="${escapeHtml(docRecord.Key)}" data-delmode="physical" data-filekind="${escapeHtml(row.__assetKind)}">Eliminar ${escapeHtml(row.__assetKind)}</button>`);
+    } else {
+      actions.push(`<button class="btn btn-danger" id="btnExplorerDeleteNow" data-recordid="${escapeHtml(docRecord.Key)}" data-delmode="logical">Eliminar</button>`);
+    }
   }
   $("e_DetailActions").innerHTML = actions.join("") || `<span class="text-xs text-slate-400">Sin links disponibles para este registro.</span>`;
 
   const delBtn = $("btnExplorerDeleteNow");
   if(delBtn){
-    delBtn.onclick = ()=>confirmarEliminacion(delBtn.getAttribute("data-recordid") || "", delBtn);
+    delBtn.onclick = ()=>confirmarEliminacion({
+      idRegistro: delBtn.getAttribute("data-recordid") || "",
+      mode: delBtn.getAttribute("data-delmode") || "logical",
+      fileKind: delBtn.getAttribute("data-filekind") || ""
+    }, delBtn);
   }
 }
 
@@ -4842,7 +4951,7 @@ function refreshExplorador(){
   const rowsBeforeFilters = rows.length;
   if(area) rows = rows.filter(r=>r.AreaResponsable===area);
   if(codigo) rows = rows.filter(r=>r.CodigoIndicador===codigo);
-  if(per && window.__EX_TAB === "AnalisisIndicador") rows = rows.filter(r=>r.PeriodoYM===per);
+  if(per && isExplorerAnalisisTab_(window.__EX_TAB)) rows = rows.filter(r=>r.PeriodoYM===per);
   if(q){
     rows = rows.filter(r=>{
       const txt = [
@@ -4850,7 +4959,8 @@ function refreshExplorador(){
         r.PeriodoLabel,
         r.Data?.NombreIndicador,
         r.Data?.AnalisisInterpretacion,
-        r.Data?.ObjetivoIndicador
+        r.Data?.ObjetivoIndicador,
+        r.__assetKind
       ].map(x=>String(x||"").toLowerCase()).join(" ");
       return txt.includes(q);
     });
@@ -4884,11 +4994,11 @@ function refreshExplorador(){
         <td class="p-2">${escapeHtml(r.CodigoIndicador||"")}</td>
         <td class="p-2">${escapeHtml(getAreaLabel(r.AreaResponsable||""))}</td>
         <td class="p-2">${escapeHtml(r.PeriodoLabel || "—")}</td>
-        <td class="p-2">${escapeHtml(window.__EX_TAB === "AnalisisIndicador" ? "Análisis" : "Ficha técnica")}</td>
+        <td class="p-2">${escapeHtml(r.__rowTipoLabel || (isExplorerAnalisisTab_(window.__EX_TAB) ? "Análisis" : "Ficha técnica"))}</td>
         <td class="p-2">
           <button class="btn btn-soft" data-detail="${escapeHtml(r.__key)}">Ver detalle</button>
           <button class="btn btn-soft" data-preview="${escapeHtml(r.__key)}">Vista previa</button>
-          <button class="btn btn-danger" data-del="${escapeHtml(r.__key)}" data-recordid="${escapeHtml(r.__recordId || "")}" ${r.__recordId ? "" : "disabled"}>Eliminar</button>
+          <button class="btn btn-danger" data-del="${escapeHtml(r.__key)}" data-recordid="${escapeHtml(r.__recordId || "")}" data-delmode="${escapeHtml(r.__deleteMode || "logical")}" data-filekind="${escapeHtml(r.__assetKind || "")}" ${r.__recordId ? "" : "disabled"}>Eliminar</button>
         </td>
       </tr>
     `;
@@ -4908,7 +5018,9 @@ function refreshExplorador(){
       const row = rows.find(x=>x.__key===key);
       if(!row) return;
       const links = getDocLinksForRow_(row);
-      const url = links.word || links.pdf;
+      const url = row.__assetKind === "PDF"
+        ? (links.pdf || links.word)
+        : (row.__assetKind === "WORD" ? (links.word || links.pdf) : (links.word || links.pdf));
       if(url) window.open(url, "_blank");
       else toast("warn","Sin vista previa","No hay documento de vista previa para este registro.");
     });
@@ -4921,7 +5033,11 @@ function refreshExplorador(){
         mostrarToast("No hay documento activo para eliminar en este registro.", "warn");
         return;
       }
-      confirmarEliminacion(idRegistro, b);
+      confirmarEliminacion({
+        idRegistro,
+        mode: b.getAttribute("data-delmode") || "logical",
+        fileKind: b.getAttribute("data-filekind") || ""
+      }, b);
     });
   });
 
