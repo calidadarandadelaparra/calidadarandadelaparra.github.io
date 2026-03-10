@@ -283,6 +283,10 @@ function periodoHuman(ym){
   return `${MESES[m-1]} ${y}`;
 }
 
+function isDeletedStatus_(value){
+  return String(value || "").trim().toUpperCase() === "ELIMINADO";
+}
+
 function toNumLoose_(value){
   if(value == null) return NaN;
   const raw = String(value).trim();
@@ -1166,20 +1170,24 @@ const CACHE = {
   analisis: [],
   prop: [],
   docs: [],
-  seg: []
+  seg: [],
+  explorer: []
 };
 
 async function loadAll(){
-  const [f, a, p, d, s] = await Promise.all([
+  const [f, a, p, d, s, e] = await Promise.all([
     apiFetch("fichas.list"),
     apiFetch("analisis.list"),
     apiFetch("prop.list"),
     apiFetch("docs.list"),
-    apiFetch("seg.list")
+    apiFetch("seg.list"),
+    apiFetch("explorer.listRegistros")
   ]);
 
   // map ficha rows to new property names (and parse JSON lists)
-  CACHE.fichas = f.ok ? (f.data||[]).map(r=>{
+  CACHE.fichas = f.ok ? (f.data||[])
+    .filter(r => !isDeletedStatus_(r?.Status || r?.status || r?.ESTADO || r?.Estado))
+    .map(r=>{
     const out = Object.assign({}, r);
     // migrate old -> new
     out.FormulaEtiqueta = out.FormulaEtiqueta || out.Etiqueta || "";
@@ -1215,18 +1223,46 @@ async function loadAll(){
       FechaCompromiso: String(x?.FechaCompromiso || "").trim()
     }
   )) : [];
-  CACHE.docs = d.ok ? (d.data||[]).map(x=>({
-    ...x,
-    TipoDocumento: x.TipoDocumento || x.Tipo || "Otro",
-    DocName: x.DocName || x.Nombre || "",
-    WordUrl: x.WordUrl || x.Link || "",
-    PdfUrl: x.PdfUrl || "",
-    FileId: x.FileId || x.Key || ""
-  })) : [];
+  CACHE.docs = d.ok ? (()=>{
+    const src = (d.data||[])
+      .filter(x => !isDeletedStatus_(x?.Status || x?.status || x?.ESTADO || x?.Estado));
+    const seen = new Set();
+    return src.filter(x=>{
+      const key = String(x?.Key || x?.ID_REGISTRO || "").trim();
+      if(!key) return false;
+      if(seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    }).map(x=>(
+      {
+        ...x,
+        TipoDocumento: x.TipoDocumento || x.Tipo || "Otro",
+        DocName: x.DocName || x.Nombre || "",
+        WordUrl: x.WordUrl || x.Link || "",
+        PdfUrl: x.PdfUrl || "",
+        FileId: x.FileId || x.Key || ""
+      }
+    ));
+  })() : [];
   CACHE.seg = s.ok ? (s.data||[]).map(x=>({
     ...x,
     Items: Array.isArray(x?.Items) ? x.Items : safeJsonParse_(x?.Items, x?.Items || [])
   })) : [];
+
+  CACHE.explorer = e.ok ? (e.data || []).map(x => ({
+    ID_REGISTRO: String(x?.ID_REGISTRO || "").trim(),
+    TIPO: String(x?.TIPO || "").trim(),
+    CODIGO: String(x?.CODIGO || "").trim(),
+    AREA: String(x?.AREA || "").trim(),
+    PERIODO: String(x?.PERIODO || "").trim(),
+    ESTADO: String(x?.ESTADO || "").trim(),
+    FECHA_ELIMINACION: String(x?.FECHA_ELIMINACION || "").trim(),
+    DOC_ID: String(x?.DOC_ID || "").trim(),
+    PDF_ID: String(x?.PDF_ID || "").trim(),
+    WordUrl: String(x?.WordUrl || "").trim(),
+    PdfUrl: String(x?.PdfUrl || "").trim(),
+    Nombre: String(x?.Nombre || "").trim()
+  })).filter(x => x.ID_REGISTRO && !isDeletedStatus_(x.ESTADO)) : [];
 
   fillAreaSelects();
 }
@@ -4351,6 +4387,18 @@ function drawBars(canvasId, rows){
       lsWrite(LS_KEYS.SEG, out);
       return ok_(true, "Registro eliminado");
     }
+    if(action==="explorer.deleteRegistro"){
+      const id = String(payload?.idRegistro || "").trim();
+      if(!id) return fail_("Falta idRegistro");
+      const docs = lsRead(LS_KEYS.DOCS, []);
+      const hit = docs.find(d => String(d?.Key || "").trim() === id) || null;
+      if(!hit) return fail_("No se encontro registro");
+      const out = docs.map(d => String(d?.Key || "").trim() === id
+        ? { ...d, Status:"ELIMINADO", FECHA_ELIMINACION: nowISO(), UpdatedAt: nowISO() }
+        : d);
+      lsWrite(LS_KEYS.DOCS, out);
+      return ok_({ deletedDoc:true, deletedPdf:true, updatedSheet:true, warnings:[], logs:["DEMO soft-delete"] }, "Registro eliminado");
+    }
     return old(action, payload);
   };
 })();
@@ -4482,6 +4530,31 @@ function renderExplorador(){
           </div>
         </div>
 
+        <div id="confirmDeleteModal" class="hidden fixed inset-0 z-[9998] bg-slate-900/50 p-4">
+          <div class="mx-auto mt-28 w-full max-w-lg rounded-2xl border border-slate-200 bg-white shadow-xl">
+            <div class="px-5 py-4 border-b border-slate-100">
+              <div class="font-extrabold text-slate-800">Confirmar eliminacion</div>
+              <div id="confirmDeleteText" class="text-sm text-slate-600 mt-1">Esta accion enviara archivos a la papelera y marcara el registro como ELIMINADO.</div>
+            </div>
+            <div class="px-5 py-4 flex items-center justify-end gap-2">
+              <button id="btnCancelDeleteModal" class="btn btn-soft">Cancelar</button>
+              <button id="btnConfirmDeleteModal" class="btn btn-danger">Eliminar</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="deleteLoaderOverlay" class="hidden fixed inset-0 z-[9999] bg-slate-900/45 p-4">
+          <div class="mx-auto mt-36 w-full max-w-sm rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-xl">
+            <div class="flex items-center gap-3">
+              <div class="h-6 w-6 rounded-full border-4 border-slate-200 border-t-sky-500 animate-spin"></div>
+              <div>
+                <div class="font-extrabold text-slate-800">Procesando</div>
+                <div id="deleteLoaderText" class="text-sm text-slate-600">Eliminando documento...</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
       </div>
     </div>
   `;
@@ -4529,60 +4602,178 @@ function setExplorerTab_(tab){
 function fillExplorerCodigo(){
   const area = $("e_Area").value;
   const dd = $("e_Codigo");
-  const fichas = area ? fichasByArea(area) : (CACHE.fichas||[]);
-  dd.innerHTML = `<option value="">Todos</option>` + fichas
-    .sort((a,b)=>(a.CodigoIndicador||"").localeCompare(b.CodigoIndicador||""))
-    .map(f=>`<option value="${escapeHtml(f.CodigoIndicador)}">${escapeHtml(f.CodigoIndicador)} · ${escapeHtml(f.NombreIndicador||"")}</option>`).join("");
+  const wantAnalisis = window.__EX_TAB === "AnalisisIndicador";
+  const rows = (CACHE.explorer || [])
+    .filter(r => area ? r.AREA === area : true)
+    .filter(r => wantAnalisis
+      ? /ANALISIS/i.test(String(r.TIPO || ""))
+      : /FICHA/i.test(String(r.TIPO || ""))
+    );
+
+  const seen = new Set();
+  const codigos = rows
+    .map(r => String(r.CODIGO || "").trim())
+    .filter(Boolean)
+    .filter(c => {
+      if(seen.has(c)) return false;
+      seen.add(c);
+      return true;
+    })
+    .sort((a,b)=>a.localeCompare(b));
+
+  dd.innerHTML = `<option value="">Todos</option>` + codigos
+    .map(c=>`<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join("");
 }
 
 function getExplorerRows_(){
-  if(window.__EX_TAB === "AnalisisIndicador"){
-    return (CACHE.analisis||[]).map(a=>({
-      __key: `A-${a.CodigoIndicador}-${a.PeriodoYM}`,
-      __type: "AnalisisIndicador",
-      Nombre: "Análisis",
-      CodigoIndicador: a.CodigoIndicador,
-      AreaResponsable: a.AreaResponsable,
-      PeriodoYM: a.PeriodoYM,
-      PeriodoLabel: periodoHuman(a.PeriodoYM),
-      Data: a
-    }));
+  const wantAnalisis = window.__EX_TAB === "AnalisisIndicador";
+  const rows = (CACHE.explorer || []).filter(r => wantAnalisis
+    ? /ANALISIS/i.test(String(r.TIPO || ""))
+    : /FICHA/i.test(String(r.TIPO || ""))
+  );
+
+  return rows.map(r => {
+    const codigo = String(r.CODIGO || "").trim();
+    const periodo = String(r.PERIODO || "").trim();
+    const analisisData = (CACHE.analisis || []).find(a =>
+      String(a?.CodigoIndicador || "").trim() === codigo &&
+      String(a?.PeriodoYM || "").trim() === periodo
+    ) || null;
+    const fichaData = (CACHE.fichas || []).find(f =>
+      String(f?.CodigoIndicador || "").trim() === codigo
+    ) || null;
+
+    return {
+      __key: String(r.ID_REGISTRO || "").trim(),
+      __recordId: String(r.ID_REGISTRO || "").trim(),
+      __type: wantAnalisis ? "AnalisisIndicador" : "FichasTecnicas",
+      Nombre: String(r.Nombre || (wantAnalisis ? "Análisis" : "Ficha técnica") || "Registro").trim(),
+      CodigoIndicador: codigo,
+      AreaResponsable: String(r.AREA || "").trim(),
+      PeriodoYM: wantAnalisis ? periodo : "",
+      PeriodoLabel: wantAnalisis ? periodoHuman(periodo) : "—",
+      TIPO: String(r.TIPO || "").trim(),
+      Data: wantAnalisis ? (analisisData || {}) : (fichaData || {})
+    };
+  });
+}
+
+function getActiveDocRecordForRow_(row){
+  const docs = (CACHE.docs || []).filter(x => !isDeletedStatus_(x?.Status || x?.status || x?.ESTADO || x?.Estado));
+  const byId = docs.find(x => String(x?.Key || "").trim() === String(row?.__recordId || "").trim());
+  if(byId) return byId;
+  let matches = [];
+  if(row.__type === "AnalisisIndicador"){
+    matches = docs.filter(x =>
+      (x.TipoDocumento === "AnalisisIndicador") &&
+      x.CodigoIndicador === row.CodigoIndicador &&
+      String(x.PeriodoYM || "") === String(row.PeriodoYM || "")
+    );
+  } else {
+    matches = docs.filter(x =>
+      (x.TipoDocumento === "FichaTecnica") &&
+      x.CodigoIndicador === row.CodigoIndicador
+    );
   }
-  return (CACHE.fichas||[]).map(f=>({
-    __key: `F-${f.CodigoIndicador}`,
-    __type: "FichasTecnicas",
-    Nombre: "Ficha técnica",
-    CodigoIndicador: f.CodigoIndicador,
-    AreaResponsable: f.AreaResponsable,
-    PeriodoYM: "",
-    PeriodoLabel: "—",
-    Data: f
-  }));
+  if(!matches.length) return null;
+  matches.sort((a,b)=> String(b.UpdatedAt || "").localeCompare(String(a.UpdatedAt || "")));
+  return matches[0];
 }
 
 function getDocLinksForRow_(row){
-  const docs = (CACHE.docs||[]);
-  if(row.__type === "AnalisisIndicador"){
-    const d = docs.find(x=>
-      (x.TipoDocumento === "AnalisisIndicador") &&
-      x.CodigoIndicador === row.CodigoIndicador &&
-      String(x.PeriodoYM||"") === String(row.PeriodoYM||"")
-    ) || null;
-    return {
-      word: d?.WordUrl || d?.Link || "",
-      pdf: d?.PdfUrl || "",
-      carpeta: d?.CarpetaUrl || d?.FolderUrl || ""
-    };
-  }
-  const d = docs.find(x=>
-    (x.TipoDocumento === "FichaTecnica") &&
-    x.CodigoIndicador === row.CodigoIndicador
-  ) || null;
+  const d = getActiveDocRecordForRow_(row);
   return {
     word: d?.WordUrl || d?.Link || "",
     pdf: d?.PdfUrl || "",
     carpeta: d?.CarpetaUrl || d?.FolderUrl || ""
   };
+}
+
+function mostrarToast(mensaje, tipo){
+  const t = (tipo === "ok" || tipo === "warn") ? tipo : "err";
+  const title = t === "ok" ? "Correcto" : (t === "warn" ? "Aviso" : "Error");
+  toast(t, title, mensaje || "");
+}
+
+function mostrarLoaderEliminacion(texto){
+  const box = $("deleteLoaderOverlay");
+  const txt = $("deleteLoaderText");
+  if(txt) txt.textContent = texto || "Eliminando documento...";
+  if(box) box.classList.remove("hidden");
+}
+
+function ocultarLoaderEliminacion(){
+  const box = $("deleteLoaderOverlay");
+  if(box) box.classList.add("hidden");
+}
+
+async function recargarExplorador(){
+  await loadAll();
+  refreshExplorador();
+}
+
+function confirmarEliminacion(idRegistro, btn){
+  const modal = $("confirmDeleteModal");
+  const txt = $("confirmDeleteText");
+  const btnCancel = $("btnCancelDeleteModal");
+  const btnConfirm = $("btnConfirmDeleteModal");
+  if(!modal || !btnConfirm || !btnCancel) return eliminarDocumento(idRegistro, btn);
+
+  if(txt) txt.textContent = "Esta accion eliminara el registro y enviara sus archivos asociados a la papelera. Deseas continuar?";
+  modal.classList.remove("hidden");
+
+  const close = ()=>{
+    modal.classList.add("hidden");
+    btnConfirm.onclick = null;
+    btnCancel.onclick = null;
+  };
+
+  btnCancel.onclick = close;
+  btnConfirm.onclick = async ()=>{
+    close();
+    await eliminarDocumento(idRegistro, btn);
+  };
+}
+
+async function eliminarDocumento(idRegistro, btn){
+  const id = String(idRegistro || "").trim();
+  if(!id){
+    mostrarToast("No se encontro el ID unico del registro para eliminar.", "err");
+    return;
+  }
+
+  const button = btn || null;
+  const originalText = button ? button.textContent : "";
+  if(button){
+    button.disabled = true;
+    button.textContent = "Eliminando...";
+  }
+  mostrarLoaderEliminacion("Eliminando documento...");
+
+  try {
+    const r = await apiFetch("explorer.deleteRegistro", { idRegistro: id });
+    if(!r?.ok){
+      mostrarToast(r?.message || "No se pudo eliminar el registro.", "err");
+      return;
+    }
+
+    const warn = Array.isArray(r.warnings) ? r.warnings : [];
+    if(warn.length){
+      mostrarToast("Registro eliminado con advertencias. Revisa logs del backend.", "warn");
+    } else {
+      mostrarToast("Registro eliminado correctamente.", "ok");
+    }
+
+    await recargarExplorador();
+  } catch(err) {
+    mostrarToast(String(err?.message || err || "Error inesperado"), "err");
+  } finally {
+    ocultarLoaderEliminacion();
+    if(button){
+      button.disabled = false;
+      button.textContent = originalText;
+    }
+  }
 }
 
 function renderExplorerDetail_(row){
@@ -4614,47 +4805,26 @@ function renderExplorerDetail_(row){
   $("e_DetailSheets").innerHTML = renderPairs(data);
 
   const links = getDocLinksForRow_(row);
+  const docRecord = getActiveDocRecordForRow_(row);
   const actions = [];
   if(links.word) actions.push(`<a href="${links.word}" target="_blank" class="btn btn-soft">Vista previa</a>`);
   else if(links.pdf) actions.push(`<a href="${links.pdf}" target="_blank" class="btn btn-soft">Vista previa</a>`);
   if(links.word) actions.push(`<a href="${links.word}" target="_blank" class="btn btn-soft">Abrir Word</a>`);
   if(links.pdf) actions.push(`<a href="${links.pdf}" target="_blank" class="btn btn-soft">Abrir PDF</a>`);
   if(links.carpeta) actions.push(`<a href="${links.carpeta}" target="_blank" class="btn btn-soft">Abrir Carpeta</a>`);
-  actions.push(`<button class="btn btn-danger" id="btnExplorerDeleteNow">Eliminar</button>`);
+  if(docRecord?.Key){
+    actions.push(`<button class="btn btn-danger" id="btnExplorerDeleteNow" data-recordid="${escapeHtml(docRecord.Key)}">Eliminar</button>`);
+  }
   $("e_DetailActions").innerHTML = actions.join("") || `<span class="text-xs text-slate-400">Sin links disponibles para este registro.</span>`;
 
   const delBtn = $("btnExplorerDeleteNow");
   if(delBtn){
-    delBtn.onclick = ()=>deleteExplorerRow_(row);
+    delBtn.onclick = ()=>confirmarEliminacion(delBtn.getAttribute("data-recordid") || "", delBtn);
   }
 }
 
-async function deleteExplorerRow_(row){
-  if(!row) return;
-  const tipo = row.__type === "AnalisisIndicador" ? "ANALISIS" : "FICHA";
-  const codigo = row.CodigoIndicador;
-  const periodo = row.PeriodoYM || "";
-  const ok = confirm(tipo === "ANALISIS"
-    ? `¿Eliminar análisis ${codigo} ${periodoHuman(periodo)}? También se enviarán a papelera sus archivos en Drive.`
-    : `¿Eliminar ficha ${codigo}? También se enviarán a papelera sus archivos en Drive.`);
-  if(!ok) return;
-
-  const r = await apiFetch("deleteRecord", {
-    tipo,
-    CodigoIndicador: codigo,
-    PeriodoYM: periodo,
-    recordId: row.__key
-  });
-  if(!r.ok){
-    toast("err","Error", r.message || "No se pudo eliminar");
-    return;
-  }
-
-  await loadAll();
-  if(tipo === "ANALISIS") await refreshHistoryByCodigo_(codigo);
-  refreshExplorador();
-  toast("ok","Eliminado","Registro y archivos asociados eliminados correctamente.");
-}
+// deleteExplorerRow_ obsoleta: el flujo vigente usa confirmarEliminacion(idRegistro, btn)
+// con data-recordid en los botones de tabla/detalle.
 
 function refreshExplorador(){
   const area = $("e_Area")?.value || "";
@@ -4678,6 +4848,11 @@ function refreshExplorador(){
       return txt.includes(q);
     });
   }
+
+  rows = rows.map(r=>({
+    ...r,
+    __recordId: String(r.__recordId || getActiveDocRecordForRow_(r)?.Key || "")
+  }));
 
   rows.sort((a,b)=>{
     const ak = `${a.CodigoIndicador||""}-${a.PeriodoYM||""}`;
@@ -4705,7 +4880,7 @@ function refreshExplorador(){
         <td class="p-2">
           <button class="btn btn-soft" data-detail="${escapeHtml(r.__key)}">Ver detalle</button>
           <button class="btn btn-soft" data-preview="${escapeHtml(r.__key)}">Vista previa</button>
-          <button class="btn btn-danger" data-del="${escapeHtml(r.__key)}">Eliminar</button>
+          <button class="btn btn-danger" data-del="${escapeHtml(r.__key)}" data-recordid="${escapeHtml(r.__recordId || "")}" ${r.__recordId ? "" : "disabled"}>Eliminar</button>
         </td>
       </tr>
     `;
@@ -4733,9 +4908,12 @@ function refreshExplorador(){
 
   tb.querySelectorAll("[data-del]").forEach(b=>{
     b.addEventListener("click", ()=>{
-      const key = b.getAttribute("data-del");
-      const row = rows.find(x=>x.__key===key);
-      if(row) deleteExplorerRow_(row);
+      const idRegistro = b.getAttribute("data-recordid") || "";
+      if(!idRegistro){
+        mostrarToast("No hay documento activo para eliminar en este registro.", "warn");
+        return;
+      }
+      confirmarEliminacion(idRegistro, b);
     });
   });
 
@@ -4789,37 +4967,8 @@ function openDocEditor(key){
 
   $("btnEDelete").onclick = async ()=>{
     const btn = $("btnEDelete");
-    const orig = btn.textContent;
-    btn.disabled = true;
-    btn.textContent = "Eliminando…";
-
-    // remove document itself
-    const r = await apiFetch("docs.delete", { Key: d.Key });
-    if(!r.ok){
-      toast("err","Error", r.message||"No se eliminó");
-      btn.disabled = false;
-      btn.textContent = orig;
-      return;
-    }
-
-    // also delete the underlying ficha/analisis/seg if applicable
-    if(d.TipoDocumento === "FichaTecnica"){
-      await apiFetch("fichas.delete", { CodigoIndicador: d.CodigoIndicador });
-    } else if(d.TipoDocumento === "AnalisisIndicador"){
-      const parts = d.Key.split("-");
-      const codigo = parts[1];
-      const periodo = parts.slice(2).join("-");
-      await apiFetch("analisis.delete", { CodigoIndicador: codigo, PeriodoYM: periodo });
-    } else if(d.TipoDocumento === "Seguimiento"){
-      await apiFetch("seg.delete", { Key: d.Key });
-    }
-
-    await loadAll();
-    toast("ok","Eliminado","Registro eliminado del Explorador.");
-    btn.disabled = false;
-    btn.textContent = orig;
+    await eliminarDocumento(d.Key, btn);
     $("e_Editor").classList.add("hidden");
-    refreshExplorador();
   };
 }
 
