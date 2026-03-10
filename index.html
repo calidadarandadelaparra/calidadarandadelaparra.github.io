@@ -90,7 +90,7 @@
      forzar un valor concreto o usar DEMO.
 =========================== */
 // principal: la URL del web‑app (se evalúa en runtime)
-let SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbw0wkkR3GCTgE3zSPharqusCTfLFy3Y_pMg18mibHzZqKLwzinkIGPlikhZMtdM-h3jeg/exec";
+let SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbxxby-LWpBRsKpgLV4XxBxlyMOp6qltp9sBTNQ0FxqQVnCLgTFV4cv33QYrikeVbILh/exec";
 const CONFIG_KEY_WEBAPP_URL = "CONFIG_SHEETS_WEBAPP_URL";
 
 function getSavedWebAppUrl(){
@@ -668,6 +668,7 @@ async function apiFetch(action, payload={}){
     const res = await fetchWithTimeout_(url, {
       method:"POST",
       headers: { "Content-Type":"text/plain" },
+      cache: "no-store",
       body: JSON.stringify({ action, payload })
     }, timeoutMs);
     return await parseJsonSafe_(res);
@@ -680,8 +681,9 @@ async function apiFetch(action, payload={}){
 
   try {
     const qp = `?action=${encodeURIComponent(action)}` +
-               `&payload=${encodeURIComponent(payloadJson)}`;
-    const res2 = await fetchWithTimeout_(url + qp, { method:"GET" }, timeoutMs);
+               `&payload=${encodeURIComponent(payloadJson)}` +
+               `&_ts=${Date.now()}`;
+    const res2 = await fetchWithTimeout_(url + qp, { method:"GET", cache:"no-store" }, timeoutMs);
     return await parseJsonSafe_(res2);
   } catch(err2) {
     console.error("apiFetch GET fallback also failed", err2);
@@ -4809,6 +4811,33 @@ async function recargarExplorador(){
   refreshExplorador();
 }
 
+function applyDeleteResultToCaches_(ref){
+  const id = String(ref?.idRegistro || "").trim();
+  const mode = String(ref?.mode || "logical").trim();
+  const kind = String(ref?.fileKind || "").trim().toUpperCase();
+  if(!id) return;
+
+  if(mode === "physical"){
+    CACHE.explorer = (CACHE.explorer || []).map(x => {
+      if(String(x?.ID_REGISTRO || "").trim() !== id) return x;
+      if(kind === "WORD") return { ...x, DOC_ID:"", WordUrl:"" };
+      if(kind === "PDF") return { ...x, PDF_ID:"", PdfUrl:"" };
+      return x;
+    });
+
+    CACHE.docs = (CACHE.docs || []).map(x => {
+      if(String(x?.Key || "").trim() !== id) return x;
+      if(kind === "WORD") return { ...x, DocId:"", FileId:"", WordUrl:"", Link:"" };
+      if(kind === "PDF") return { ...x, PdfId:"", PdfUrl:"" };
+      return x;
+    });
+    return;
+  }
+
+  CACHE.explorer = (CACHE.explorer || []).filter(x => String(x?.ID_REGISTRO || "").trim() !== id);
+  CACHE.docs = (CACHE.docs || []).filter(x => String(x?.Key || "").trim() !== id);
+}
+
 function confirmarEliminacion(delRef, btn){
   const ref = (typeof delRef === "object" && delRef)
     ? {
@@ -4891,6 +4920,10 @@ async function eliminarDocumento(delRef, btn){
     } else {
       mostrarToast(isPhysical ? "Archivo eliminado correctamente." : "Registro eliminado correctamente.", "ok");
     }
+
+    // UX inmediato: retirar del cache local y refrescar antes de recargar estricto desde backend.
+    applyDeleteResultToCaches_(ref);
+    refreshExplorador();
 
     await recargarExplorador();
   } catch(err) {
