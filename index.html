@@ -1250,19 +1250,23 @@ async function loadAll(){
   })) : [];
 
   CACHE.explorer = e.ok ? (e.data || []).map(x => ({
-    ID_REGISTRO: String(x?.ID_REGISTRO || "").trim(),
-    TIPO: String(x?.TIPO || "").trim(),
-    CODIGO: String(x?.CODIGO || "").trim(),
-    AREA: String(x?.AREA || "").trim(),
-    PERIODO: String(x?.PERIODO || "").trim(),
-    ESTADO: String(x?.ESTADO || "").trim(),
-    FECHA_ELIMINACION: String(x?.FECHA_ELIMINACION || "").trim(),
-    DOC_ID: String(x?.DOC_ID || "").trim(),
-    PDF_ID: String(x?.PDF_ID || "").trim(),
+    ID_REGISTRO: String(x?.ID_REGISTRO || x?.id_registro || x?.Key || x?.key || x?.DOC_ID || "").trim(),
+    TIPO: String(x?.TIPO || x?.Tipo || x?.tipo || x?.TipoDocumento || "").trim(),
+    CODIGO: String(x?.CODIGO || x?.Codigo || x?.CodigoIndicador || "").trim(),
+    AREA: String(x?.AREA || x?.Area || x?.AreaResponsable || "").trim(),
+    PERIODO: String(x?.PERIODO || x?.Periodo || x?.PeriodoYM || "").trim(),
+    ESTADO: String(x?.ESTADO || x?.Estado || x?.Status || "").trim(),
+    FECHA_ELIMINACION: String(x?.FECHA_ELIMINACION || x?.FechaEliminacion || "").trim(),
+    DOC_ID: String(x?.DOC_ID || x?.DocId || x?.FileId || "").trim(),
+    PDF_ID: String(x?.PDF_ID || x?.PdfId || "").trim(),
     WordUrl: String(x?.WordUrl || "").trim(),
     PdfUrl: String(x?.PdfUrl || "").trim(),
     Nombre: String(x?.Nombre || "").trim()
   })).filter(x => x.ID_REGISTRO && !isDeletedStatus_(x.ESTADO)) : [];
+
+  console.log("[EXPLORER_LIST] ok=", !!(e && e.ok), "message=", e?.message || "", "rawCount=", Array.isArray(e?.data) ? e.data.length : 0);
+  console.log("[CACHE_EXPLORER] cargados:", CACHE.explorer.length, CACHE.explorer.slice(0,3));
+  if(!(e && e.ok)) console.warn("[EXPLORER_LIST] backend error:", e?.message || "sin detalle");
 
   fillAreaSelects();
 }
@@ -4627,10 +4631,12 @@ function fillExplorerCodigo(){
 
 function getExplorerRows_(){
   const wantAnalisis = window.__EX_TAB === "AnalisisIndicador";
-  const rows = (CACHE.explorer || []).filter(r => wantAnalisis
+  const rowsRaw = (CACHE.explorer || []);
+  const rows = rowsRaw.filter(r => wantAnalisis
     ? /ANALISIS/i.test(String(r.TIPO || ""))
     : /FICHA/i.test(String(r.TIPO || ""))
   );
+  console.log("[GET_EXPLORER_ROWS] tab=", window.__EX_TAB, "rowsAntes=", rowsRaw.length, "rowsDespues=", rows.length);
 
   return rows.map(r => {
     const codigo = String(r.CODIGO || "").trim();
@@ -4833,6 +4839,7 @@ function refreshExplorador(){
   const q = ($("e_Search")?.value || "").trim().toLowerCase();
 
   let rows = getExplorerRows_();
+  const rowsBeforeFilters = rows.length;
   if(area) rows = rows.filter(r=>r.AreaResponsable===area);
   if(codigo) rows = rows.filter(r=>r.CodigoIndicador===codigo);
   if(per && window.__EX_TAB === "AnalisisIndicador") rows = rows.filter(r=>r.PeriodoYM===per);
@@ -4853,6 +4860,7 @@ function refreshExplorador(){
     ...r,
     __recordId: String(r.__recordId || getActiveDocRecordForRow_(r)?.Key || "")
   }));
+  console.log("[GET_EXPLORER_ROWS] tab=", window.__EX_TAB, "rowsAntes=", rowsBeforeFilters, "rowsDespues=", rows.length);
 
   rows.sort((a,b)=>{
     const ak = `${a.CodigoIndicador||""}-${a.PeriodoYM||""}`;
