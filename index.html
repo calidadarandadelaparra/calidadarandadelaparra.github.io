@@ -90,7 +90,7 @@
      forzar un valor concreto o usar DEMO.
 =========================== */
 // principal: la URL del web‑app (se evalúa en runtime)
-let SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbz0WSHH1u-GBEw06w5sOrBm69JYGD6TGq9XdHg2vp-Kz4PlVN3gV4pNfLR_ZKSh-MFw0g/exec";
+let SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbw0wkkR3GCTgE3zSPharqusCTfLFy3Y_pMg18mibHzZqKLwzinkIGPlikhZMtdM-h3jeg/exec";
 const CONFIG_KEY_WEBAPP_URL = "CONFIG_SHEETS_WEBAPP_URL";
 
 function getSavedWebAppUrl(){
@@ -4703,10 +4703,31 @@ function getExplorerRows_(){
       Data: wantAnalisis ? (analisisData || {}) : (fichaData || {})
     };
 
-    if(!wantFiles) return [base];
+    const nombreLower = String(base.Nombre || "").toLowerCase();
+    const isNamedWord = /\.docx(?:$|\s|\))/i.test(nombreLower);
+    const isNamedPdf = /\.pdf(?:$|\s|\))/i.test(nombreLower);
+    const isPhysicalSource = isNamedWord || isNamedPdf;
+
+    // Tabs lógicas: excluir completamente filas que ya representan archivo físico (.docx/.pdf).
+    if(!wantFiles){
+      if(isPhysicalSource) return [];
+      return [base];
+    }
 
     const rowsOut = [];
-    if(base.DOC_ID || base.WordUrl){
+    let includeWord = !!(base.DOC_ID || base.WordUrl);
+    let includePdf = !!(base.PDF_ID || base.PdfUrl);
+
+    // Tabs Word/PDF: mantener exclusividad por naturaleza del elemento.
+    // Si el nombre ya indica un físico concreto, forzar solo ese tipo.
+    if(isPhysicalSource){
+      includeWord = includeWord || isNamedWord;
+      includePdf = includePdf || isNamedPdf;
+      if(isNamedWord && !isNamedPdf) includePdf = false;
+      if(isNamedPdf && !isNamedWord) includeWord = false;
+    }
+
+    if(includeWord){
       rowsOut.push({
         ...base,
         __key: base.__key + "::WORD",
@@ -4716,7 +4737,7 @@ function getExplorerRows_(){
         __rowTipoLabel: "Archivo Word"
       });
     }
-    if(base.PDF_ID || base.PdfUrl){
+    if(includePdf){
       rowsOut.push({
         ...base,
         __key: base.__key + "::PDF",
