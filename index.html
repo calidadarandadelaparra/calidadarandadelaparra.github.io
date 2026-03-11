@@ -90,7 +90,7 @@
      forzar un valor concreto o usar DEMO.
 =========================== */
 // principal: la URL del web‑app (se evalúa en runtime)
-let SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbzj3r6S9s3Fx5vuG6xjhPVzjdjM_R-LPDlnrWw1eH7RNCvGFAQGiiEBvvylivsCyOEojA/exec";
+let SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbzoiITtFoUNNNd7cBNRwYNuwzqV7q_W_jW0crlCd10FxDKcv2bdm8KrRykSVADwH-ZGPg/exec";
 const CONFIG_KEY_WEBAPP_URL = "CONFIG_SHEETS_WEBAPP_URL";
 
 function getSavedWebAppUrl(){
@@ -1261,6 +1261,8 @@ async function loadAll(){
     FECHA_ELIMINACION: String(x?.FECHA_ELIMINACION || x?.FechaEliminacion || "").trim(),
     DOC_ID: String(x?.DOC_ID || x?.DocId || x?.FileId || "").trim(),
     PDF_ID: String(x?.PDF_ID || x?.PdfId || "").trim(),
+    HAS_WORD: Boolean(x?.HAS_WORD) || String(x?.HAS_WORD || "").toLowerCase() === "true",
+    HAS_PDF: Boolean(x?.HAS_PDF) || String(x?.HAS_PDF || "").toLowerCase() === "true",
     WordUrl: String(x?.WordUrl || "").trim(),
     PdfUrl: String(x?.PdfUrl || "").trim(),
     Nombre: String(x?.Nombre || "").trim()
@@ -4719,17 +4721,8 @@ function getExplorerRows_(){
     }
 
     const rowsOut = [];
-    let includeWord = !!(base.DOC_ID || base.WordUrl);
-    let includePdf = !!(base.PDF_ID || base.PdfUrl);
-
-    // Tabs Word/PDF: mantener exclusividad por naturaleza del elemento.
-    // Si el nombre ya indica un físico concreto, forzar solo ese tipo.
-    if(isPhysicalSource){
-      includeWord = includeWord || isNamedWord;
-      includePdf = includePdf || isNamedPdf;
-      if(isNamedWord && !isNamedPdf) includePdf = false;
-      if(isNamedPdf && !isNamedWord) includeWord = false;
-    }
+    const includeWord = (r.HAS_WORD === true) || !!(base.DOC_ID || base.WordUrl);
+    const includePdf = (r.HAS_PDF === true) || !!(base.PDF_ID || base.PdfUrl);
 
     if(includeWord){
       rowsOut.push({
