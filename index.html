@@ -90,7 +90,7 @@
      forzar un valor concreto o usar DEMO.
 =========================== */
 // principal: la URL del web‑app (se evalúa en runtime)
-let SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbxcmrP4AJu_u0Sas6KydnAYBllMalUSEaDHZLrxz_O11vkHsACMhbt35XmXGhr146Nd7w/exec";
+let SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbzHA32D2rtdAxiMKTYGZqiwA3-ztjz2tKUZjU9D3q-8lo83W6J_Ai3WU4VtNsnYk533zg/exec";
 const CONFIG_KEY_WEBAPP_URL = "CONFIG_SHEETS_WEBAPP_URL";
 
 function getSavedWebAppUrl(){
@@ -4832,21 +4832,40 @@ function getExplorerRows_(){
   const wantAnalisis = isExplorerAnalisisTab_(window.__EX_TAB);
   const wantFiles = isExplorerFilesTab_(window.__EX_TAB);
   const rowsRaw = (CACHE.explorer || []);
+
+  const periodKey = (v)=>{
+    const raw = String(v || "").trim();
+    if(/^\d{4}-\d{2}$/.test(raw)) return raw;
+    const d = new Date(raw);
+    if(!Number.isNaN(d.getTime())) return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    const m = raw.match(/(\d{4})-(\d{2})/);
+    if(m) return `${m[1]}-${m[2]}`;
+    return raw;
+  };
+
+  const analysisPeriodSlugEs_ = (periodoRaw)=>{
+    const ym = periodKey(periodoRaw);
+    const human = String(periodoHuman(ym) || "").trim(); // Ej: "Marzo 2026"
+    if(!human) return "";
+    return human
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/\s+/g, "-"); // "marzo-2026"
+  };
+
   const rows = rowsRaw.filter(r => wantAnalisis
     ? /ANALISIS/i.test(String(r.TIPO || ""))
     : /FICHA/i.test(String(r.TIPO || ""))
   );
   const mapped = rows.map(r => {
     const codigo = String(r.CODIGO || "").trim();
-    const periodo = String(r.PERIODO || "").trim();
+    const periodo = periodKey(String(r.PERIODO || "").trim());
     const isLogicalSource = r?.IS_LOGICAL === true || String(r?.IS_LOGICAL || "").toLowerCase() === "true";
-    const rawNombre = String(r.Nombre || (wantAnalisis ? "Análisis" : "Ficha técnica") || "Registro").trim();
-    const logicalFriendlyName = wantAnalisis
-      ? (`ANALISIS_${codigo}${periodo ? "_" + periodo : ""}`)
+    const analisisSuffix = analysisPeriodSlugEs_(periodo);
+    const visibleNombreBase = wantAnalisis
+      ? (`ANALISIS_${codigo}${analisisSuffix ? "-" + analisisSuffix : ""}`)
       : (`FICHA_${codigo}`);
-    const visibleNombre = (isLogicalSource && codigo)
-      ? logicalFriendlyName
-      : rawNombre;
 
     const analisisData = (CACHE.analisis || []).find(a =>
       String(a?.CodigoIndicador || "").trim() === codigo &&
@@ -4861,7 +4880,7 @@ function getExplorerRows_(){
       __key: String(r.ID_REGISTRO || "").trim(),
       __recordId: recordId,
       __type: wantAnalisis ? "AnalisisIndicador" : "FichasTecnicas",
-      Nombre: visibleNombre,
+      Nombre: visibleNombreBase,
       CodigoIndicador: codigo,
       AreaResponsable: String(r.AREA || "").trim(),
       PeriodoYM: wantAnalisis ? periodo : "",
@@ -4949,14 +4968,6 @@ function getExplorerRows_(){
   });
 
   const flat = mapped.flat();
-
-  const periodKey = (v)=>{
-    const raw = String(v || "").trim();
-    if(/^\d{4}-\d{2}$/.test(raw)) return raw;
-    const d = new Date(raw);
-    if(!Number.isNaN(d.getTime())) return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
-    return raw;
-  };
 
   const dedupKeyOf = (row)=>{
     const tipo = String(row?.__type || "").toUpperCase();
