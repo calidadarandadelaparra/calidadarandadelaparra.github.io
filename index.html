@@ -90,7 +90,7 @@
      forzar un valor concreto o usar DEMO.
 =========================== */
 // principal: la URL del web‑app (se evalúa en runtime)
-let SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbx08Vkc9ggrO9esCi50BtTkKc-_2Fla0vrwLeEa_qo5OvaRdnfw3jvmEhDhHLlp5pY-vA/exec";
+let SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbwx77YN61oBU9wVBJwl8mNYGSDihftI1K6fjhGtdavdgIcFt7y4zitIHLQI8a0goqfokA/exec";
 const CONFIG_KEY_WEBAPP_URL = "CONFIG_SHEETS_WEBAPP_URL";
 
 function getSavedWebAppUrl(){
@@ -4839,6 +4839,15 @@ function getExplorerRows_(){
   const mapped = rows.map(r => {
     const codigo = String(r.CODIGO || "").trim();
     const periodo = String(r.PERIODO || "").trim();
+    const isLogicalSource = r?.IS_LOGICAL === true || String(r?.IS_LOGICAL || "").toLowerCase() === "true";
+    const rawNombre = String(r.Nombre || (wantAnalisis ? "Análisis" : "Ficha técnica") || "Registro").trim();
+    const logicalFriendlyName = wantAnalisis
+      ? (`ANALISIS_${codigo}${periodo ? "_" + periodo : ""}`)
+      : (`FICHA_${codigo}`);
+    const visibleNombre = (isLogicalSource && codigo)
+      ? logicalFriendlyName
+      : rawNombre;
+
     const analisisData = (CACHE.analisis || []).find(a =>
       String(a?.CodigoIndicador || "").trim() === codigo &&
       String(a?.PeriodoYM || "").trim() === periodo
@@ -4852,7 +4861,7 @@ function getExplorerRows_(){
       __key: String(r.ID_REGISTRO || "").trim(),
       __recordId: recordId,
       __type: wantAnalisis ? "AnalisisIndicador" : "FichasTecnicas",
-      Nombre: String(r.Nombre || (wantAnalisis ? "Análisis" : "Ficha técnica") || "Registro").trim(),
+      Nombre: visibleNombre,
       CodigoIndicador: codigo,
       AreaResponsable: String(r.AREA || "").trim(),
       PeriodoYM: wantAnalisis ? periodo : "",
@@ -4872,7 +4881,6 @@ function getExplorerRows_(){
     const nombreLower = String(base.Nombre || "").toLowerCase();
     const isNamedWord = /\.docx(?:$|\s|\))/i.test(nombreLower);
     const isNamedPdf = /\.pdf(?:$|\s|\))/i.test(nombreLower);
-    const isLogicalSource = r?.IS_LOGICAL === true || String(r?.IS_LOGICAL || "").toLowerCase() === "true";
     const hasPhysicalSignal = !!(base.DOC_ID || base.PDF_ID || base.WordUrl || base.PdfUrl || r?.HAS_WORD || r?.HAS_PDF || isNamedWord || isNamedPdf);
 
     // Tabs lógicas: solo entidad principal lógica.
@@ -4941,8 +4949,44 @@ function getExplorerRows_(){
   });
 
   const flat = mapped.flat();
-  console.log("[GET_EXPLORER_ROWS] tab=", window.__EX_TAB, "rowsAntes=", rowsRaw.length, "rowsDespues=", flat.length);
-  return flat;
+
+  const periodKey = (v)=>{
+    const raw = String(v || "").trim();
+    if(/^\d{4}-\d{2}$/.test(raw)) return raw;
+    const d = new Date(raw);
+    if(!Number.isNaN(d.getTime())) return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    return raw;
+  };
+
+  const dedupKeyOf = (row)=>{
+    const tipo = String(row?.__type || "").toUpperCase();
+    const cod = String(row?.CodigoIndicador || "").trim();
+    const per = periodKey(row?.PeriodoYM || "");
+    if(!wantFiles){
+      return `LOG|${tipo}|${cod}|${per}`;
+    }
+    const fid = String(row?.__deleteRef?.fileId || "").trim();
+    const kind = String(row?.__assetKind || "").toUpperCase();
+    const name = String(row?.Nombre || "").replace(/\s*\[(?:WORD|PDF)\]\s*$/i, "").trim().toLowerCase();
+    return `PHY|${tipo}|${cod}|${per}|${kind}|${fid || name}`;
+  };
+
+  const bestByKey = new Map();
+  flat.forEach(row => {
+    const key = dedupKeyOf(row);
+    const prev = bestByKey.get(key);
+    if(!prev){
+      bestByKey.set(key, row);
+      return;
+    }
+    const prevHasId = !!String(prev?.__deleteRef?.fileId || "").trim();
+    const rowHasId = !!String(row?.__deleteRef?.fileId || "").trim();
+    if(rowHasId && !prevHasId) bestByKey.set(key, row);
+  });
+
+  const deduped = Array.from(bestByKey.values());
+  console.log("[GET_EXPLORER_ROWS] tab=", window.__EX_TAB, "rowsAntes=", rowsRaw.length, "rowsDespues=", deduped.length, "rawFlat=", flat.length);
+  return deduped;
 }
 
 function getActiveDocRecordForRow_(row){
