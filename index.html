@@ -1,9 +1,9 @@
   <!doctype html>
   <html lang="es">
   <head>
-    <meta charset="utf-8"/>
+    <meta charset="UTF-8"/>
     <meta name="viewport" content="width=device-width,initial-scale=1"/>
-    <title>Sistema de Indicadores Â· Macro Style</title>
+    <title>Sistema de Indicadores · Macro Style</title>
 
     <!-- Tailwind CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -85,12 +85,12 @@
   /* ===========================
     CONFIG (ajustada para correr como WebApp de Google)
     - cuando el HTML se sirve desde Apps Script, el mismo URL
-      es el endpoint `/exec`; por eso lo calculamos dinÃ¡micamente.
-    - si por alguna razÃ³n cargas el HTML localmente todavÃ­a puedes
+      es el endpoint `/exec`; por eso lo calculamos dinámicamente.
+    - si por alguna razón cargas el HTML localmente todavía puedes
       forzar un valor concreto o usar DEMO.
   =========================== */
-  // principal: la URL del webâ€‘app (se evalÃºa en runtime)
-  let SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbzT0S-PiSPZdnz6y0Q9lJTKsnYB7y3Po0BAeKXx_zcxOiY3P09Fxx0rrBWhdcSuMGVnmg/exec";
+  // principal: la URL del web‑app (se evalúa en runtime)
+  let SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbysHI8a-Q-XsWsf2PWAnxOywWpTOd2ejRSGZSrlGWEDnbheV8Fs6BKOhfL7MGOK1bg6uA/exec";
   const CONFIG_KEY_WEBAPP_URL = "CONFIG_SHEETS_WEBAPP_URL";
 
   function getSavedWebAppUrl(){
@@ -108,15 +108,15 @@
   }
 
   function getWebAppUrl(){
-    // prioridad: variable explÃ­cita > deducida
+    // prioridad: variable explícita > deducida
     if(SHEETS_WEBAPP_URL) return SHEETS_WEBAPP_URL;
-    // si se estÃ¡ ejecutando dentro de la WebApp de GAS, la propia
-    // ubicaciÃ³n actual es el endpoint
+    // si se está ejecutando dentro de la WebApp de GAS, la propia
+    // ubicación actual es el endpoint
     if(typeof location !== 'undefined' && location.href){
       const href = String(location.href || "").trim();
       if(isLikelyGasWebAppUrl_(href)) return href;
     }
-    // sin URL vÃ¡lida: se usarÃ¡ DEMO hasta que el usuario la configure
+    // sin URL válida: se usará DEMO hasta que el usuario la configure
     return "";
   }
 
@@ -172,19 +172,19 @@
   const UI_BUILD = "IDX-2026-03-05-01";
 
   /* ===========================
-    CATÃLOGO ÃREAS (COMPLETO)
+    CATÁLOGO ÁREAS (COMPLETO)
     value = prefijo, label = nombre (SIN mostrar prefijo)
   =========================== */
   const AREAS_CATALOGO = [
-    { Area:"ADM-IND-", NombreArea:"AdmisiÃ³n" },
+    { Area:"ADM-IND-", NombreArea:"Admisión" },
     { Area:"ALM-IND-", NombreArea:"Almacenes" },
     { Area:"AMB-IND-", NombreArea:"Ambulancia" },
-    { Area:"ARC-IND-", NombreArea:"Archivo ClÃ­nico" },
+    { Area:"ARC-IND-", NombreArea:"Archivo Clínico" },
     { Area:"BCO-IND-", NombreArea:"Banco de Sangre" },
     { Area:"BIO-IND-", NombreArea:"Biomedicina" },
     { Area:"CAJ-IND-", NombreArea:"Caja" },
     { Area:"CAM-IND-", NombreArea:"Camilleros" },
-    { Area:"CSL-IND-", NombreArea:"CapacitaciÃ³n y Seguridad Laboral" },
+    { Area:"CSL-IND-", NombreArea:"Capacitación y Seguridad Laboral" },
     { Area:"CEY-IND-", NombreArea:"Ceye" },
     { Area:"COB-IND-", NombreArea:"Cobranza" },
     { Area:"CAL-IND-", NombreArea:"Calidad" },
@@ -192,90 +192,90 @@
     { Area:"COM-IND-", NombreArea:"Compras" },
     { Area:"CON-IND-", NombreArea:"Contabilidad" },
     { Area:"CUN-IND-", NombreArea:"Cunas" },
-    { Area:"ENZ-IND-", NombreArea:"EnseÃ±anza (medicos)" },
-    { Area:"EEN-IND-", NombreArea:"EnseÃ±anza enfermerÃ­a" },
-    { Area:"EPI-IND-", NombreArea:"EpidemiologÃ­a" },
-    { Area:"ERP-IND-", NombreArea:"Eventos y Relaciones PÃºblicas" },
+    { Area:"ENZ-IND-", NombreArea:"Enseñanza (medicos)" },
+    { Area:"EEN-IND-", NombreArea:"Enseñanza enfermería" },
+    { Area:"EPI-IND-", NombreArea:"Epidemiología" },
+    { Area:"ERP-IND-", NombreArea:"Eventos y Relaciones Públicas" },
     { Area:"FAR-IND-", NombreArea:"Farmacia" },
     { Area:"FCA-IND-", NombreArea:"Farmacovigilancia" },
-    { Area:"GEM-IND-", NombreArea:"GestiÃ³n MÃ©dica" },
-    { Area:"HSI-IND-", NombreArea:"HemodiÃ¡lisis" },
+    { Area:"GEM-IND-", NombreArea:"Gestión Médica" },
+    { Area:"HSI-IND-", NombreArea:"Hemodiálisis" },
     { Area:"HDM-IND-", NombreArea:"Hemodinamia" },
-    { Area:"HOS-IND-", NombreArea:"HospitalizaciÃ³n" },
-    { Area:"IMG-IND-", NombreArea:"ImagenologÃ­a" },
+    { Area:"HOS-IND-", NombreArea:"Hospitalización" },
+    { Area:"IMG-IND-", NombreArea:"Imagenología" },
     { Area:"INH-IND-", NombreArea:"Inhaloterapia" },
     { Area:"INT-IND-", NombreArea:"Intendencia" },
     { Area:"CML-IND-", NombreArea:"Comercial" },
-    { Area:"JUR-IND-", NombreArea:"JurÃ­dico" },
+    { Area:"JUR-IND-", NombreArea:"Jurídico" },
     { Area:"LAB-IND-", NombreArea:"Laboratorio" },
     { Area:"MTO-IND-", NombreArea:"Mantenimiento" },
     { Area:"MAT-IND-", NombreArea:"Maternidad" },
-    { Area:"NOM-IND-", NombreArea:"NÃ³minas" },
-    { Area:"NUT-IND-", NombreArea:"NutriciÃ³n" },
-    { Area:"ONC-IND-", NombreArea:"OncologÃ­a" },
+    { Area:"NOM-IND-", NombreArea:"Nóminas" },
+    { Area:"NUT-IND-", NombreArea:"Nutrición" },
+    { Area:"ONC-IND-", NombreArea:"Oncología" },
     { Area:"PRP-IND-", NombreArea:"Prestaciones al Personal" },
     { Area:"PUB-IND-", NombreArea:"Publicidad y Medios" },
-    { Area:"QUI-IND-", NombreArea:"QuirÃ³fano" },
-    { Area:"RYS-IND-", NombreArea:"ReproducciÃ³n y SelecciÃ³n" },
-    { Area:"REP-IND-", NombreArea:"ReproducciÃ³n (CREHAP)" },
-    { Area:"RPA-IND-", NombreArea:"RoperÃ­a" },
-    { Area:"MLO-IND-", NombreArea:"Monitero y LogÃ­stica" },
+    { Area:"QUI-IND-", NombreArea:"Quirófano" },
+    { Area:"RYS-IND-", NombreArea:"Reproducción y Selección" },
+    { Area:"REP-IND-", NombreArea:"Reproducción (CREHAP)" },
+    { Area:"RPA-IND-", NombreArea:"Ropería" },
+    { Area:"MLO-IND-", NombreArea:"Monitero y Logística" },
     { Area:"SAC-IND-", NombreArea:"Servicio al Cliente" },
     { Area:"SIS-IND-", NombreArea:"Sistemas" },
-    { Area:"TES-IND-", NombreArea:"TesorerÃ­a" },
+    { Area:"TES-IND-", NombreArea:"Tesorería" },
     { Area:"TRA-IND-", NombreArea:"Trasplante" },
     { Area:"UCN-IND-", NombreArea:"UCIN  (Unidad de cuidados intensivos neonatales)" },
     { Area:"UCI-IND-", NombreArea:"Unidad de Terapia Intensiva" },
     { Area:"UTI-IND-", NombreArea:"Unidad de Terapia Intermedia" },
     { Area:"URG-IND-", NombreArea:"Urgencias" },
-    { Area:"DGL-IND-", NombreArea:"DirecciÃ³n General" },
-    { Area:"DME-IND-", NombreArea:"DirecciÃ³n MÃ©dica" },
+    { Area:"DGL-IND-", NombreArea:"Dirección General" },
+    { Area:"DME-IND-", NombreArea:"Dirección Médica" },
     { Area:"GCO-IND-", NombreArea:"Gerencia Comercial" },
     { Area:"GDP-IND-", NombreArea:"Gerencia Desarrollo de Personal" },
     { Area:"GEN-IND-", NombreArea:"Gerencia Financiera" },
     { Area:"GFI-IND-", NombreArea:"Gerencia de Finanzas" },
     { Area:"GCA-IND-", NombreArea:"Gerencia de Calidad" },
-    { Area:"GME-IND-", NombreArea:"Gerencia MÃ©dica" },
+    { Area:"GME-IND-", NombreArea:"Gerencia Médica" },
     { Area:"GAB-IND-", NombreArea:"Gerencia de Abastecimientos" },
     { Area:"JSA-IND-", NombreArea:"Jefatura de Servicios Auxiliares" },
     { Area:"LEX-IND-", NombreArea:"Laser Eximer" },
-    { Area:"CLS-IND-", NombreArea:"Clinica del SueÃ±o" },
+    { Area:"CLS-IND-", NombreArea:"Clinica del Sueño" },
     { Area:"NUC-IND-", NombreArea:"Medicina Nuclear" },
-    { Area:"NEU-IND-", NombreArea:"NeurofisiologÃ­a" },
-    { Area:"OFT-IND-", NombreArea:"OftalmologÃ­a" },
+    { Area:"NEU-IND-", NombreArea:"Neurofisiología" },
+    { Area:"OFT-IND-", NombreArea:"Oftalmología" },
     { Area:"OST-IND-", NombreArea:"Osteoporosis" },
     { Area:"PET-IND-", NombreArea:"Pet/Ct" },
-    { Area:"REC-IND-", NombreArea:"RecepciÃ³n" },
-    { Area:"RMG-IND-", NombreArea:"Resonancia MagnÃ©tica" },
+    { Area:"REC-IND-", NombreArea:"Recepción" },
+    { Area:"RMG-IND-", NombreArea:"Resonancia Magnética" },
     { Area:"MISP-IND-", NombreArea:"Metas Internacionales de Seguridad de Paciente" },
     { Area:"MMU-IND-", NombreArea:"Manejo y Uso de Medicamentos" },
-    { Area:"PCI-IND-", NombreArea:"PrevenciÃ³n y Control de Infecciones" },
-    { Area:"FMS-IND-", NombreArea:"GestiÃ³n y Seguridad de las Instalaciones" },
-    { Area:"SQE-IND-", NombreArea:"Competencias y CapacitaciÃ³n del Personal" },
+    { Area:"PCI-IND-", NombreArea:"Prevención y Control de Infecciones" },
+    { Area:"FMS-IND-", NombreArea:"Gestión y Seguridad de las Instalaciones" },
+    { Area:"SQE-IND-", NombreArea:"Competencias y Capacitación del Personal" },
     { Area:"QPS-IND-", NombreArea:"Mejora de Calidad y Seguridad del Paciente" },
-    { Area:"ACC-IND-", NombreArea:"Acceso y Continuidad de la AtenciÃ³n" },
+    { Area:"ACC-IND-", NombreArea:"Acceso y Continuidad de la Atención" },
     { Area:"PFR-IND-", NombreArea:"Derechos del Paciente y su Familia" },
-    { Area:"AOP-IND-", NombreArea:"EvaluaciÃ³n de Pacientes" },
-    { Area:"SAD-IND-", NombreArea:"Servicios Auxiliares de DiagnÃ³stico" },
-    { Area:"COP-IND-", NombreArea:"AtenciÃ³n de Pacientes" },
-    { Area:"ASC-IND-", NombreArea:"Anestesia y AtenciÃ³n Quirurgica" },
-    { Area:"PFE-IND-", NombreArea:"EducaciÃ³n al Paciente y a su Familia" },
-    { Area:"MCI-IND-", NombreArea:"GestiÃ³n de la CominicaciÃ³n  y la InformaciÃ³n" },
-    { Area:"GLD-IND-", NombreArea:"Gobierno, Liderazgo y DirecciÃ³n" },
+    { Area:"AOP-IND-", NombreArea:"Evaluación de Pacientes" },
+    { Area:"SAD-IND-", NombreArea:"Servicios Auxiliares de Diagnóstico" },
+    { Area:"COP-IND-", NombreArea:"Atención de Pacientes" },
+    { Area:"ASC-IND-", NombreArea:"Anestesia y Atención Quirurgica" },
+    { Area:"PFE-IND-", NombreArea:"Educación al Paciente y a su Familia" },
+    { Area:"MCI-IND-", NombreArea:"Gestión de la Cominicación  y la Información" },
+    { Area:"GLD-IND-", NombreArea:"Gobierno, Liderazgo y Dirección" },
     { Area:"CTO-IND-", NombreArea:"Proveedores" },
-    { Area:"AI-IND-", NombreArea:"AuditorÃ­as Internas" },
-    { Area:"AE-IND-", NombreArea:"AuditorÃ­as Externas" },
+    { Area:"AI-IND-", NombreArea:"Auditorías Internas" },
+    { Area:"AE-IND-", NombreArea:"Auditorías Externas" },
     { Area:"OM-IND-", NombreArea:"Oportunidad de Mejora" },
-    { Area:"AC-IND-", NombreArea:"AcciÃ³n Correctiva" },
-    { Area:"POL-IND-", NombreArea:"PolÃ­tica" },
+    { Area:"AC-IND-", NombreArea:"Acción Correctiva" },
+    { Area:"POL-IND-", NombreArea:"Política" },
     { Area:"MCA-IND-", NombreArea:"Manual de Calidad" },
     { Area:"PRO-IND-", NombreArea:"Procedimientos" },
     { Area:"PLN-IND-", NombreArea:"Plan" },
     { Area:"PRG-IND-", NombreArea:"Programa" },
-    { Area:"PNO-IND-", NombreArea:"Procedimientos normalizados de operaciÃ³n" },
+    { Area:"PNO-IND-", NombreArea:"Procedimientos normalizados de operación" },
     { Area:"MAN-IND-", NombreArea:"Manual" },
     { Area:"PRT-IND-", NombreArea:"Protocolo" },
-    { Area:"GUI-IND-", NombreArea:"GuÃ­a" },
+    { Area:"GUI-IND-", NombreArea:"Guía" },
     { Area:"INS-IND-", NombreArea:"Instructivo" },
     { Area:"FOR-IND-", NombreArea:"Formatos" },
     { Area:"S/C-IND-", NombreArea:"Externo" },
@@ -306,7 +306,7 @@
     setTimeout(()=>root.classList.add("hidden"), 4200);
   }
   function periodoHuman(ym){
-    if(!ym || !/^\d{4}-\d{2}$/.test(ym)) return "â€”";
+    if(!ym || !/^\d{4}-\d{2}$/.test(ym)) return "—";
     const [y,m]=ym.split("-").map(Number);
     return `${MESES[m-1]} ${y}`;
   }
@@ -455,7 +455,7 @@
         <div>
           <div class="font-extrabold text-navy leading-tight">Sistema de Indicadores</div>
           <div class="text-xs text-slate-500 -mt-0.5">
-            Macro Style Â· <span id="modeTag" class="font-semibold"></span>
+            Macro Style · <span id="modeTag" class="font-semibold"></span>
             <span class="ml-2 inline-flex items-center rounded-full border border-slate-300 px-2 py-0.5 text-[10px] font-extrabold text-slate-700">IDX-2026-03-05-01</span>
           </div>
         </div>
@@ -463,14 +463,14 @@
 
       <nav class="flex flex-wrap items-center gap-2">
         <button class="navBtn active" data-target="secInicio">Inicio</button>
-        <button class="navBtn" data-target="secFicha">Ficha TÃ©cnica</button>
-        <button class="navBtn" data-target="secAnalisis">AnÃ¡lisis</button>
+        <button class="navBtn" data-target="secFicha">Ficha Técnica</button>
+        <button class="navBtn" data-target="secAnalisis">Análisis</button>
         <button class="navBtn" data-target="secDashboard" data-protected="1">Dashboard</button>
         <button class="navBtn" data-target="secExplorador" data-protected="1">Explorador</button>
         <button class="navBtn" data-target="secSeguimiento" data-protected="1">Seguimiento</button>
 
         <button id="btnSync" class="btn btn-primary">Sincronizar</button>
-        <button id="btnLogout" class="btn btn-soft">Cerrar sesiÃ³n</button>
+        <button id="btnLogout" class="btn btn-soft">Cerrar sesión</button>
       </nav>
     </div>
   </header>
@@ -487,29 +487,29 @@
       </div>
       <div class="p-5 space-y-4">
         <div id="authOptionsRow" class="hidden grid grid-cols-2 gap-2">
-          <button id="btnAuthGoLogin" class="btn btn-primary">Iniciar sesiÃ³n</button>
+          <button id="btnAuthGoLogin" class="btn btn-primary">Iniciar sesión</button>
           <button id="btnAuthGoRegister" class="btn btn-soft">Registrarme</button>
         </div>
 
         <div id="loginNameWrap">
           <label class="text-xs font-extrabold text-slate-600">Nombre *</label>
-          <input id="loginName" class="input mt-1" placeholder="Ej. Luis Ãngel"/>
+          <input id="loginName" class="input mt-1" placeholder="Ej. Luis Ángel"/>
         </div>
         <div>
           <label id="loginUserLabel" class="text-xs font-extrabold text-slate-600">Correo corporativo *</label>
           <input id="loginUser" class="input mt-1" placeholder="usuario@arandadelaparra.com"/>
         </div>
         <div id="loginAreaWrap">
-          <label class="text-xs font-extrabold text-slate-600">Ãrea *</label>
+          <label class="text-xs font-extrabold text-slate-600">Área *</label>
           <input id="loginArea" class="input mt-1" placeholder="Ej. Calidad"/>
         </div>
         <div>
-          <label class="text-xs font-extrabold text-slate-600">ContraseÃ±a *</label>
-          <input id="loginPass" type="password" class="input mt-1" placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"/>
+          <label class="text-xs font-extrabold text-slate-600">Contraseña *</label>
+          <input id="loginPass" type="password" class="input mt-1" placeholder="••••••••"/>
         </div>
 
         <div id="loginCodeWrap">
-          <label class="text-xs font-extrabold text-slate-600">CÃ³digo de verificaciÃ³n *</label>
+          <label class="text-xs font-extrabold text-slate-600">Código de verificación *</label>
           <input id="loginCode" class="input mt-1" placeholder="Ej. 123456" maxlength="6" inputmode="numeric" autocomplete="one-time-code"/>
         </div>
 
@@ -519,12 +519,12 @@
 
         <div class="flex gap-2">
           <button id="btnLogin" class="flex-1 btn btn-primary">Entrar</button>
-          <button id="btnSendCode" class="btn btn-soft">Enviar cÃ³digo</button>
+          <button id="btnSendCode" class="btn btn-soft">Enviar código</button>
           <button id="btnRegister" class="btn btn-soft">Registrarme</button>
           <button id="btnLoginCancel" class="btn btn-soft">Cancelar</button>
         </div>
 
-        <div class="text-xs text-slate-500">SesiÃ³n vÃ¡lida por 8 horas.</div>
+        <div class="text-xs text-slate-500">Sesión válida por 8 horas.</div>
       </div>
     </div>
   </div>
@@ -553,8 +553,8 @@
     <section class="rounded-2xl bg-navy text-white shadow-sm overflow-hidden">
       <div class="px-6 py-5 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
         <div>
-          <div class="text-lg font-extrabold">Dashboard corporativo Â· SemÃ¡foro estilo macro</div>
-          <div class="text-sm text-white/80">DEMO/Sheets Â· FÃ³rmula live Â· Evidencias (Figuras) Â· Seguimiento (Calidad)</div>
+          <div class="text-lg font-extrabold">Dashboard corporativo · Semáforo estilo macro</div>
+          <div class="text-sm text-white/80">DEMO/Sheets · Fórmula live · Evidencias (Figuras) · Seguimiento (Calidad)</div>
         </div>
         <div class="flex items-center gap-2">
           <span class="badge badge-gray bg-white/10 text-white border border-white/20">
@@ -575,8 +575,8 @@
       <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div class="card">
           <div class="card-b">
-            <div class="text-xs font-extrabold text-slate-500">ACCESO RÃPIDO</div>
-            <div class="text-xl font-extrabold text-navy mt-2">Ficha TÃ©cnica</div>
+            <div class="text-xs font-extrabold text-slate-500">ACCESO RÁPIDO</div>
+            <div class="text-xl font-extrabold text-navy mt-2">Ficha Técnica</div>
             <div class="text-sm text-slate-600 mt-1">Captura o actualiza datos del indicador.</div>
             <button id="goFicha" class="mt-4 btn btn-primary w-full">Capturar ficha</button>
           </div>
@@ -584,10 +584,10 @@
 
         <div class="card">
           <div class="card-b">
-            <div class="text-xs font-extrabold text-slate-500">ACCESO RÃPIDO</div>
-            <div class="text-xl font-extrabold text-navy mt-2">AnÃ¡lisis</div>
+            <div class="text-xs font-extrabold text-slate-500">ACCESO RÁPIDO</div>
+            <div class="text-xl font-extrabold text-navy mt-2">Análisis</div>
             <div class="text-sm text-slate-600 mt-1">Captura N/D, resultado, propuestas y evidencias.</div>
-            <button id="goAnalisis" class="mt-4 btn btn-primary w-full">Capturar anÃ¡lisis</button>
+            <button id="goAnalisis" class="mt-4 btn btn-primary w-full">Capturar análisis</button>
           </div>
         </div>
 
@@ -607,28 +607,28 @@
 
     </section>
 
-    <!-- FICHA TÃ‰CNICA (placeholder en PARTE 1) -->
+    <!-- FICHA TÉCNICA (placeholder en PARTE 1) -->
     <section id="secFicha" class="spaSection hidden">
       <div class="card">
         <div class="card-h">
-          <div class="font-extrabold text-navy text-lg">Ficha TÃ©cnica</div>
-          <div class="text-sm text-slate-500">Selects + fÃ³rmula live (Ej. (N/D)*100)</div>
+          <div class="font-extrabold text-navy text-lg">Ficha Técnica</div>
+          <div class="text-sm text-slate-500">Selects + fórmula live (Ej. (N/D)*100)</div>
         </div>
         <div class="card-b">
-          <div class="text-sm text-slate-500">MÃ³dulo listo.</div>
+          <div class="text-sm text-slate-500">Módulo listo.</div>
         </div>
       </div>
     </section>
 
-    <!-- ANÃLISIS (placeholder en PARTE 1) -->
+    <!-- ANÁLISIS (placeholder en PARTE 1) -->
     <section id="secAnalisis" class="spaSection hidden">
       <div class="card">
         <div class="card-h">
-          <div class="font-extrabold text-navy text-lg">AnÃ¡lisis del Indicador (estilo macro)</div>
-          <div class="text-sm text-slate-500">Filtra cÃ³digos por Ã¡rea Â· periodos registrados Â· evidencias</div>
+          <div class="font-extrabold text-navy text-lg">Análisis del Indicador (estilo macro)</div>
+          <div class="text-sm text-slate-500">Filtra códigos por área · periodos registrados · evidencias</div>
         </div>
         <div class="card-b">
-          <div class="text-sm text-slate-500">MÃ³dulo listo.</div>
+          <div class="text-sm text-slate-500">Módulo listo.</div>
         </div>
       </div>
     </section>
@@ -641,7 +641,7 @@
           <div class="text-sm text-slate-500">KPI cards + pastel + barras + tabla resumen</div>
         </div>
         <div class="card-b">
-          <div class="text-sm text-slate-500">MÃ³dulo listo.</div>
+          <div class="text-sm text-slate-500">Módulo listo.</div>
         </div>
       </div>
     </section>
@@ -654,7 +654,7 @@
           <div class="text-sm text-slate-500">Filtros + listado + editar registros</div>
         </div>
         <div class="card-b">
-          <div class="text-sm text-slate-500">MÃ³dulo listo.</div>
+          <div class="text-sm text-slate-500">Módulo listo.</div>
         </div>
       </div>
     </section>
@@ -667,7 +667,7 @@
           <div class="text-sm text-slate-500">Lista NO CUMPLEN + captura de tabla (1..5) + verificador</div>
         </div>
         <div class="card-b">
-          <div class="text-sm text-slate-500">MÃ³dulo listo.</div>
+          <div class="text-sm text-slate-500">Módulo listo.</div>
         </div>
       </div>
     </section>
@@ -676,12 +676,12 @@
 
   <footer id="appFooter" class="hidden max-w-7xl mx-auto px-4 pb-10">
     <div class="text-xs text-slate-500 text-center mt-6">
-      Â© Sistema interno Â· <span id="footerMode" class="font-semibold"></span> Â·
-      Desarrollado por <span class="font-semibold">I.I. Luis Angel Guillen Medina & I.I. Alejandra GarcÃ­a Cerda</span>
+      © Sistema interno · <span id="footerMode" class="font-semibold"></span> ·
+      Desarrollado por <span class="font-semibold">I.I. Luis Angel Guillen Medina & I.I. Alejandra García Cerda</span>
     </div>
   </footer>
 
-  <!-- MÃ³dulos principales -->
+  <!-- Módulos principales -->
   <script>
   /* =========================================================
     STORAGE / API (DEMO o Sheets)
@@ -794,19 +794,19 @@
   }
   function humanAuthMessage_(code, fallback){
     switch(String(code || "").trim().toUpperCase()){
-      case "USUARIO_EXISTE": return "Ese correo ya estÃ¡ registrado. Inicia sesiÃ³n.";
-      case "CODIGO_REQUERIDO": return "Captura el cÃ³digo de verificaciÃ³n.";
-      case "CODIGO_INVALIDO": return "El cÃ³digo de verificaciÃ³n no es vÃ¡lido.";
-      case "CODIGO_EXPIRADO": return "El cÃ³digo expirÃ³. Solicita uno nuevo.";
-      case "CREDENCIALES_INVALIDAS": return "Correo o contraseÃ±a incorrectos.";
-      case "USUARIO_INACTIVO": return "Tu usuario estÃ¡ inactivo. Contacta a Calidad.";
-      case "USUARIO_NO_VERIFICADO": return "Tu usuario no estÃ¡ verificado.";
+      case "USUARIO_EXISTE": return "Ese correo ya está registrado. Inicia sesión.";
+      case "CODIGO_REQUERIDO": return "Captura el código de verificación.";
+      case "CODIGO_INVALIDO": return "El código de verificación no es válido.";
+      case "CODIGO_EXPIRADO": return "El código expiró. Solicita uno nuevo.";
+      case "CREDENCIALES_INVALIDAS": return "Correo o contraseña incorrectos.";
+      case "USUARIO_INACTIVO": return "Tu usuario está inactivo. Contacta a Calidad.";
+      case "USUARIO_NO_VERIFICADO": return "Tu usuario no está verificado.";
       case "FALTAN DATOS":
       case "FALTAN CREDENCIALES": return "Completa los datos requeridos.";
       case "SOLO CORREOS @ARANDADELAPARRA.COM": return "Solo correos @arandadelaparra.com";
-      case "CONFIG_WEBAPP_URL_MISSING": return "Falta configurar la URL del Web App de Apps Script en ConfiguraciÃ³n.";
+      case "CONFIG_WEBAPP_URL_MISSING": return "Falta configurar la URL del Web App de Apps Script en Configuración.";
       case "RESPUESTA_INVALIDA_API": return "La URL configurada no responde como API JSON. Verifica que sea el /exec del Web App.";
-      case "MAIL_SERVICE_NO_AUTORIZADO": return "El servicio de correo no estÃ¡ autorizado en Apps Script. Hay que reautorizar y volver a desplegar.";
+      case "MAIL_SERVICE_NO_AUTORIZADO": return "El servicio de correo no está autorizado en Apps Script. Hay que reautorizar y volver a desplegar.";
       case "EMAIL_ENVIO_FALLIDO": return "No se pudo enviar el correo. Intenta nuevamente en un minuto.";
       default: return fallback || "No se pudo procesar la solicitud.";
     }
@@ -918,18 +918,18 @@
       if(dup) return fail_("DUPLICADO");
       analisis.push(payload);
       lsWrite(LS_KEYS.ANALISIS, analisis);
-      return ok_(payload, "AnÃ¡lisis guardado");
+      return ok_(payload, "Análisis guardado");
     }
     if(action==="analisis.delete"){
       const { CodigoIndicador, PeriodoYM } = payload || {};
       if(!CodigoIndicador || !PeriodoYM) return fail_("Falta codigo/periodo");
       const idx = analisis.findIndex(x=>x.CodigoIndicador===CodigoIndicador && x.PeriodoYM===PeriodoYM);
       if(idx>=0) analisis.splice(idx,1);
-      // tambiÃ©n borrar propuestas asociadas
+      // también borrar propuestas asociadas
       const keepProp = prop.filter(p=>!(p.CodigoIndicador===CodigoIndicador && p.PeriodoYM===PeriodoYM));
       lsWrite(LS_KEYS.ANALISIS, analisis);
       lsWrite(LS_KEYS.PROP, keepProp);
-      return ok_(true, "AnÃ¡lisis eliminado");
+      return ok_(true, "Análisis eliminado");
     }
 
     // propuestas
@@ -1021,7 +1021,7 @@
       return ok_(payload, "Seguimiento guardado");
     }
 
-    return fail_("AcciÃ³n no soportada: "+action);
+    return fail_("Acción no soportada: "+action);
   }
 
   /* =========================================================
@@ -1046,7 +1046,7 @@
       PeriodicidadMedicion:"",       // select
       MetaObjetivo:null,
 
-      // FÃ³rmula
+      // Fórmula
       FormulaTipo:"",                // Porcentaje | Tasa | Otro
       FormulaEtiqueta:"",            // texto libre (ej "%", "tasa", etc.)
       FormulaNumerador:"",
@@ -1162,7 +1162,7 @@
   }
 
   /* =========================================================
-    SESIÃ“N (Calidad)
+    SESIÓN (Calidad)
   ========================================================= */
   function getSession(){
     try{ return JSON.parse(localStorage.getItem(LS_KEYS.SESSION) || "null"); } catch { return null; }
@@ -1207,7 +1207,7 @@
 
     if($("loginTitle")) $("loginTitle").textContent = entry ? "Registro de acceso" : "Acceso restringido";
     if($("loginSub")) $("loginSub").textContent = entry
-      ? "Elige una opciÃ³n para continuar"
+      ? "Elige una opción para continuar"
       : "Solo Calidad";
     if($("loginUserLabel")) $("loginUserLabel").textContent = "Correo corporativo *";
 
@@ -1430,7 +1430,7 @@
   }
 
   /* =========================================================
-    SELECTS ÃREAS
+    SELECTS ÁREAS
   ========================================================= */
   function fillAreaSelects(){
     const opts = AREAS_CATALOGO.map(o=>`<option value="${escapeHtml(o.Area)}">${escapeHtml(o.NombreArea)}</option>`).join("");
@@ -1438,12 +1438,12 @@
     const fa = $("f_AreaResponsable");
     if(fa) fa.innerHTML = `<option value="">Selecciona...</option>${opts}`;
 
-    // (AnÃ¡lisis/Dashboard/Explorador se llenan dinÃ¡micamente)
+    // (Análisis/Dashboard/Explorador se llenan dinámicamente)
   }
 
   /* =========================================================
-    AUTOGENERAR CÃ“DIGO POR ÃREA (FIX DEL BUG)
-    - Cada cambio de Ã¡rea recalcula desde CACHE.fichas
+    AUTOGENERAR CÓDIGO POR ÁREA (FIX DEL BUG)
+    - Cada cambio de área recalcula desde CACHE.fichas
   ========================================================= */
   function nextNumberForPrefix(prefix){
     const nums = (CACHE.fichas||[])
@@ -1467,7 +1467,7 @@
 
     const nnn = nextNumberForPrefix(prefix);
     out.value = `${prefix}${nnn}`;
-    // Autollenar el campo oculto NumeroIndicador solo con el nÃºmero
+    // Autollenar el campo oculto NumeroIndicador solo con el número
     $("f_NumeroIndicador").value = nnn;
   }
 
@@ -1479,16 +1479,16 @@
   }
 
   /* =========================================================
-    FICHA TÃ‰CNICA UI (COMPLETA)
+    FICHA TÉCNICA UI (COMPLETA)
   ========================================================= */
   function renderFichaForm(){
     const sec = $("secFicha");
     sec.innerHTML = `
       <div class="card">
         <div class="card-h">
-          <div class="font-extrabold text-navy text-lg">Ficha TÃ©cnica</div>
+          <div class="font-extrabold text-navy text-lg">Ficha Técnica</div>
           <div class="text-sm text-slate-500">
-            Campos obligatorios Â· FÃ³rmula live Â· Etiqueta (Porcentaje/Tasa/Otro)
+            Campos obligatorios · Fórmula live · Etiqueta (Porcentaje/Tasa/Otro)
           </div>
         </div>
 
@@ -1497,13 +1497,13 @@
           <!-- GRID TOP -->
           <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div>
-              <label class="text-xs font-extrabold text-slate-600">Ãrea responsable *</label>
+              <label class="text-xs font-extrabold text-slate-600">Área responsable *</label>
               <select id="f_AreaResponsable" class="input mt-1"></select>
             </div>
 
             <div>
-              <label class="text-xs font-extrabold text-slate-600">CÃ³digo (auto) *</label>
-              <input id="f_CodigoIndicador" class="input mt-1" placeholder="Se genera al elegir el Ã¡rea" readonly />
+              <label class="text-xs font-extrabold text-slate-600">Código (auto) *</label>
+              <input id="f_CodigoIndicador" class="input mt-1" placeholder="Se genera al elegir el área" readonly />
             </div>
 
             <div style="display:none">
@@ -1527,13 +1527,13 @@
                 <label class="text-xs font-extrabold text-slate-600">Tipo de indicador *</label>
                 <select id="f_TipoIndicador" class="input mt-1">
                   <option value="">Selecciona...</option>
-                  <option>EstadÃ­stico</option>
+                  <option>Estadístico</option>
                   <option>Proceso</option>
                   <option>Resultado</option>
                 </select>
               </div>
               <div>
-                <label class="text-xs font-extrabold text-slate-600">Periodicidad de mediciÃ³n *</label>
+                <label class="text-xs font-extrabold text-slate-600">Periodicidad de medición *</label>
                 <select id="f_Periodicidad" class="input mt-1">
                   <option value="">Selecciona...</option>
                   <option>Mensual</option>
@@ -1550,7 +1550,7 @@
             <label class="text-xs font-extrabold text-slate-600">Objetivo del indicador *</label>
             <textarea id="f_Objetivo" class="input mt-1" rows="3" placeholder="Describe el objetivo..."></textarea>
             <div id="f_ObjetivoSug" class="hidden mt-2 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
-              <div class="font-extrabold text-navy text-xs mb-1">Sugerencia de redacciÃ³n (propuesta)</div>
+              <div class="font-extrabold text-navy text-xs mb-1">Sugerencia de redacción (propuesta)</div>
               <div id="f_ObjetivoSugTxt"></div>
             </div>
           </div>
@@ -1562,7 +1562,7 @@
             </div>
 
             <div>
-              <label class="text-xs font-extrabold text-slate-600">Etiqueta (presentaciÃ³n) *</label>
+              <label class="text-xs font-extrabold text-slate-600">Etiqueta (presentación) *</label>
               <select id="f_FormulaTipo" class="input mt-1">
                 <option value="">Selecciona...</option>
                 <option value="Porcentaje">Porcentaje</option>
@@ -1577,10 +1577,10 @@
             </div>
           </div>
 
-          <!-- FÃ“RMULA -->
+          <!-- FÓRMULA -->
           <div class="card">
             <div class="card-h">
-              <div class="font-extrabold text-navy">FÃ³rmula</div>
+              <div class="font-extrabold text-navy">Fórmula</div>
               <div class="text-xs text-slate-500">Se arma en vivo: Ej. (N/D)*100</div>
             </div>
             <div class="card-b space-y-4">
@@ -1603,7 +1603,7 @@
                 </div>
 
                 <div class="md:col-span-2">
-                  <label class="text-xs font-extrabold text-slate-600">Vista de fÃ³rmula</label>
+                  <label class="text-xs font-extrabold text-slate-600">Vista de fórmula</label>
                   <div class="mt-1 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
                     <div class="text-sm text-slate-700 font-extrabold" id="f_FormulaPreview">(N/D)*1</div>
                   </div>
@@ -1615,8 +1615,8 @@
 
           <!-- LISTAS NUMERADAS -->
           <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-            ${renderListBlock("Fuentes de recolecciÃ³n *", "f_Fuentes", "f_FuentesList", "Ej. Sistema HIS, BitÃ¡cora, etc.")}
-            ${renderListBlock("TÃ©rminos / Definiciones *", "f_Terminos", "f_TerminosList", "Ej. DefiniciÃ³n de evento...")}
+            ${renderListBlock("Fuentes de recolección *", "f_Fuentes", "f_FuentesList", "Ej. Sistema HIS, Bitácora, etc.")}
+            ${renderListBlock("Términos / Definiciones *", "f_Terminos", "f_TerminosList", "Ej. Definición de evento...")}
             ${renderListBlock("Observaciones *", "f_Observaciones", "f_ObservacionesList", "Ej. Consideraciones...", true, true)}
           </div>
 
@@ -1628,14 +1628,14 @@
 
           <div id="f_SaveMsg" class="hidden rounded-2xl border border-emerald-200 bg-emerald-50 text-emerald-900 p-3 text-sm">
             <div class="font-extrabold">Ficha guardada correctamente</div>
-            <div>Redirigiendo al inicioâ€¦</div>
+            <div>Redirigiendo al inicio…</div>
           </div>
 
         </div>
       </div>
     `;
 
-    // llenar select Ã¡rea
+    // llenar select área
     fillAreaSelects();
 
     // eventos
@@ -1678,7 +1678,7 @@
     <div class="card">
       <div class="card-h">
         <div class="font-extrabold text-navy">${escapeHtml(title)}</div>
-        <div class="text-xs text-slate-500">${maxOne ? "MÃ¡ximo una entrada." : "Agrega Ã­tems, se enumeran automÃ¡ticamente."}</div>
+        <div class="text-xs text-slate-500">${maxOne ? "Máximo una entrada." : "Agrega ítems, se enumeran automáticamente."}</div>
       </div>
       <div class="card-b space-y-2">
         <div class="flex gap-2">
@@ -1695,7 +1695,7 @@
     const input = $(inputId);
     const list = $(listId);
     const btn = document.querySelector(`[data-add="${inputId}"]`);
-    const numbered = !maxOne; // No numeraciÃ³n si es maxOne (observaciones)
+    const numbered = !maxOne; // No numeración si es maxOne (observaciones)
     
     btn.addEventListener("click", ()=>{
       const txt = (input.value||"").trim();
@@ -1737,7 +1737,7 @@
       return;
     }
     
-    // Desactivar botÃ³n + si es maxOne y hay items
+    // Desactivar botón + si es maxOne y hay items
     if(btn && maxOne && items.length > 0){
       btn.disabled = true;
     }
@@ -1779,7 +1779,7 @@
         arr.splice(idx,1);
         setListState(listId, arr);
         renderNumbered(listId, numbered, maxOne);
-        // Re-habilitar botÃ³n si se eliminÃ³ el Ãºltimo item
+        // Re-habilitar botón si se eliminó el último item
         if(btn && maxOne && arr.length === 0){
           btn.disabled = false;
         }
@@ -1873,19 +1873,19 @@
   }
 
   /* =========================================================
-    SUGERENCIA REDACCIÃ“N (ligera, local, sin IA externa)
+    SUGERENCIA REDACCIÓN (ligera, local, sin IA externa)
     - NO modifica texto, solo muestra propuesta abajo
   ========================================================= */
   function suggestRedaction(textareaId, boxId, outId){
     const txt = ($(textareaId).value||"").trim();
     if(!txt){ $(boxId).classList.add("hidden"); return; }
 
-    // â€œmejoritaâ€ bÃ¡sica (mayÃºscula inicial, quitar dobles espacios, punto final)
+    // “mejorita” básica (mayúscula inicial, quitar dobles espacios, punto final)
     let s = txt.replace(/\s+/g," ").trim();
     s = s.charAt(0).toUpperCase() + s.slice(1);
     if(!/[.!?]$/.test(s)) s += ".";
 
-    // si empieza con verbos comunes, lo dejamos. Si no, sugerimos â€œAsegurar/Incrementar/Reducirâ€
+    // si empieza con verbos comunes, lo dejamos. Si no, sugerimos “Asegurar/Incrementar/Reducir”
     const starters = ["Asegurar","Incrementar","Reducir","Mejorar","Garantizar","Evaluar","Monitorear","Disminuir"];
     if(!starters.some(v=>s.startsWith(v))){
       s = "Asegurar " + s.charAt(0).toLowerCase() + s.slice(1);
@@ -1896,7 +1896,7 @@
   }
 
   /* =========================================================
-    VALIDACIÃ“N FICHA (todo obligatorio)
+    VALIDACIÓN FICHA (todo obligatorio)
   ========================================================= */
   function clearErrorsFicha(){
     ["f_AreaResponsable","f_CodigoIndicador","f_ResponsableIndicador","f_NombreIndicador","f_TipoIndicador","f_Periodicidad","f_Objetivo","f_Meta",
@@ -1981,7 +1981,7 @@
     const btn = $("btnFichaSave");
     const origText = btn.textContent;
     btn.disabled = true;
-    btn.textContent = "Guardandoâ€¦";
+    btn.textContent = "Guardando…";
 
     console.log('saveFicha invoked, demo=', USE_DEMO, 'url=', getWebAppUrl());
     const row = modelFicha();
@@ -1989,10 +1989,10 @@
 
     row.AreaResponsable = getFichaAreaValue_();
     row.CodigoIndicador = ($("f_CodigoIndicador").value||"").trim();
-    // Asegurar que NumeroIndicador siempre se envÃ­a correctamente
+    // Asegurar que NumeroIndicador siempre se envía correctamente
     let numInd = Number($("f_NumeroIndicador")?.value||0);
     if(!numInd){
-      // Extraer del cÃ³digo si es posible
+      // Extraer del código si es posible
       const codVal = $("f_CodigoIndicador")?.value||"";
       const match = codVal.match(/(\d+)$/);
       if(match) numInd = Number(match[1]);
@@ -2058,7 +2058,7 @@
       btn.textContent = origText;
     }
     if(!r.ok){
-      toast("err","No se guardÃ³", r.message || "Error");
+      toast("err","No se guardó", r.message || "Error");
       return false;
     }
 
@@ -2084,7 +2084,7 @@
       toast(
         "ok",
         opts.successTitle || "Guardado",
-        opts.successMessage || "Ficha tÃ©cnica guardada correctamente."
+        opts.successMessage || "Ficha técnica guardada correctamente."
       );
 
       if(opts.redirectAfterSave !== false){
@@ -2124,7 +2124,7 @@
     if(docOk){
       toast("ok","Proceso completo","Ficha capturada en el sistema y documento Word/PDF guardado correctamente.");
     } else if(docOk === null){
-      toast("ok","Ficha capturada","La ficha sÃ­ quedÃ³ guardada en el sistema. Puedes confirmar el documento cuando quieras.");
+      toast("ok","Ficha capturada","La ficha sí quedó guardada en el sistema. Puedes confirmar el documento cuando quieras.");
     }
   }
 
@@ -2140,13 +2140,13 @@
     const nombre = $("f_NombreIndicador").value;
     const areaLabel = getAreaLabel(getFichaAreaValue_());
 
-    $("pdfSub").textContent = `Ficha TÃ©cnica Â· ${codigo}`;
+    $("pdfSub").textContent = `Ficha Técnica · ${codigo}`;
     $("pdfContent").innerHTML = `
       <div class="space-y-4 print-card">
         <div class="text-2xl font-extrabold text-navy">${escapeHtml(nombre)}</div>
         <div class="text-sm text-slate-600">
-          <span class="font-extrabold">CÃ³digo:</span> ${escapeHtml(codigo)} Â·
-          <span class="font-extrabold">Ãrea:</span> ${escapeHtml(areaLabel)} Â·
+          <span class="font-extrabold">Código:</span> ${escapeHtml(codigo)} ·
+          <span class="font-extrabold">Área:</span> ${escapeHtml(areaLabel)} ·
           <span class="font-extrabold">Periodicidad:</span> ${escapeHtml($("f_Periodicidad").value)}
         </div>
 
@@ -2156,7 +2156,7 @@
         </div>
 
         <div class="card">
-          <div class="card-h"><div class="font-extrabold text-navy">FÃ³rmula</div></div>
+          <div class="card-h"><div class="font-extrabold text-navy">Fórmula</div></div>
           <div class="card-b text-sm text-slate-700 space-y-2">
             <div><span class="font-extrabold">Numerador:</span> ${escapeHtml($("f_NumTxt").value)}</div>
             <div><span class="font-extrabold">Denominador:</span> ${escapeHtml($("f_DenTxt").value)}</div>
@@ -2167,8 +2167,8 @@
           </div>
         </div>
 
-        ${renderListCard("Fuentes de recolecciÃ³n", getListState("f_FuentesList"))}
-        ${renderListCard("TÃ©rminos / definiciones", getListState("f_TerminosList"))}
+        ${renderListCard("Fuentes de recolección", getListState("f_FuentesList"))}
+        ${renderListCard("Términos / definiciones", getListState("f_TerminosList"))}
         ${renderListCard("Observaciones", getListState("f_ObservacionesList"))}
       </div>
     `;
@@ -2176,7 +2176,7 @@
   }
 
   // ------------------------------------------------
-  // GeneraciÃ³n de documentos usando backend Apps Script
+  // Generación de documentos usando backend Apps Script
   // ------------------------------------------------
   async function generateFichaDoc(opts){
     opts = opts || {};
@@ -2194,11 +2194,11 @@
     }
 
     try {
-      const ok = confirm("Â¿Confirmas guardar definitivo de la ficha (Word + PDF)?");
+      const ok = confirm("¿Confirmas guardar definitivo de la ficha (Word + PDF)?");
       if(!ok) return null;
 
       btn.disabled = true;
-      btn.textContent = "Guardando definitivoâ€¦";
+      btn.textContent = "Guardando definitivo…";
       const docWin = window.open("about:blank", "_blank");
       const pdfWin = window.open("about:blank", "_blank");
       const r = await apiFetch("docs.confirmarFichaDoc", {
@@ -2211,7 +2211,7 @@
       if(!r.ok){
         try { docWin && !docWin.closed && docWin.close(); } catch(_) {}
         try { pdfWin && !pdfWin.closed && pdfWin.close(); } catch(_) {}
-        toast("err","Error", r.message || "FallÃ³ guardado definitivo");
+        toast("err","Error", r.message || "Falló guardado definitivo");
         return false;
       }
       const links = r.data || {};
@@ -2240,7 +2240,7 @@
     const btn = $("btnFichaDoc");
     const orig = btn.textContent;
     btn.disabled = true;
-    btn.textContent = "Generandoâ€¦";
+    btn.textContent = "Generando…";
 
     try {
       const payload = modelFicha();
@@ -2321,8 +2321,8 @@
   ========================================================= */
   function setModeTags(){
     refreshApiMode_();
-    $("modeTag").textContent = (USE_DEMO ? "DEMO localStorage" : "Google Sheets") + " Â· " + UI_BUILD;
-    $("footerMode").textContent = (USE_DEMO ? "DEMO localStorage" : "Google Sheets") + " Â· " + UI_BUILD;
+    $("modeTag").textContent = (USE_DEMO ? "DEMO localStorage" : "Google Sheets") + " · " + UI_BUILD;
+    $("footerMode").textContent = (USE_DEMO ? "DEMO localStorage" : "Google Sheets") + " · " + UI_BUILD;
   }
 
   function wireHeaderNav(){
@@ -2345,11 +2345,11 @@
 
     $("btnLogout").addEventListener("click", ()=>{
       clearSession();
-      toast("ok","SesiÃ³n cerrada","Acceso de Calidad removido.");
+      toast("ok","Sesión cerrada","Acceso de Calidad removido.");
       openAuthModal_("entry");
     });
 
-    // accesos rÃ¡pidos en Inicio
+    // accesos rápidos en Inicio
     $("goFicha").addEventListener("click", ()=>{
       showSection("secFicha");
       renderFichaForm();
@@ -2388,7 +2388,7 @@
       const p = ($("loginPass").value||"").trim();
 
       if(!u || !p){
-        $("loginMsg").textContent = "Captura correo corporativo y contraseÃ±a.";
+        $("loginMsg").textContent = "Captura correo corporativo y contraseña.";
         $("loginMsg").classList.remove("hidden");
         return;
       }
@@ -2400,7 +2400,7 @@
 
       const r = await apiFetch("auth.login", { Email: u, Password: p });
       if(!r?.ok){
-        $("loginMsg").textContent = humanAuthMessage_(r?.message, "No se pudo iniciar sesiÃ³n.");
+        $("loginMsg").textContent = humanAuthMessage_(r?.message, "No se pudo iniciar sesión.");
         $("loginMsg").classList.remove("hidden");
         return;
       }
@@ -2408,7 +2408,7 @@
       const me = r.data || {};
       const userArea = me.Area || area || "";
       if(authModalMode === "quality" && !isQualityArea_(userArea)){
-        $("loginMsg").textContent = "Este acceso estÃ¡ restringido para usuarios del Ã¡rea de Calidad.";
+        $("loginMsg").textContent = "Este acceso está restringido para usuarios del área de Calidad.";
         $("loginMsg").classList.remove("hidden");
         return;
       }
@@ -2439,12 +2439,12 @@
       const pass = ($("loginPass").value||"").trim();
 
       if(!name || !email || !area || !pass){
-        $("loginMsg").textContent = "Completa nombre, Ã¡rea, correo corporativo y contraseÃ±a para enviar cÃ³digo.";
+        $("loginMsg").textContent = "Completa nombre, área, correo corporativo y contraseña para enviar código.";
         $("loginMsg").classList.remove("hidden");
         return;
       }
 
-      const prevLabel = btnSendCode ? btnSendCode.textContent : "Enviar cÃ³digo";
+      const prevLabel = btnSendCode ? btnSendCode.textContent : "Enviar código";
       if(btnSendCode){
         btnSendCode.disabled = true;
         btnSendCode.textContent = "Enviando...";
@@ -2452,14 +2452,14 @@
       try {
         const r = await apiFetch("auth.requestCode", { Nombre:name, Area:area, Email:email, Password:pass });
         if(!r?.ok){
-          const baseMsg = humanAuthMessage_(r?.message, "No se pudo enviar el cÃ³digo.");
+          const baseMsg = humanAuthMessage_(r?.message, "No se pudo enviar el código.");
           const detail = String(r?.data?.reason || "").trim();
           $("loginMsg").textContent = detail ? `${baseMsg} (${detail})` : baseMsg;
           $("loginMsg").classList.remove("hidden");
           return;
         }
         $("loginMsg").classList.add("hidden");
-        toast("ok","CÃ³digo enviado","Revisa tu correo corporativo y captura el cÃ³digo para completar registro.");
+        toast("ok","Código enviado","Revisa tu correo corporativo y captura el código para completar registro.");
       } finally {
         if(btnSendCode){
           btnSendCode.disabled = false;
@@ -2477,12 +2477,12 @@
       const pass = ($("loginPass").value||"").trim();
       const code = normalizeVerificationCode_(($("loginCode").value||"").trim());
       if(!name || !email || !area || !pass || !code){
-        $("loginMsg").textContent = "Completa nombre, Ã¡rea, correo corporativo, contraseÃ±a y cÃ³digo.";
+        $("loginMsg").textContent = "Completa nombre, área, correo corporativo, contraseña y código.";
         $("loginMsg").classList.remove("hidden");
         return;
       }
       if(code.length !== 6){
-        $("loginMsg").textContent = "El cÃ³digo debe tener 6 dÃ­gitos.";
+        $("loginMsg").textContent = "El código debe tener 6 dígitos.";
         $("loginMsg").classList.remove("hidden");
         return;
       }
@@ -2503,9 +2503,9 @@
         setEntryAuthAction_("login");
         $("loginPass").value = "";
         $("loginCode").value = "";
-        $("loginMsg").textContent = "Cuenta creada satisfactoriamente. Ahora inicia sesiÃ³n.";
+        $("loginMsg").textContent = "Cuenta creada satisfactoriamente. Ahora inicia sesión.";
         $("loginMsg").classList.remove("hidden");
-        toast("ok","Registro exitoso","Cuenta creada. Inicia sesiÃ³n para continuar.");
+        toast("ok","Registro exitoso","Cuenta creada. Inicia sesión para continuar.");
       } finally {
         if(btnRegister){
           btnRegister.disabled = false;
@@ -2540,7 +2540,7 @@
     window.__AN_DOC_DRAFT = null;
     const btn = $("btnASaveAnalisis");
     if(btn){
-      btn.textContent = "Guardar anÃ¡lisis/Guardar archivo";
+      btn.textContent = "Guardar análisis/Guardar archivo";
     }
   }
 
@@ -2570,7 +2570,7 @@
 
   <script>
   /* =========================================================
-    COMPONENTES UI: SEMÃFORO MACRO
+    COMPONENTES UI: SEMÁFORO MACRO
   ========================================================= */
   function getSemaforo(cumple, mode="auto"){
     // cumple: true/false, mode: auto|warn (si quieres monitoreo)
@@ -2596,7 +2596,7 @@
   }
 
   /* =========================================================
-    HELPERS: FICHA/ANÃLISIS lookup
+    HELPERS: FICHA/ANÁLISIS lookup
   ========================================================= */
   function fichaByCodigo(codigo){
     return (CACHE.fichas||[]).find(f=>f.CodigoIndicador===codigo) || null;
@@ -2633,29 +2633,29 @@
     const explicit = Number(ficha.FormulaFactor ?? ficha.Factor);
     if(Number.isFinite(explicit) && explicit > 1) return explicit;
 
-    // Fallback seguro para fichas viejas: si no hay pista clara y venÃ­a en 1,
-    // usar porcentaje por defecto (caso mÃ¡s comÃºn en tus indicadores).
+    // Fallback seguro para fichas viejas: si no hay pista clara y venía en 1,
+    // usar porcentaje por defecto (caso más común en tus indicadores).
     if(explicit === 1 || !Number.isFinite(explicit)) return 100;
     return 1;
   }
   function fmtNum(n){
-    if(n===null || n===undefined || n==="") return "â€”";
+    if(n===null || n===undefined || n==="") return "—";
     const x = Number(n);
     if(!Number.isFinite(x)) return String(n);
     return x.toLocaleString("es-MX", { maximumFractionDigits: 2 });
   }
 
   /* =========================================================
-    ANÃLISIS: Render completo
+    ANÁLISIS: Render completo
   ========================================================= */
   function renderAnalisis(){
     const sec = $("secAnalisis");
     sec.innerHTML = `
       <div class="card">
         <div class="card-h">
-          <div class="font-extrabold text-navy text-lg">AnÃ¡lisis del Indicador (Estilo Macro)</div>
+          <div class="font-extrabold text-navy text-lg">Análisis del Indicador (Estilo Macro)</div>
           <div class="text-sm text-slate-500">
-            Filtra cÃ³digos por Ã¡rea Â· CÃ¡lculo automÃ¡tico Â· Propuestas (+) Â· Evidencias opcionales (Figuras)
+            Filtra códigos por área · Cálculo automático · Propuestas (+) · Evidencias opcionales (Figuras)
           </div>
         </div>
 
@@ -2664,13 +2664,13 @@
           <!-- SELECTOR -->
           <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
             <div>
-              <label class="text-xs font-extrabold text-slate-600">Ãrea *</label>
+              <label class="text-xs font-extrabold text-slate-600">Área *</label>
               <select id="a_Area" class="input mt-1"></select>
             </div>
             <div>
-              <label class="text-xs font-extrabold text-slate-600">CÃ³digo (solo del Ã¡rea) *</label>
+              <label class="text-xs font-extrabold text-slate-600">Código (solo del área) *</label>
               <select id="a_Codigo" class="input mt-1">
-                <option value="">Selecciona Ã¡rea primeroâ€¦</option>
+                <option value="">Selecciona área primero…</option>
               </select>
             </div>
             <div class="flex gap-2">
@@ -2687,7 +2687,7 @@
             </div>
             <div class="card-b">
               <div id="a_PeriodosRegistrados" class="text-sm text-slate-700">
-                Selecciona un cÃ³digo para ver periodos.
+                Selecciona un código para ver periodos.
               </div>
             </div>
           </div>
@@ -2718,7 +2718,7 @@
             </div>
           </div>
 
-          <!-- FORMULARIO ANÃLISIS -->
+          <!-- FORMULARIO ANÁLISIS -->
           <div id="a_FormBlock" class="hidden space-y-6">
 
             <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -2726,7 +2726,7 @@
                 <label class="text-xs font-extrabold text-slate-600">Periodo (mes) *</label>
                 <input id="a_PeriodoYM" type="month" class="input mt-1"/>
                 <div id="a_DupMsg" class="hidden mt-2 rounded-2xl border border-red-200 bg-red-50 text-red-900 p-3 text-sm">
-                  Ese mes ya fue capturado. Si deseas recapturarlo, elimÃ­nalo primero en el Explorador.
+                  Ese mes ya fue capturado. Si deseas recapturarlo, elimínalo primero en el Explorador.
                 </div>
               </div>
 
@@ -2749,10 +2749,10 @@
 
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
               <div class="md:col-span-2">
-                <label class="text-xs font-extrabold text-slate-600">AnÃ¡lisis e interpretaciÃ³n del resultado *</label>
-                <textarea id="a_Analisis" class="input mt-1" rows="5" placeholder="Redacta el anÃ¡lisisâ€¦"></textarea>
+                <label class="text-xs font-extrabold text-slate-600">Análisis e interpretación del resultado *</label>
+                <textarea id="a_Analisis" class="input mt-1" rows="5" placeholder="Redacta el análisis…"></textarea>
                 <div id="a_AnalisisSug" class="hidden mt-2 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
-                  <div class="font-extrabold text-navy text-xs mb-1">Sugerencia de redacciÃ³n (propuesta)</div>
+                  <div class="font-extrabold text-navy text-xs mb-1">Sugerencia de redacción (propuesta)</div>
                   <div id="a_AnalisisSugTxt"></div>
                 </div>
               </div>
@@ -2760,28 +2760,28 @@
               <div class="card">
                 <div class="card-h">
                   <div class="font-extrabold text-navy">Cumplimiento</div>
-                  <div class="text-xs text-slate-500">Auto segÃºn meta.</div>
+                  <div class="text-xs text-slate-500">Auto según meta.</div>
                 </div>
                 <div class="card-b space-y-3">
                   <div class="text-sm text-slate-600">Estado:</div>
                   <div id="a_Semaforo"></div>
                   <div class="text-xs text-slate-500">
-                    Regla: si Resultado â‰¥ Meta â†’ CUMPLE
+                    Regla: si Resultado ≥ Meta → CUMPLE
                   </div>
                 </div>
               </div>
             </div>
 
-            <!-- GRÃFICA TIPO TU IMAGEN -->
+            <!-- GRÁFICA TIPO TU IMAGEN -->
             <div class="card">
               <div class="card-h">
-                <div class="font-extrabold text-navy">GrÃ¡fica (Resultado vs Meta)</div>
+                <div class="font-extrabold text-navy">Gráfica (Resultado vs Meta)</div>
                 <div class="text-xs text-slate-500">Se actualiza en cuanto existe un resultado.</div>
               </div>
               <div class="card-b flex justify-center">
                 <canvas id="aChart" height="220" class="w-full max-w-xs mx-auto"></canvas>
                 <div class="text-xs text-slate-500 mt-2">
-                  Tip: al cargar periodos previos, se grafican automÃ¡ticamente.
+                  Tip: al cargar periodos previos, se grafican automáticamente.
                 </div>
               </div>
             </div>
@@ -2805,15 +2805,15 @@
             <div class="card">
               <div class="card-h">
                 <div class="font-extrabold text-navy">Propuestas de mejora (solo si NO CUMPLE)</div>
-                <div class="text-xs text-slate-500">Empieza con AcciÃ³n 1 y agrega con +</div>
+                <div class="text-xs text-slate-500">Empieza con Acción 1 y agrega con +</div>
               </div>
 
               <div class="card-b space-y-3">
                 <div id="propBlock"></div>
 
                 <div class="flex gap-2">
-                  <button id="btnPropAdd" class="btn btn-soft">+ Agregar acciÃ³n</button>
-                  <div class="text-xs text-slate-500 self-center">MÃ¡ximo 5.</div>
+                  <button id="btnPropAdd" class="btn btn-soft">+ Agregar acción</button>
+                  <div class="text-xs text-slate-500 self-center">Máximo 5.</div>
                 </div>
               </div>
             </div>
@@ -2822,7 +2822,7 @@
             <div class="card">
               <div class="card-h">
                 <div class="font-extrabold text-navy">Evidencias (opcional)</div>
-                <div class="text-xs text-slate-500">Sube imÃ¡genes Â· se enumeran como Figura 1..N</div>
+                <div class="text-xs text-slate-500">Sube imágenes · se enumeran como Figura 1..N</div>
               </div>
 
               <div class="card-b space-y-3">
@@ -2834,13 +2834,13 @@
             <div class="flex flex-wrap gap-2">
               <button id="btnAIrFirmas" class="btn btn-soft hidden">Firmas</button>
               <button id="btnABorrador" class="btn btn-soft">Limpiar</button>
-              <button id="btnASaveAnalisis" class="btn btn-primary">Guardar anÃ¡lisis/Guardar archivo</button>
+              <button id="btnASaveAnalisis" class="btn btn-primary">Guardar análisis/Guardar archivo</button>
               <button id="btnAGuardar" class="btn btn-primary">Generar vista previa del Word-PDF</button>
             </div>
 
             <div id="a_SaveMsg" class="hidden rounded-2xl border border-emerald-200 bg-emerald-50 text-emerald-900 p-3 text-sm">
               <div class="font-extrabold">Guardado correctamente</div>
-              <div>El anÃ¡lisis se guardÃ³ en la base de datos.</div>
+              <div>El análisis se guardó en la base de datos.</div>
             </div>
 
           </div>
@@ -2848,7 +2848,7 @@
       </div>
     `;
 
-    // llenar select Ã¡rea
+    // llenar select área
     const aArea = $("a_Area");
     aArea.innerHTML = `<option value="">Selecciona...</option>` + AREAS_CATALOGO
       .map(o=>`<option value="${escapeHtml(o.Area)}">${escapeHtml(o.NombreArea)}</option>`).join("");
@@ -2877,7 +2877,7 @@
     });
 
     $("a_Analisis").addEventListener("input", ()=>{
-      // mantiene la grÃ¡fica visible mientras se redacta interpretaciÃ³n
+      // mantiene la gráfica visible mientras se redacta interpretación
       recalcResultadoAndUI();
     });
     $("a_Analisis").addEventListener("blur", ()=>suggestRedaction("a_Analisis","a_AnalisisSug","a_AnalisisSugTxt"));
@@ -2904,17 +2904,17 @@
     const prefix = $("a_Area").value;
     const dd = $("a_Codigo");
     if(!prefix){
-      dd.innerHTML = `<option value="">Selecciona Ã¡rea primeroâ€¦</option>`;
+      dd.innerHTML = `<option value="">Selecciona área primero…</option>`;
       return;
     }
     const fichas = fichasByArea(prefix);
     if(!fichas.length){
-      dd.innerHTML = `<option value="">Sin fichas en esta Ã¡rea</option>`;
+      dd.innerHTML = `<option value="">Sin fichas en esta área</option>`;
       return;
     }
-    dd.innerHTML = `<option value="">Seleccionaâ€¦</option>` + fichas
+    dd.innerHTML = `<option value="">Selecciona…</option>` + fichas
       .sort((a,b)=>(a.CodigoIndicador||"").localeCompare(b.CodigoIndicador||""))
-      .map(f=>`<option value="${escapeHtml(f.CodigoIndicador)}">${escapeHtml(f.CodigoIndicador)} Â· ${escapeHtml(f.NombreIndicador)}</option>`).join("");
+      .map(f=>`<option value="${escapeHtml(f.CodigoIndicador)}">${escapeHtml(f.CodigoIndicador)} · ${escapeHtml(f.NombreIndicador)}</option>`).join("");
   }
 
   function resetAnalisisUI(full){
@@ -2928,8 +2928,8 @@
 
     if(full){
       $("a_Area").value = "";
-      $("a_Codigo").innerHTML = `<option value="">Selecciona Ã¡rea primeroâ€¦</option>`;
-      $("a_PeriodosRegistrados").innerHTML = `Selecciona un cÃ³digo para ver periodos.`;
+      $("a_Codigo").innerHTML = `<option value="">Selecciona área primero…</option>`;
+      $("a_PeriodosRegistrados").innerHTML = `Selecciona un código para ver periodos.`;
     }
 
     $("a_PeriodoYM").value = "";
@@ -2942,7 +2942,7 @@
     // props
     window.__PROP_ROWS = [];
     renderPropRows();
-    addPropRow(); // acciÃ³n 1
+    addPropRow(); // acción 1
 
     // evidencias
     window.__EVID = [];
@@ -2964,13 +2964,13 @@
     const codigo = $("a_Codigo").value;
 
     if(!area || !codigo){
-      toast("err","Faltan datos","Selecciona Ãrea y CÃ³digo.");
+      toast("err","Faltan datos","Selecciona Área y Código.");
       return;
     }
 
     const ficha = fichaByCodigo(codigo);
     if(!ficha){
-      toast("err","No encontrado","No existe ficha para este cÃ³digo.");
+      toast("err","No encontrado","No existe ficha para este código.");
       return;
     }
 
@@ -2984,12 +2984,12 @@
     $("a_Meta").textContent = fmtNum(ficha.MetaObjetivo);
     $("a_Objetivo").textContent = ficha.ObjetivoIndicador || "";
 
-    // hint fÃ³rmula
+    // hint fórmula
     const f = getFichaFactor(ficha);
     const formulaNum = normalizeFormulaOperandForHint_(ficha.FormulaNumerador, "N");
     const formulaDen = normalizeFormulaOperandForHint_(ficha.FormulaDenominador, "D");
     const formulaEtiqueta = normalizeFormulaOperandForHint_(ficha.FormulaEtiqueta, "");
-    $("a_FormulaHint").textContent = `FÃ³rmula: (${formulaNum||"N"}/${formulaDen||"D"})*${f}  Â· Etiqueta: ${formulaEtiqueta||""}`;
+    $("a_FormulaHint").textContent = `Fórmula: (${formulaNum||"N"}/${formulaDen||"D"})*${f}  · Etiqueta: ${formulaEtiqueta||""}`;
 
     await refreshHistoryByCodigo_(codigo);
 
@@ -3020,7 +3020,7 @@
       checkDuplicadoPeriodo();
     }
     recalcResultadoAndUI();
-    // chart con histÃ³ricos al cargar indicador
+    // chart con históricos al cargar indicador
     const series = buildSeriesForCodigo(codigo);
     drawAnalisisChart(series, Number(ficha.MetaObjetivo||0));
   }
@@ -3142,14 +3142,14 @@
   function updatePeriodosRegistrados(){
     const codigo = $("a_Codigo").value;
     if(!codigo){
-      $("a_PeriodosRegistrados").innerHTML = `Selecciona un cÃ³digo para ver periodos.`;
+      $("a_PeriodosRegistrados").innerHTML = `Selecciona un código para ver periodos.`;
       return;
     }
     const rows = getAllRowsForCodigo_(codigo);
     const arr = Array.from(new Set(rows.map(x=>String(x.PeriodoYM))));
 
     if(!arr.length){
-      $("a_PeriodosRegistrados").innerHTML = `<span class="badge badge-gray">AÃºn no hay periodos registrados.</span>`;
+      $("a_PeriodosRegistrados").innerHTML = `<span class="badge badge-gray">Aún no hay periodos registrados.</span>`;
       return;
     }
 
@@ -3161,10 +3161,10 @@
     const bodyRows = arr.map(per => {
       const r = mapByPeriodo.get(per) || {};
       const res = toNumLoose_(r?.ResultadoObtenido ?? r?.Resultado ?? r?.resultado);
-      const resTxt = Number.isFinite(res) ? res.toFixed(2) : "â€”";
+      const resTxt = Number.isFinite(res) ? res.toFixed(2) : "—";
       const cumpleVal = String(r?.Cumple ?? r?.cumple ?? "").toLowerCase();
       const statusTxt = (cumpleVal === "true" || cumpleVal === "1" || cumpleVal === "cumple") ? "CUMPLE" :
-        ((cumpleVal === "false" || cumpleVal === "0" || cumpleVal === "no cumple") ? "NO CUMPLE" : "â€”");
+        ((cumpleVal === "false" || cumpleVal === "0" || cumpleVal === "no cumple") ? "NO CUMPLE" : "—");
       return `<tr class="border-b border-slate-100">
         <td class="px-2 py-1.5 text-slate-700">${escapeHtml(periodoHuman(per))}</td>
         <td class="px-2 py-1.5 text-slate-700">${escapeHtml(resTxt)}</td>
@@ -3209,7 +3209,7 @@
 
     if(!isPeriodoAllowedByPeriodicidad(per, periodicidad)){
       const allowed = periodicidadToAllowedMonths(periodicidad).map(m=>MESES[m-1]).join(", ");
-      setPeriodoValidationMessage(`Periodo no vÃ¡lido para periodicidad ${periodicidad || "seleccionada"}. Meses permitidos: ${allowed}.`);
+      setPeriodoValidationMessage(`Periodo no válido para periodicidad ${periodicidad || "seleccionada"}. Meses permitidos: ${allowed}.`);
       syncPeriodoLockState_(true);
       return true;
     }
@@ -3218,7 +3218,7 @@
     if(dup){
       const next = getNextPeriodoDisponible(codigo, periodicidad);
       const sug = next ? ` Sugerido: ${periodoHuman(next)}.` : "";
-      setPeriodoValidationMessage("Ese mes ya fue capturado. Si deseas recapturarlo, elimÃ­nalo primero en el Explorador." + sug);
+      setPeriodoValidationMessage("Ese mes ya fue capturado. Si deseas recapturarlo, elimínalo primero en el Explorador." + sug);
       syncPeriodoLockState_(true);
     } else {
       setPeriodoValidationMessage("");
@@ -3242,19 +3242,19 @@
 
     $("a_Resultado").value = res===null ? "" : res.toFixed(2);
 
-    // semÃ¡foro
+    // semáforo
     let c = null;
     if(ficha && res!==null){
       const meta = Number(ficha.MetaObjetivo);
       c = cumpleFrom(meta, res);
       $("a_Semaforo").innerHTML = getSemaforo(c===true);
     }else{
-      $("a_Semaforo").innerHTML = `<span class="badge badge-gray">â€”</span>`;
+      $("a_Semaforo").innerHTML = `<span class="badge badge-gray">—</span>`;
     }
     // show/hide propuestas section
     togglePropSection(c===false);
 
-    // chart: si ya hay resultado y periodo seleccionado, grafica instantÃ¡nea (incluye el punto actual aunque no estÃ© guardado)
+    // chart: si ya hay resultado y periodo seleccionado, grafica instantánea (incluye el punto actual aunque no esté guardado)
     if(ficha){
       const meta = Number(ficha.MetaObjetivo||0);
       const series = buildSeriesForCodigo(codigo);
@@ -3310,7 +3310,7 @@
   ========================================================= */
   function addPropRow(){
     window.__PROP_ROWS = window.__PROP_ROWS || [];
-    if(window.__PROP_ROWS.length >= 5) return toast("warn","LÃ­mite","MÃ¡ximo 5 acciones.");
+    if(window.__PROP_ROWS.length >= 5) return toast("warn","Límite","Máximo 5 acciones.");
     window.__PROP_ROWS.push({ Accion:"", Responsable:"", FechaCompromiso:"" });
     renderPropRows();
   }
@@ -3323,14 +3323,14 @@
     wrap.innerHTML = window.__PROP_ROWS.map((r,i)=>`
       <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
         <div class="flex items-center justify-between">
-          <div class="font-extrabold text-navy">AcciÃ³n ${i+1}</div>
+          <div class="font-extrabold text-navy">Acción ${i+1}</div>
           <button class="text-xs font-extrabold text-red-700 hover:underline" data-prop-del="${i}">Eliminar</button>
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3">
           <div class="md:col-span-2">
-            <label class="text-xs font-extrabold text-slate-600">AcciÃ³n *</label>
-            <input class="input mt-1" data-prop="Accion" data-idx="${i}" value="${escapeHtml(r.Accion)}" placeholder="Describe la acciÃ³n..."/>
+            <label class="text-xs font-extrabold text-slate-600">Acción *</label>
+            <input class="input mt-1" data-prop="Accion" data-idx="${i}" value="${escapeHtml(r.Accion)}" placeholder="Describe la acción..."/>
           </div>
           <div>
             <label class="text-xs font-extrabold text-slate-600">Responsable *</label>
@@ -3362,7 +3362,7 @@
   }
 
   /* =========================================================
-    EVIDENCIAS (imÃ¡genes) -> Figuras
+    EVIDENCIAS (imágenes) -> Figuras
   ========================================================= */
   async function fileToDataURL(file){
     return new Promise((resolve,reject)=>{
@@ -3405,7 +3405,7 @@
         <div class="text-xs font-extrabold text-slate-600 mb-2">Figura ${i+1}</div>
         <img src="${x.DataUrl}" class="w-full h-40 object-cover rounded-xl border border-slate-100"/>
         <div class="text-xs text-slate-500 mt-2 truncate">${escapeHtml(x.FileName)}</div>
-        <label class="text-xs font-extrabold text-slate-600 mt-2 block">TÃ­tulo de pie de foto</label>
+        <label class="text-xs font-extrabold text-slate-600 mt-2 block">Título de pie de foto</label>
         <input class="input mt-1" data-evid-cap="${i}" value="${escapeHtml(x.figuraTexto||x.FiguraTexto||x.caption||x.Caption||"")}" placeholder="Ej. Evidencia del evento"/>
         <button class="text-xs font-extrabold text-red-700 hover:underline mt-2" data-evid-del="${i}">Eliminar</button>
       </div>
@@ -3465,7 +3465,7 @@
   }
 
   /* =========================================================
-    VALIDACIÃ“N + GUARDAR ANÃLISIS
+    VALIDACIÓN + GUARDAR ANÁLISIS
   ========================================================= */
   function validateAnalisis(){
     // obligatorios: area, codigo, periodo, n, d, analisis, resultado (auto)
@@ -3477,10 +3477,10 @@
     const anal = ($("a_Analisis").value||"").trim();
     const res = $("a_Resultado").value;
 
-    if(!area || !codigo) return fail_("Selecciona Ãrea y CÃ³digo.");
+    if(!area || !codigo) return fail_("Selecciona Área y Código.");
     if(!per) return fail_("Selecciona el periodo.");
     if(n==="" || d==="") return fail_("Captura Numerador y Denominador.");
-    if(!anal) return fail_("Captura el anÃ¡lisis e interpretaciÃ³n.");
+    if(!anal) return fail_("Captura el análisis e interpretación.");
     if(res==="") return fail_("Resultado no calculado (revisa N/D).");
     if(checkDuplicadoPeriodo()) return fail_("DUPLICADO");
 
@@ -3529,15 +3529,15 @@
     };
     if(btnSave){
       btnSave.disabled = true;
-      btnSave.textContent = "Guardandoâ€¦";
+      btnSave.textContent = "Guardando…";
     }
     if(btnPreview){
       btnPreview.disabled = true;
-      btnPreview.textContent = "Guardandoâ€¦";
+      btnPreview.textContent = "Guardando…";
     }
     if(btnDoc){
       btnDoc.disabled = true;
-      btnDoc.textContent = "Guardandoâ€¦";
+      btnDoc.textContent = "Guardando…";
     }
 
     const v = validateAnalisis();
@@ -3554,7 +3554,7 @@
     const alreadyLocal = getAnalisisByCodigoPeriodo_(codigo, periodo);
     if(alreadyLocal){
       $("a_DupMsg").classList.remove("hidden");
-      toast("err","Duplicado","Ese mes ya fue capturado. Si deseas recapturarlo, elimÃ­nalo primero en el Explorador.");
+      toast("err","Duplicado","Ese mes ya fue capturado. Si deseas recapturarlo, elimínalo primero en el Explorador.");
       const locked = checkDuplicadoPeriodo();
       restoreSaveButtons_(locked);
       return false;
@@ -3563,7 +3563,7 @@
     const alreadyRemote = await apiFetch("getAnalisisById", { CodigoIndicador: codigo, PeriodoYM: periodo });
     if(alreadyRemote?.ok && alreadyRemote?.data){
       $("a_DupMsg").classList.remove("hidden");
-      toast("err","Duplicado","Ese mes ya fue capturado. Si deseas recapturarlo, elimÃ­nalo primero en el Explorador.");
+      toast("err","Duplicado","Ese mes ya fue capturado. Si deseas recapturarlo, elimínalo primero en el Explorador.");
       const locked = checkDuplicadoPeriodo();
       restoreSaveButtons_(locked);
       return false;
@@ -3629,11 +3629,11 @@
     if(!r.ok){
       if(r.message==="DUPLICADO" || r.message==="DUPLICADO"){
         $("a_DupMsg").classList.remove("hidden");
-        toast("err","Duplicado","Ese mes ya fue capturado. Si deseas recapturarlo, elimÃ­nalo primero en el Explorador.");
+        toast("err","Duplicado","Ese mes ya fue capturado. Si deseas recapturarlo, elimínalo primero en el Explorador.");
         checkDuplicadoPeriodo();
         return false;
       }
-      toast("err","Error", r.message || "No se guardÃ³.");
+      toast("err","Error", r.message || "No se guardó.");
       return false;
     }
 
@@ -3649,7 +3649,7 @@
 
     // success feedback
     if(!opts.silentSuccessToast){
-      toast("ok","Guardado","AnÃ¡lisis capturado correctamente.");
+      toast("ok","Guardado","Análisis capturado correctamente.");
     }
 
     // Propuestas (si hay)
@@ -3677,7 +3677,7 @@
     await loadAll();
     await refreshHistoryByCodigo_(codigo);
 
-    // refresca chips/histÃ³rico del indicador actual
+    // refresca chips/histórico del indicador actual
     updatePeriodosRegistrados();
     recalcResultadoAndUI();
 
@@ -3729,7 +3729,7 @@
 
     const docOk = await generateAnalisisDoc({ showSuccessToast:false });
     if(docOk){
-      toast("ok","Proceso completo","AnÃ¡lisis capturado en el sistema y documento Word/PDF guardado correctamente.");
+      toast("ok","Proceso completo","Análisis capturado en el sistema y documento Word/PDF guardado correctamente.");
     }
   }
 
@@ -3748,7 +3748,7 @@
   }
 
   /* =========================================================
-    PDF PREVIEW ANÃLISIS
+    PDF PREVIEW ANÁLISIS
   ========================================================= */
   function openAnalisisPreviewPDF(opts){
     opts = opts || {};
@@ -3767,7 +3767,7 @@
     const c = cumpleFrom(meta, res);
     const analisisFinal = buildAnalisisInterpretacion(($("a_Analisis").value||"").trim(), window.__EVID||[]);
 
-    $("pdfSub").textContent = `AnÃ¡lisis Â· ${codigo} Â· ${periodoHuman(perYM)}`;
+    $("pdfSub").textContent = `Análisis · ${codigo} · ${periodoHuman(perYM)}`;
 
     const evidHtml = (window.__EVID||[]).map((x,i)=>`
       <div class="card">
@@ -3784,13 +3784,13 @@
       <div class="space-y-4 print-card">
         <div class="text-2xl font-extrabold text-navy">${escapeHtml(ficha?.NombreIndicador||"")}</div>
         <div class="text-sm text-slate-600">
-          <span class="font-extrabold">CÃ³digo:</span> ${escapeHtml(codigo)} Â·
-          <span class="font-extrabold">Ãrea:</span> ${escapeHtml(getAreaLabel(ficha?.AreaResponsable||""))} Â·
+          <span class="font-extrabold">Código:</span> ${escapeHtml(codigo)} ·
+          <span class="font-extrabold">Área:</span> ${escapeHtml(getAreaLabel(ficha?.AreaResponsable||""))} ·
           <span class="font-extrabold">Periodo:</span> ${escapeHtml(periodoHuman(perYM))}
         </div>
 
         <div class="flex items-center gap-3">
-          <div class="text-sm font-extrabold text-slate-700">SemÃ¡foro:</div>
+          <div class="text-sm font-extrabold text-slate-700">Semáforo:</div>
           ${getSemaforo(c===true)}
         </div>
 
@@ -3799,12 +3799,12 @@
           <div class="card-b text-sm text-slate-700 space-y-1">
             <div><span class="font-extrabold">Meta:</span> ${fmtNum(meta)}</div>
             <div><span class="font-extrabold">Resultado:</span> ${fmtNum(res)}</div>
-            <div class="text-xs text-slate-500">FÃ³rmula: ${escapeHtml($("a_FormulaHint").textContent)}</div>
+            <div class="text-xs text-slate-500">Fórmula: ${escapeHtml($("a_FormulaHint").textContent)}</div>
           </div>
         </div>
 
         <div class="card">
-          <div class="card-h"><div class="font-extrabold text-navy">AnÃ¡lisis e interpretaciÃ³n</div></div>
+          <div class="card-h"><div class="font-extrabold text-navy">Análisis e interpretación</div></div>
           <div class="card-b text-sm text-slate-700 whitespace-pre-line">${escapeHtml(analisisFinal)}</div>
         </div>
 
@@ -3837,7 +3837,7 @@
         if(extWin && !extWin.closed) extWin.location.href = draft.linkDocx;
         else window.location.href = draft.linkDocx;
       }
-      else toast("warn","Sin vista previa","No se encontrÃ³ el enlace del borrador actual.");
+      else toast("warn","Sin vista previa","No se encontró el enlace del borrador actual.");
       return !!draft.linkDocx;
     }
 
@@ -3893,7 +3893,7 @@
 
       btn.disabled = true;
       const origTxt = btn.textContent;
-      btn.textContent = "Generando borradorâ€¦";
+      btn.textContent = "Generando borrador…";
       try {
         const rp = await apiFetch("docs.generarAnalisisFromUI", payloadPreview);
         if(!rp.ok){
@@ -3916,8 +3916,8 @@
         } else {
           try { previewWin && !previewWin.closed && previewWin.close(); } catch(_) {}
         }
-        btn.textContent = "Guardar anÃ¡lisis/Guardar archivo";
-        toast("ok","Borrador en Drive","Revisa/ajusta el formato en Drive y luego presiona de nuevo este botÃ³n para confirmar guardado final.");
+        btn.textContent = "Guardar análisis/Guardar archivo";
+        toast("ok","Borrador en Drive","Revisa/ajusta el formato en Drive y luego presiona de nuevo este botón para confirmar guardado final.");
         return true;
       } catch(e){
         try { previewWin && !previewWin.closed && previewWin.close(); } catch(_) {}
@@ -3925,18 +3925,18 @@
         return false;
       } finally {
         btn.disabled = false;
-        if(btn.textContent === "Generando borradorâ€¦") btn.textContent = origTxt;
+        if(btn.textContent === "Generando borrador…") btn.textContent = origTxt;
       }
     }
 
     if(opts.previewOnly) return true;
 
-    const ok = confirm("Â¿Confirmas que el documento en Drive ya estÃ¡ correcto para guardarlo de forma final (Word + PDF)?");
+    const ok = confirm("¿Confirmas que el documento en Drive ya está correcto para guardarlo de forma final (Word + PDF)?");
     if(!ok) return;
 
     const orig = btn.textContent;
     btn.disabled = true;
-    btn.textContent = "Confirmandoâ€¦";
+    btn.textContent = "Confirmando…";
     const docWin = window.open("about:blank", "_blank");
     const pdfWin = window.open("about:blank", "_blank");
 
@@ -3950,7 +3950,7 @@
       if(!r.ok){
         try { docWin && !docWin.closed && docWin.close(); } catch(_) {}
         try { pdfWin && !pdfWin.closed && pdfWin.close(); } catch(_) {}
-        toast("err","Error", r.message || "FallÃ³ confirmaciÃ³n final");
+        toast("err","Error", r.message || "Falló confirmación final");
         return false;
       } else {
         const links = r.data;
@@ -3969,7 +3969,7 @@
         }
         alert(`Documento listo:\nWord: ${links.linkDocx}\nPDF: ${links.linkPdf}`);
         if(opts.showSuccessToast !== false){
-          toast("ok","Documento confirmado","Se guardÃ³ como siempre (Word y PDF) y se abrieron en pestaÃ±as nuevas.");
+          toast("ok","Documento confirmado","Se guardó como siempre (Word y PDF) y se abrieron en pestañas nuevas.");
         }
         clearAnalisisDocDraft_();
         return true;
@@ -3981,7 +3981,7 @@
       return false;
     } finally {
       btn.disabled = false;
-      btn.textContent = "Guardar anÃ¡lisis/Guardar archivo";
+      btn.textContent = "Guardar análisis/Guardar archivo";
     }
   }
 
@@ -4008,7 +4008,7 @@
           <table class="w-full text-sm">
             <thead>
               <tr class="text-left text-xs text-slate-500 border-b border-slate-200">
-                <th class="p-2">#</th><th class="p-2">AcciÃ³n</th><th class="p-2">Responsable</th><th class="p-2">Fecha</th>
+                <th class="p-2">#</th><th class="p-2">Acción</th><th class="p-2">Responsable</th><th class="p-2">Fecha</th>
               </tr>
             </thead>
             <tbody>${trs}</tbody>
@@ -4019,8 +4019,8 @@
   }
 
   /* =========================================================
-    CHART: AnÃ¡lisis (barras + lÃ­nea meta)
-    - Sin librerÃ­as (canvas)
+    CHART: Análisis (barras + línea meta)
+    - Sin librerías (canvas)
   ========================================================= */
   function drawAnalisisChart(series, meta){
     const c = $("aChart");
@@ -4029,7 +4029,7 @@
 
     // resize canvas to match CSS width
     let w = c.clientWidth || 900;
-    w = Math.min(w, 280);  // Ancho mÃ¡s compacto
+    w = Math.min(w, 280);  // Ancho más compacto
     c.width = w;
     const h = c.height;
 
@@ -4182,7 +4182,7 @@
       <div class="card">
         <div class="card-h">
           <div class="font-extrabold text-navy text-lg">Dashboard</div>
-          <div class="text-sm text-slate-500">KPIs Â· Pastel Cumple/No Cumple Â· Barras por indicador Â· Tabla resumen</div>
+          <div class="text-sm text-slate-500">KPIs · Pastel Cumple/No Cumple · Barras por indicador · Tabla resumen</div>
         </div>
 
         <div class="card-b space-y-6">
@@ -4190,7 +4190,7 @@
           <!-- FILTROS -->
           <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
             <div>
-              <label class="text-xs font-extrabold text-slate-600">Ãrea</label>
+              <label class="text-xs font-extrabold text-slate-600">Área</label>
               <select id="d_Area" class="input mt-1"></select>
             </div>
             <div>
@@ -4226,7 +4226,7 @@
             <div class="card">
               <div class="card-h">
                 <div class="font-extrabold text-navy">Barras por indicador</div>
-                <div class="text-xs text-slate-500">Resultado vs Meta (Ãºltimo periodo filtrado)</div>
+                <div class="text-xs text-slate-500">Resultado vs Meta (último periodo filtrado)</div>
               </div>
               <div class="card-b flex justify-center">
                 <canvas id="barChart" height="260" class="w-full max-w-xs mx-auto"></canvas>
@@ -4238,21 +4238,21 @@
           <div class="card">
             <div class="card-h">
               <div class="font-extrabold text-navy">Resumen</div>
-              <div class="text-xs text-slate-500">CÃ³digo Â· Nombre Â· Ãrea Â· Periodo Â· Resultado Â· Meta Â· Cumplimiento Â· SemÃ¡foro Â· AcciÃ³n</div>
+              <div class="text-xs text-slate-500">Código · Nombre · Área · Periodo · Resultado · Meta · Cumplimiento · Semáforo · Acción</div>
             </div>
             <div class="card-b overflow-auto">
               <table class="min-w-[980px] w-full text-sm">
                 <thead>
                   <tr class="text-left text-xs text-slate-500 border-b border-slate-200">
-                    <th class="p-2">CÃ³digo</th>
+                    <th class="p-2">Código</th>
                     <th class="p-2">Nombre</th>
-                    <th class="p-2">Ãrea</th>
+                    <th class="p-2">Área</th>
                     <th class="p-2">Periodo</th>
                     <th class="p-2">Resultado</th>
                     <th class="p-2">Meta</th>
                     <th class="p-2">Cumplimiento</th>
-                    <th class="p-2">SemÃ¡foro</th>
-                    <th class="p-2">AcciÃ³n</th>
+                    <th class="p-2">Semáforo</th>
+                    <th class="p-2">Acción</th>
                   </tr>
                 </thead>
                 <tbody id="d_Table"></tbody>
@@ -4284,7 +4284,7 @@
     <div class="card">
       <div class="card-b">
         <div class="text-xs font-extrabold text-slate-500">${escapeHtml(title)}</div>
-        <div id="${id}" class="text-2xl font-extrabold ${valueCls} mt-2">â€”</div>
+        <div id="${id}" class="text-2xl font-extrabold ${valueCls} mt-2">—</div>
       </div>
     </div>`;
   }
@@ -4318,7 +4318,7 @@
     $("kpiNo").textContent = `${pctNo.toFixed(0)}%`;
 
     const top5 = valid.filter(x=>x.Cumple===false).slice(0,5);
-    $("kpiTop5").textContent = top5.length ? top5.map(x=>x.Codigo).join(", ") : "â€”";
+    $("kpiTop5").textContent = top5.length ? top5.map(x=>x.Codigo).join(", ") : "—";
 
     // render table
     const tb = $("d_Table");
@@ -4327,20 +4327,20 @@
         <td class="p-2 font-extrabold text-navy">${escapeHtml(r.Codigo)}</td>
         <td class="p-2">${escapeHtml(r.Nombre)}</td>
         <td class="p-2">${escapeHtml(r.AreaLabel)}</td>
-        <td class="p-2">${escapeHtml(r.PeriodoLabel||"â€”")}</td>
-        <td class="p-2">${r.Resultado===null ? "â€”" : fmtNum(r.Resultado)}</td>
-        <td class="p-2">${r.Meta===null ? "â€”" : fmtNum(r.Meta)}</td>
-        <td class="p-2">${r.Cumple===null ? "â€”" : (r.Cumple ? "CUMPLE" : "NO CUMPLE")}</td>
-        <td class="p-2">${r.Cumple===null ? `<span class="badge badge-gray">â€”</span>` : getSemaforo(r.Cumple===true)}</td>
+        <td class="p-2">${escapeHtml(r.PeriodoLabel||"—")}</td>
+        <td class="p-2">${r.Resultado===null ? "—" : fmtNum(r.Resultado)}</td>
+        <td class="p-2">${r.Meta===null ? "—" : fmtNum(r.Meta)}</td>
+        <td class="p-2">${r.Cumple===null ? "—" : (r.Cumple ? "CUMPLE" : "NO CUMPLE")}</td>
+        <td class="p-2">${r.Cumple===null ? `<span class="badge badge-gray">—</span>` : getSemaforo(r.Cumple===true)}</td>
         <td class="p-2">
-          <button class="btn btn-soft" data-open-anal="${escapeHtml(r.Codigo)}">Abrir anÃ¡lisis</button>
+          <button class="btn btn-soft" data-open-anal="${escapeHtml(r.Codigo)}">Abrir análisis</button>
         </td>
       </tr>
     `).join("");
 
     tb.querySelectorAll("[data-open-anal]").forEach(b=>{
       b.addEventListener("click", ()=>{
-        // manda a anÃ¡lisis con area/codigo precargados
+        // manda a análisis con area/codigo precargados
         showSection("secAnalisis");
         renderAnalisis();
         // set values after render
@@ -4412,7 +4412,7 @@
   }
 
   /* =========================================================
-    CHARTS Dashboard (sin librerÃ­as)
+    CHARTS Dashboard (sin librerías)
   ========================================================= */
   function drawPie(canvasId, cumpleN, noN){
     const c = $(canvasId);
@@ -4479,7 +4479,7 @@
     const ctx = c.getContext("2d");
 
     let w = c.clientWidth || 600;
-    w = Math.min(w, 280);  // Ancho mÃ¡s compacto
+    w = Math.min(w, 280);  // Ancho más compacto
     c.width = w;
     const h = c.height;
 
@@ -4536,14 +4536,14 @@
   }
 
   /* =========================================================
-    HOOK: cuando se abre secciÃ³n, renderiza
+    HOOK: cuando se abre sección, renderiza
   ========================================================= */
   (function hookShowSection(){
     const original = showSection;
     window.showSection = function(id){
       original(id);
 
-      // Render dinÃ¡mico al entrar
+      // Render dinámico al entrar
       if(id==="secFicha"){
         renderFichaForm();
       }
@@ -4630,33 +4630,33 @@
       <div class="card">
         <div class="card-h">
         <div class="font-extrabold text-navy text-lg">Explorador (Calidad)</div>
-        <div class="text-sm text-slate-500">BÃºsqueda por tabs: lÃ³gicos y archivos Word/PDF.</div>
+        <div class="text-sm text-slate-500">Búsqueda por tabs: lógicos y archivos Word/PDF.</div>
         </div>
 
         <div class="card-b space-y-5">
 
           <div class="flex flex-wrap gap-2">
-            <button id="e_TabFichas" class="btn btn-soft">Fichas TÃ©cnicas</button>
-            <button id="e_TabFichasFiles" class="btn btn-soft">Fichas tÃ©cnicas - Word/PDF</button>
-            <button id="e_TabAnalisis" class="btn btn-soft">AnÃ¡lisis</button>
-            <button id="e_TabAnalisisFiles" class="btn btn-soft">AnÃ¡lisis - Word/PDF</button>
+            <button id="e_TabFichas" class="btn btn-soft">Fichas Técnicas</button>
+            <button id="e_TabFichasFiles" class="btn btn-soft">Fichas técnicas - Word/PDF</button>
+            <button id="e_TabAnalisis" class="btn btn-soft">Análisis</button>
+            <button id="e_TabAnalisisFiles" class="btn btn-soft">Análisis - Word/PDF</button>
           </div>
 
           <!-- FILTROS -->
           <div class="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
             <div>
-              <label class="text-xs font-extrabold text-slate-600">Ãrea</label>
+              <label class="text-xs font-extrabold text-slate-600">Área</label>
               <select id="e_Area" class="input mt-1"></select>
             </div>
             <div>
-              <label class="text-xs font-extrabold text-slate-600">CÃ³digo</label>
+              <label class="text-xs font-extrabold text-slate-600">Código</label>
               <select id="e_Codigo" class="input mt-1">
                 <option value="">Todos</option>
               </select>
             </div>
             <div>
               <label class="text-xs font-extrabold text-slate-600">Texto</label>
-              <input id="e_Search" class="input mt-1" placeholder="Buscar por cÃ³digo, nombre o contenido..."/>
+              <input id="e_Search" class="input mt-1" placeholder="Buscar por código, nombre o contenido..."/>
             </div>
             <div>
               <label class="text-xs font-extrabold text-slate-600">Periodo (mes)</label>
@@ -4672,7 +4672,7 @@
           <div class="card">
             <div class="card-h">
               <div class="font-extrabold text-navy">Listado</div>
-              <div class="text-xs text-slate-500">Registro Â· CÃ³digo Â· Ãrea Â· Periodo Â· AcciÃ³n</div>
+              <div class="text-xs text-slate-500">Registro · Código · Área · Periodo · Acción</div>
             </div>
 
             <div class="card-b overflow-auto">
@@ -4680,11 +4680,11 @@
                 <thead>
                   <tr class="text-left text-xs text-slate-500 border-b border-slate-200">
                     <th class="p-2">Registro</th>
-                    <th class="p-2">CÃ³digo</th>
-                    <th class="p-2">Ãrea</th>
+                    <th class="p-2">Código</th>
+                    <th class="p-2">Área</th>
                     <th class="p-2">Periodo</th>
                     <th class="p-2">Tipo</th>
-                    <th class="p-2">AcciÃ³n</th>
+                    <th class="p-2">Acción</th>
                   </tr>
                 </thead>
                 <tbody id="e_Table"></tbody>
@@ -4915,7 +4915,7 @@
         CodigoIndicador: codigo,
         AreaResponsable: String(r.AREA || "").trim(),
         PeriodoYM: wantAnalisis ? periodo : "",
-        PeriodoLabel: wantAnalisis ? periodoHuman(periodo) : "â€”",
+        PeriodoLabel: wantAnalisis ? periodoHuman(periodo) : "—",
         TIPO: String(r.TIPO || "").trim(),
         DOC_ID: String(r.DOC_ID || "").trim(),
         PDF_ID: String(r.PDF_ID || "").trim(),
@@ -4924,7 +4924,7 @@
         __deleteMode: "logical",
         __assetKind: "",
         __deleteRef: { idRegistro: recordId, mode: "logical", fileKind: "" },
-        __rowTipoLabel: wantAnalisis ? "AnÃ¡lisis" : "Ficha tÃ©cnica",
+        __rowTipoLabel: wantAnalisis ? "Análisis" : "Ficha técnica",
         Data: wantAnalisis ? (analisisData || {}) : (fichaData || {})
       };
 
@@ -4933,13 +4933,13 @@
       const isNamedPdf = /\.pdf(?:$|\s|\))/i.test(nombreLower);
       const hasPhysicalSignal = !!(base.DOC_ID || base.PDF_ID || base.WordUrl || base.PdfUrl || r?.HAS_WORD || r?.HAS_PDF || isNamedWord || isNamedPdf);
 
-      // Tabs lÃ³gicas: solo entidad principal lÃ³gica.
+      // Tabs lógicas: solo entidad principal lógica.
       if(!wantFiles){
         if(!isLogicalSource && hasPhysicalSignal) return [];
         return [base];
       }
 
-      // Tabs de archivos: nunca mostrar filas lÃ³gicas.
+      // Tabs de archivos: nunca mostrar filas lógicas.
       if(isLogicalSource) return [];
 
       const rowsOut = [];
@@ -4958,7 +4958,7 @@
       const includeWordRaw = (r.HAS_WORD === true) || !!(wordFileId || base.WordUrl) || isNamedWord || wordByUrl || wordByType;
       const includePdfRaw = (r.HAS_PDF === true) || !!(pdfFileId || base.PdfUrl) || isNamedPdf || pdfByUrl || pdfByType;
 
-      // Prioridad solicitada: si hay seÃ±al explicita de PDF y no hay evidencia explicita de Word, etiquetar como PDF.
+      // Prioridad solicitada: si hay señal explicita de PDF y no hay evidencia explicita de Word, etiquetar como PDF.
       let includePdf = includePdfRaw;
       let includeWord = includeWordRaw;
       if(includePdf && !wordByUrl && !wordByType && !isNamedWord && !r.HAS_WORD){
@@ -5273,10 +5273,10 @@
     const snapshot = safeJsonParse_(data.WEB_SNAPSHOT, data.WEB_SNAPSHOT || null);
 
     const renderPairs = (obj)=>{
-      if(!obj || typeof obj !== "object") return `<div class="text-slate-400">Sin informaciÃ³n.</div>`;
+      if(!obj || typeof obj !== "object") return `<div class="text-slate-400">Sin información.</div>`;
       const entries = Object.entries(obj)
         .filter(([k])=>!["DataUrl","dataUrl","FirmaResponsableDataUrl"].includes(k));
-      if(!entries.length) return `<div class="text-slate-400">Sin informaciÃ³n.</div>`;
+      if(!entries.length) return `<div class="text-slate-400">Sin información.</div>`;
       return `
         <div class="overflow-auto">
           <table class="w-full text-sm">
@@ -5449,8 +5449,8 @@
           <td class="p-2 font-extrabold text-navy">${escapeHtml(displayName||"Registro")}</td>
           <td class="p-2">${escapeHtml(r.CodigoIndicador||"")}</td>
           <td class="p-2">${escapeHtml(getAreaLabel(r.AreaResponsable||""))}</td>
-          <td class="p-2">${escapeHtml(r.PeriodoLabel || "â€”")}</td>
-          <td class="p-2">${escapeHtml(r.__rowTipoLabel || (isExplorerAnalisisTab_(window.__EX_TAB) ? "AnÃ¡lisis" : "Ficha tÃ©cnica"))}</td>
+          <td class="p-2">${escapeHtml(r.PeriodoLabel || "—")}</td>
+          <td class="p-2">${escapeHtml(r.__rowTipoLabel || (isExplorerAnalisisTab_(window.__EX_TAB) ? "Análisis" : "Ficha técnica"))}</td>
           <td class="p-2">
             <button class="btn btn-soft" data-detail="${escapeHtml(r.__key)}">Ver detalle</button>
             <button class="btn btn-soft" data-preview="${escapeHtml(r.__key)}">Vista previa</button>
@@ -5508,7 +5508,7 @@
     if(!d) return toast("err","No encontrado","No existe el registro.");
 
     $("e_Editor").classList.remove("hidden");
-    $("e_Sub").textContent = `${d.CodigoIndicador} Â· ${periodoHuman(d.PeriodoYM||"")} Â· ${d.TipoDocumento}`;
+    $("e_Sub").textContent = `${d.CodigoIndicador} · ${periodoHuman(d.PeriodoYM||"")} · ${d.TipoDocumento}`;
 
     $("e_DocName").value = d.DocName || "";
     $("e_Notas").value = d.Notas || "";
@@ -5535,9 +5535,9 @@
 
       // Actualizar en backend
       const r = await apiFetch("docs.upsert", upd);
-      if(!r.ok) return toast("err","Error", r.message||"No se guardÃ³");
+      if(!r.ok) return toast("err","Error", r.message||"No se guardó");
 
-      // Si hay FileId y cambiÃ³ el nombre, intenta renombrar en Drive
+      // Si hay FileId y cambió el nombre, intenta renombrar en Drive
       if(d.FileId && docName !== d.DocName){
         const r2 = await apiFetch("renameDriveFile", { fileId: d.FileId, newName: docName });
         if(!r2.ok) toast("err","Drive","No se pudo renombrar en Drive: "+(r2.message||''));
@@ -5596,7 +5596,7 @@
     const codigo = parts[1];
     const periodo = parts.slice(2).join("-");
     const a = analisisByCodigo(codigo).find(x=>x.PeriodoYM===periodo);
-    if(!a) return toast("err","No encontrado","AnÃ¡lisis no existe.");
+    if(!a) return toast("err","No encontrado","Análisis no existe.");
     showSection("secAnalisis");
 
     $("a_Area").value = a.AreaResponsable || "";
@@ -5637,21 +5637,21 @@
           <div class="card">
             <div class="card-h">
               <div class="font-extrabold text-navy">Indicadores NO CUMPLEN</div>
-              <div class="text-xs text-slate-500">Se toma del Ãºltimo anÃ¡lisis por cÃ³digo.</div>
+              <div class="text-xs text-slate-500">Se toma del último análisis por código.</div>
             </div>
             <div class="card-b overflow-auto">
               <table class="min-w-[980px] w-full text-sm">
                 <thead>
                   <tr class="text-left text-xs text-slate-500 border-b border-slate-200">
-                    <th class="p-2">CÃ³digo</th>
+                    <th class="p-2">Código</th>
                     <th class="p-2">Indicador</th>
-                    <th class="p-2">Ãrea</th>
+                    <th class="p-2">Área</th>
                     <th class="p-2">Periodo</th>
                     <th class="p-2">Resultado</th>
                     <th class="p-2">Meta</th>
                     <th class="p-2">Propuestas</th>
                     <th class="p-2">Seguimiento</th>
-                    <th class="p-2">AcciÃ³n</th>
+                    <th class="p-2">Acción</th>
                   </tr>
                 </thead>
                 <tbody id="s_Table"></tbody>
@@ -5677,7 +5677,7 @@
 
               <div class="flex gap-2">
                 <button id="btnSAdd" class="btn btn-soft">+ Agregar seguimiento</button>
-                <div class="text-xs text-slate-500 self-center">MÃ¡ximo 5.</div>
+                <div class="text-xs text-slate-500 self-center">Máximo 5.</div>
               </div>
 
               <div class="flex flex-wrap gap-2">
@@ -5762,7 +5762,7 @@
     const resolveSiNo_ = (item)=>{
       const direct = String(item?.EvidenciaMostrada || "").trim();
       if(direct === "Si" || direct === "No") return direct;
-      if(/^si$/i.test(direct) || /^sÃ­$/i.test(direct)) return "Si";
+      if(/^si$/i.test(direct) || /^sí$/i.test(direct)) return "Si";
       if(/^no$/i.test(direct)) return "No";
       if(String(item?.EvidenciaSi || "").trim()) return "Si";
       if(String(item?.EvidenciaNo || "").trim()) return "No";
@@ -5883,7 +5883,7 @@
 
     $("s_Form").classList.remove("hidden");
     $("s_SaveMsg").classList.add("hidden");
-    $("s_Sub").textContent = `${codigo} Â· ${f?.NombreIndicador||""} Â· ${periodoHuman(periodoYM)}`;
+    $("s_Sub").textContent = `${codigo} · ${f?.NombreIndicador||""} · ${periodoHuman(periodoYM)}`;
 
     // load existing seg record if exists
     const existing = getSegByCodigoPeriodo_(codigo, periodoYM);
@@ -5901,7 +5901,7 @@
 
   function addSegRow(){
     window.__SEG_ROWS = window.__SEG_ROWS || [];
-    if(window.__SEG_ROWS.length >= 5) return toast("warn","LÃ­mite","MÃ¡ximo 5 seguimientos.");
+    if(window.__SEG_ROWS.length >= 5) return toast("warn","Límite","Máximo 5 seguimientos.");
     window.__SEG_ROWS.push({
       Fecha:"",
       Resultado:"",
@@ -5924,9 +5924,9 @@
         </div>
         ${propuestas[i] ? `
           <div class="mt-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
-            <div><span class="font-extrabold text-slate-700">AcciÃ³n:</span> ${escapeHtml(propuestas[i].Accion || "â€”")}</div>
-            <div><span class="font-extrabold text-slate-700">Responsable:</span> ${escapeHtml(propuestas[i].Responsable || "â€”")}</div>
-            <div><span class="font-extrabold text-slate-700">Compromiso:</span> ${escapeHtml(propuestas[i].FechaCompromiso || "â€”")}</div>
+            <div><span class="font-extrabold text-slate-700">Acción:</span> ${escapeHtml(propuestas[i].Accion || "—")}</div>
+            <div><span class="font-extrabold text-slate-700">Responsable:</span> ${escapeHtml(propuestas[i].Responsable || "—")}</div>
+            <div><span class="font-extrabold text-slate-700">Compromiso:</span> ${escapeHtml(propuestas[i].FechaCompromiso || "—")}</div>
           </div>
         ` : ""}
 
@@ -5940,7 +5940,7 @@
             <input class="input mt-1" data-s="Resultado" data-i="${i}" value="${escapeHtml(r.Resultado||"")}" placeholder="Ej. 92"/>
           </div>
           <div>
-            <label class="text-xs font-extrabold text-slate-600">Se mostrÃ³ evidencia *</label>
+            <label class="text-xs font-extrabold text-slate-600">Se mostró evidencia *</label>
             <select class="input mt-1" data-s="EvidenciaMostrada" data-i="${i}">
               <option value="">Selecciona...</option>
               <option ${r.EvidenciaMostrada==="Si"?"selected":""}>Si</option>
@@ -5948,7 +5948,7 @@
             </select>
           </div>
           <div>
-            <label class="text-xs font-extrabold text-slate-600">Cierre de la acciÃ³n *</label>
+            <label class="text-xs font-extrabold text-slate-600">Cierre de la acción *</label>
             <select class="input mt-1" data-s="CierreAccion" data-i="${i}">
               <option value="">Selecciona...</option>
               <option ${r.CierreAccion==="Efectiva"?"selected":""}>Efectiva</option>
@@ -6032,10 +6032,10 @@
           Resul: String(it?.Resultado || "").trim(),
           EvidenciaMostrada: String(it?.EvidenciaMostrada || "").trim(),
           CierreAccion: String(it?.CierreAccion || "").trim(),
-          EvidenciaSi: String(it?.EvidenciaMostrada || "").trim() === "Si" ? "âœ”" : "",
-          EvidenciaNo: String(it?.EvidenciaMostrada || "").trim() === "No" ? "âœ”" : "",
-          CierreEfectiva: String(it?.CierreAccion || "").trim() === "Efectiva" ? "âœ”" : "",
-          CierreNoEfectiva: String(it?.CierreAccion || "").trim() === "No efectiva" ? "âœ”" : ""
+          EvidenciaSi: String(it?.EvidenciaMostrada || "").trim() === "Si" ? "✔" : "",
+          EvidenciaNo: String(it?.EvidenciaMostrada || "").trim() === "No" ? "✔" : "",
+          CierreEfectiva: String(it?.CierreAccion || "").trim() === "Efectiva" ? "✔" : "",
+          CierreNoEfectiva: String(it?.CierreAccion || "").trim() === "No efectiva" ? "✔" : ""
         }
       )),
       UpdatedAt: nowISO()
@@ -6043,7 +6043,7 @@
 
     const r = await apiFetch("seg.upsert", rec);
     if(!r.ok){
-      if(!opts.silentToast) toast("err","Error", r.message||"No se guardÃ³");
+      if(!opts.silentToast) toast("err","Error", r.message||"No se guardó");
       return false;
     }
 
@@ -6100,10 +6100,10 @@
           Fech: String(it?.Fecha || "").trim(),
           Resultado: String(it?.Resultado || "").trim(),
           Resul: String(it?.Resultado || "").trim(),
-          EvidenciaSi: evidencia === "Si" ? "âœ”" : "",
-          EvidenciaNo: evidencia === "No" ? "âœ”" : "",
-          CierreEfectiva: cierre === "Efectiva" ? "âœ”" : "",
-          CierreNoEfectiva: cierre === "No efectiva" ? "âœ”" : ""
+          EvidenciaSi: evidencia === "Si" ? "✔" : "",
+          EvidenciaNo: evidencia === "No" ? "✔" : "",
+          CierreEfectiva: cierre === "Efectiva" ? "✔" : "",
+          CierreNoEfectiva: cierre === "No efectiva" ? "✔" : ""
         };
       });
 
@@ -6155,7 +6155,7 @@
     try {
       if(btn){
         btn.disabled = true;
-        btn.textContent = "Generandoâ€¦";
+        btn.textContent = "Generando…";
       }
 
       const saved = await saveSeguimiento({
@@ -6185,7 +6185,7 @@
         toast("ok","Vista previa lista","Seguimiento guardado y documento NO CUMPLE rellenado con propuestas/seguimiento.");
       } else {
         try { preOpened && !preOpened.closed && preOpened.close(); } catch(_) {}
-        toast("warn","Sin enlace","Se generÃ³ el borrador, pero no llegÃ³ el enlace de vista previa.");
+        toast("warn","Sin enlace","Se generó el borrador, pero no llegó el enlace de vista previa.");
       }
     } catch(e){
       try { preOpened && !preOpened.closed && preOpened.close(); } catch(_) {}
@@ -6218,10 +6218,11 @@
   })();
 
   /* =========================================================
-    FINAL: al cargar, si estÃ¡s en anÃ¡lisis/dashboard ya renderizados
+    FINAL: al cargar, si estás en análisis/dashboard ya renderizados
     (no rompe nada)
   ========================================================= */
   (function finalBoot(){
     // nada extra, solo placeholder
   })();
   </script>
+
