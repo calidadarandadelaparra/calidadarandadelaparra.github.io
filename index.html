@@ -4813,6 +4813,9 @@ function getExplorerRows_(){
         ...base,
         __key: base.__key + "::WORD",
         Nombre: (base.Nombre || "Registro") + " [WORD]",
+        __includeWord: includeWord,
+        __includePdf: includePdf,
+        __typeHints: typeHints,
         __deleteMode: "physical",
         __assetKind: "WORD",
         __deleteRef: { idRegistro: base.__recordId, mode: "physical", fileKind: "WORD" },
@@ -4824,6 +4827,9 @@ function getExplorerRows_(){
         ...base,
         __key: base.__key + "::PDF",
         Nombre: (base.Nombre || "Registro") + " [PDF]",
+        __includeWord: includeWord,
+        __includePdf: includePdf,
+        __typeHints: typeHints,
         __deleteMode: "physical",
         __assetKind: "PDF",
         __deleteRef: { idRegistro: base.__recordId, mode: "physical", fileKind: "PDF" },
@@ -5196,9 +5202,56 @@ function refreshExplorador(){
   }
 
   tb.innerHTML = rows.map(r=>{
+    const d = getActiveDocRecordForRow_(r) || {};
+    const rawName = String(r?.Nombre || "Registro").trim();
+    const cleanName = rawName.replace(/\s*\[(?:WORD|PDF)\]\s*$/i, "").trim();
+    const lowerName = cleanName.toLowerCase();
+    const mimeType = String(r?.MimeType || r?.mimeType || d?.MimeType || d?.mimeType || "").trim();
+    const fileType = String(r?.FileType || r?.fileType || d?.FileType || d?.fileType || "").trim();
+    const links = getDocLinksForRow_(r);
+    const linkWord = String(links?.word || "").toLowerCase();
+    const linkPdf = String(links?.pdf || "").toLowerCase();
+
+    const extMatch = lowerName.match(/\.([a-z0-9]+)(?:$|\s|\)|[?#])/i);
+    const extension = extMatch ? ('.' + extMatch[1].toLowerCase()) : "";
+    const byNamePdf = extension === ".pdf";
+    const byNameWord = extension === ".doc" || extension === ".docx";
+    const byLinkPdf = /\.pdf(?:$|[?#])/i.test(linkPdf) || /\.pdf(?:$|[?#])/i.test(linkWord);
+    const byLinkWord = /\.(doc|docx)(?:$|[?#])/i.test(linkWord) || /\.(doc|docx)(?:$|[?#])/i.test(linkPdf);
+    const byTypePdf = /pdf/i.test(mimeType) || /pdf/i.test(fileType);
+    const byTypeWord = /(msword|wordprocessingml|word)/i.test(mimeType) || /(msword|wordprocessingml|word)/i.test(fileType);
+
+    let finalLabel = "";
+    if(byNamePdf) finalLabel = "PDF";
+    else if(byNameWord) finalLabel = "WORD";
+    else if(byTypePdf || byLinkPdf) finalLabel = "PDF";
+    else if(byTypeWord || byLinkWord) finalLabel = "WORD";
+    else if(String(r?.__assetKind || "").toUpperCase() === "PDF") finalLabel = "PDF";
+    else if(String(r?.__assetKind || "").toUpperCase() === "WORD") finalLabel = "WORD";
+
+    const displayName = (isExplorerFilesTab_(window.__EX_TAB) && finalLabel)
+      ? (cleanName + " [" + finalLabel + "]")
+      : (r?.Nombre || "Registro");
+
+    if(isExplorerFilesTab_(window.__EX_TAB)){
+      const keyForLog = String(d?.Key || r?.__recordId || "").trim();
+      console.log("[FILE_LABEL_DEBUG]", {
+        nombreArchivo: cleanName,
+        __recordId: String(r?.__recordId || "").trim(),
+        Key: keyForLog,
+        visibleName: displayName,
+        extension,
+        mimeType,
+        fileType,
+        includeWord: !!r?.__includeWord,
+        includePdf: !!r?.__includePdf,
+        finalLabel
+      });
+    }
+
     return `
       <tr class="border-b border-slate-200">
-        <td class="p-2 font-extrabold text-navy">${escapeHtml(r.Nombre||"Registro")}</td>
+        <td class="p-2 font-extrabold text-navy">${escapeHtml(displayName||"Registro")}</td>
         <td class="p-2">${escapeHtml(r.CodigoIndicador||"")}</td>
         <td class="p-2">${escapeHtml(getAreaLabel(r.AreaResponsable||""))}</td>
         <td class="p-2">${escapeHtml(r.PeriodoLabel || "—")}</td>
