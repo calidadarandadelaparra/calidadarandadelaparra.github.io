@@ -90,7 +90,7 @@
       forzar un valor concreto o usar DEMO.
   =========================== */
   // principal: la URL del web‑app (se evalúa en runtime)
-  let SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbysHI8a-Q-XsWsf2PWAnxOywWpTOd2ejRSGZSrlGWEDnbheV8Fs6BKOhfL7MGOK1bg6uA/exec";
+  let SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbyKJy2ZKKHakXgRvptdZgo3X9Y3Xiv0qZEb6gjARxe4q1CzljlXo_q_JmPQbxgGigaqLQ/exec";
   const CONFIG_KEY_WEBAPP_URL = "CONFIG_SHEETS_WEBAPP_URL";
 
   function getSavedWebAppUrl(){
@@ -1906,13 +1906,19 @@
     });
   }
 
+  function readInputValue_(id){
+    const el = $(id);
+    const raw = String(el?.value ?? "");
+    return raw.replace(/[\u200B-\u200D\uFEFF]/g, "").trim();
+  }
+
   function validateFicha(){
     clearErrorsFicha();
     let ok = true;
 
     const must = (id)=>{
       const el = $(id);
-      const v = (el?.value||"").trim();
+      const v = readInputValue_(id);
       if(!v){ el.classList.add("err"); ok=false; }
       return v;
     };
@@ -1998,7 +2004,7 @@
       if(match) numInd = Number(match[1]);
     }
     row.NumeroIndicador = numInd || null;
-    row.ResponsableIndicador = ($("f_ResponsableIndicador").value||"").trim();
+    row.ResponsableIndicador = readInputValue_("f_ResponsableIndicador");
     row.NombreIndicador = ($("f_NombreIndicador").value||"").trim();
     row.TipoIndicador = $("f_TipoIndicador").value;
     row.PeriodicidadMedicion = $("f_Periodicidad").value;
@@ -2246,7 +2252,7 @@
       const payload = modelFicha();
       payload.AreaResponsable = getFichaAreaValue_();
       payload.CodigoIndicador = ($("f_CodigoIndicador").value||"").trim();
-      payload.ResponsableIndicador = ($("f_ResponsableIndicador").value||"").trim();
+      payload.ResponsableIndicador = readInputValue_("f_ResponsableIndicador");
       payload.NombreIndicador = ($("f_NombreIndicador").value||"").trim();
       payload.TipoIndicador = $("f_TipoIndicador").value;
       payload.PeriodicidadMedicion = $("f_Periodicidad").value;
@@ -4928,10 +4934,7 @@
         Data: wantAnalisis ? (analisisData || {}) : (fichaData || {})
       };
 
-      const nombreLower = String(base.Nombre || "").toLowerCase();
-      const isNamedWord = /\.docx(?:$|\s|\))/i.test(nombreLower);
-      const isNamedPdf = /\.pdf(?:$|\s|\))/i.test(nombreLower);
-      const hasPhysicalSignal = !!(base.DOC_ID || base.PDF_ID || base.WordUrl || base.PdfUrl || r?.HAS_WORD || r?.HAS_PDF || isNamedWord || isNamedPdf);
+      const hasPhysicalSignal = !!(base.DOC_ID || base.PDF_ID || base.WordUrl || base.PdfUrl || r?.HAS_WORD || r?.HAS_PDF);
 
       // Tabs lógicas: solo entidad principal lógica.
       if(!wantFiles){
@@ -4943,27 +4946,13 @@
       if(isLogicalSource) return [];
 
       const rowsOut = [];
-      const wordUrlLower = String(base.WordUrl || "").toLowerCase();
-      const pdfUrlLower = String(base.PdfUrl || "").toLowerCase();
       const typeHints = String(r?.MimeType || r?.mimeType || r?.FileType || r?.fileType || "").toLowerCase();
-
-      const pdfByUrl = /\.pdf(?:$|[?#])/i.test(pdfUrlLower) || /\.pdf(?:$|[?#])/i.test(wordUrlLower);
-      const wordByUrl = /\.(doc|docx)(?:$|[?#])/i.test(wordUrlLower) || /\.(doc|docx)(?:$|[?#])/i.test(pdfUrlLower);
-      const pdfByType = /pdf/.test(typeHints);
-      const wordByType = /(msword|wordprocessingml|word)/.test(typeHints);
 
       const wordFileId = extractDriveFileIdFromUrl_(base.DOC_ID) || extractDriveFileIdFromUrl_(base.WordUrl);
       const pdfFileId = extractDriveFileIdFromUrl_(base.PDF_ID) || extractDriveFileIdFromUrl_(base.PdfUrl);
 
-      const includeWordRaw = (r.HAS_WORD === true) || !!(wordFileId || base.WordUrl) || isNamedWord || wordByUrl || wordByType;
-      const includePdfRaw = (r.HAS_PDF === true) || !!(pdfFileId || base.PdfUrl) || isNamedPdf || pdfByUrl || pdfByType;
-
-      // Prioridad solicitada: si hay señal explicita de PDF y no hay evidencia explicita de Word, etiquetar como PDF.
-      let includePdf = includePdfRaw;
-      let includeWord = includeWordRaw;
-      if(includePdf && !wordByUrl && !wordByType && !isNamedWord && !r.HAS_WORD){
-        includeWord = false;
-      }
+      const includeWord = (r.HAS_WORD === true) || !!(wordFileId || base.WordUrl);
+      const includePdf = (r.HAS_PDF === true) || !!(pdfFileId || base.PdfUrl);
 
       if(includeWord){
         const canDeletePhysical = !!wordFileId;
@@ -5158,12 +5147,14 @@
       ? {
           idRegistro: String(delRef.idRegistro || "").trim(),
           mode: String(delRef.mode || "logical").trim(),
-          fileKind: String(delRef.fileKind || "").trim().toUpperCase()
+          fileKind: String(delRef.fileKind || "").trim().toUpperCase(),
+          fileId: String(delRef.fileId || "").trim()
         }
       : {
           idRegistro: String(delRef || "").trim(),
           mode: "logical",
-          fileKind: ""
+          fileKind: "",
+          fileId: ""
         };
 
     const id = ref.idRegistro;
