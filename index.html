@@ -90,7 +90,7 @@
       forzar un valor concreto o usar DEMO.
   =========================== */
   // principal: la URL del web‑app (se evalúa en runtime)
-  let SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbyKJy2ZKKHakXgRvptdZgo3X9Y3Xiv0qZEb6gjARxe4q1CzljlXo_q_JmPQbxgGigaqLQ/exec";
+  let SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbwjXRobPmeJ5586BX7CHxwgXSgzNWrZCA480I0TjSnW3EVFNBdz4wdvFligrG1_dGXR2g/exec";
   const CONFIG_KEY_WEBAPP_URL = "CONFIG_SHEETS_WEBAPP_URL";
 
   function getSavedWebAppUrl(){
@@ -1906,19 +1906,13 @@
     });
   }
 
-  function readInputValue_(id){
-    const el = $(id);
-    const raw = String(el?.value ?? "");
-    return raw.replace(/[\u200B-\u200D\uFEFF]/g, "").trim();
-  }
-
   function validateFicha(){
     clearErrorsFicha();
     let ok = true;
 
     const must = (id)=>{
       const el = $(id);
-      const v = readInputValue_(id);
+      const v = String(el?.value || "").trim();
       if(!v){ el.classList.add("err"); ok=false; }
       return v;
     };
@@ -2004,7 +1998,7 @@
       if(match) numInd = Number(match[1]);
     }
     row.NumeroIndicador = numInd || null;
-    row.ResponsableIndicador = readInputValue_("f_ResponsableIndicador");
+    row.ResponsableIndicador = String($("f_ResponsableIndicador")?.value || "").trim();
     row.NombreIndicador = ($("f_NombreIndicador").value||"").trim();
     row.TipoIndicador = $("f_TipoIndicador").value;
     row.PeriodicidadMedicion = $("f_Periodicidad").value;
@@ -2252,7 +2246,7 @@
       const payload = modelFicha();
       payload.AreaResponsable = getFichaAreaValue_();
       payload.CodigoIndicador = ($("f_CodigoIndicador").value||"").trim();
-      payload.ResponsableIndicador = readInputValue_("f_ResponsableIndicador");
+      payload.ResponsableIndicador = String($("f_ResponsableIndicador")?.value || "").trim();
       payload.NombreIndicador = ($("f_NombreIndicador").value||"").trim();
       payload.TipoIndicador = $("f_TipoIndicador").value;
       payload.PeriodicidadMedicion = $("f_Periodicidad").value;
