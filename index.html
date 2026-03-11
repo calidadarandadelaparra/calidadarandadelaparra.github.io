@@ -90,7 +90,7 @@
      forzar un valor concreto o usar DEMO.
 =========================== */
 // principal: la URL del web‑app (se evalúa en runtime)
-let SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbytKl8pLxpQ0sb8rwXCKmS4uGl4pd3hacT583PAi4HnNAtGsyum6FOCGCZb23z7xjMs/exec";
+let SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbyFokn7ET-5TIt9SaUWM_x2OUHN8Pes_1U0JgLR3US5hGUsYqx_9EM_-estvnW--aWV4A/exec";
 const CONFIG_KEY_WEBAPP_URL = "CONFIG_SHEETS_WEBAPP_URL";
 
 function getSavedWebAppUrl(){
@@ -1244,6 +1244,57 @@ const CACHE = {
   explorer: []
 };
 
+function buildExplorerValidityIndex_(rows){
+  const fichaCodes = new Set();
+  const analisisKeys = new Set();
+
+  (rows || []).forEach(r => {
+    const codigo = String(r?.CODIGO || "").trim();
+    if(!codigo) return;
+    const tipo = String(r?.TIPO || "").trim().toUpperCase();
+    const periodo = String(r?.PERIODO || "").trim();
+
+    if(tipo.includes("ANALISIS")){
+      if(periodo) analisisKeys.add(`${codigo}|${periodo}`);
+      return;
+    }
+    if(tipo.includes("FICHA")){
+      fichaCodes.add(codigo);
+      return;
+    }
+
+    if(periodo) analisisKeys.add(`${codigo}|${periodo}`);
+    else fichaCodes.add(codigo);
+  });
+
+  return { fichaCodes, analisisKeys };
+}
+
+function enforceGlobalValidityFromExplorer_(){
+  const idx = buildExplorerValidityIndex_(CACHE.explorer || []);
+
+  CACHE.fichas = (CACHE.fichas || [])
+    .filter(r => !isDeletedRowGlobal_(r))
+    .filter(r => idx.fichaCodes.has(String(r?.CodigoIndicador || "").trim()));
+
+  CACHE.analisis = (CACHE.analisis || [])
+    .filter(r => !isDeletedRowGlobal_(r))
+    .filter(r => {
+      const k = `${String(r?.CodigoIndicador || "").trim()}|${String(r?.PeriodoYM || "").trim()}`;
+      return idx.analisisKeys.has(k);
+    });
+
+  CACHE.prop = (CACHE.prop || []).filter(r => {
+    const k = `${String(r?.CodigoIndicador || "").trim()}|${String(r?.PeriodoYM || "").trim()}`;
+    return idx.analisisKeys.has(k);
+  });
+
+  CACHE.seg = (CACHE.seg || []).filter(r => {
+    const k = `${String(r?.CodigoIndicador || "").trim()}|${String(r?.PeriodoYM || "").trim()}`;
+    return idx.analisisKeys.has(k);
+  });
+}
+
 async function loadAll(){
   const explorerPayload = (forensicOn_() && FORENSIC_TRACE.active)
     ? {
@@ -1344,6 +1395,8 @@ async function loadAll(){
     PdfUrl: String(x?.PdfUrl || "").trim(),
     Nombre: String(x?.Nombre || "").trim()
   })).filter(x => x.ID_REGISTRO && !isDeletedRowGlobal_(x)) : [];
+
+  enforceGlobalValidityFromExplorer_();
 
   if(forensicOn_() && FORENSIC_TRACE.active){
     const targetId = String(FORENSIC_TRACE.targetId || "").trim();
@@ -4948,11 +5001,13 @@ function applyDeleteResultToCaches_(ref){
       if(kind === "PDF") return { ...x, PdfId:"", PdfUrl:"" };
       return x;
     });
+    enforceGlobalValidityFromExplorer_();
     return;
   }
 
   CACHE.explorer = (CACHE.explorer || []).filter(x => String(x?.ID_REGISTRO || "").trim() !== id);
   CACHE.docs = (CACHE.docs || []).filter(x => String(x?.Key || "").trim() !== id);
+  enforceGlobalValidityFromExplorer_();
 }
 
 function confirmarEliminacion(delRef, btn){
