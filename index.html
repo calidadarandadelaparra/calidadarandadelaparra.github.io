@@ -90,7 +90,7 @@
      forzar un valor concreto o usar DEMO.
 =========================== */
 // principal: la URL del web‑app (se evalúa en runtime)
-let SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbyFokn7ET-5TIt9SaUWM_x2OUHN8Pes_1U0JgLR3US5hGUsYqx_9EM_-estvnW--aWV4A/exec";
+let SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbzgaD3sMVKYfidH_qKzYgjZThHWXC74GOVHREx7QKVPOqkObJdG0tSf2DceFBJkNfKzMQ/exec";
 const CONFIG_KEY_WEBAPP_URL = "CONFIG_SHEETS_WEBAPP_URL";
 
 function getSavedWebAppUrl(){
@@ -752,6 +752,19 @@ async function apiFetch(action, payload={}){
   }
 }
 
+async function runCleanupAudit_(){
+  return await apiFetch("system.cleanupAllOnce", { dryRun:true });
+}
+
+async function runCleanupTotalOneTime_(confirmText, force){
+  const payload = {
+    dryRun:false,
+    confirm: String(confirmText || "").trim(),
+    force: !!force
+  };
+  return await apiFetch("system.cleanupAllOnce", payload);
+}
+
 function ok_(data, message="OK"){ return { ok:true, data, message }; }
 function fail_(message="ERROR"){ return { ok:false, data:null, message }; }
 function normalizeCorpEmail_(value){
@@ -1380,6 +1393,7 @@ async function loadAll(){
   })) : [];
 
   CACHE.explorer = e.ok ? (e.data || []).map(x => ({
+    IS_LOGICAL: x?.IS_LOGICAL === true || String(x?.IS_LOGICAL || "").toLowerCase() === "true",
     ID_REGISTRO: String(x?.ID_REGISTRO || x?.id_registro || x?.Key || x?.key || x?.DOC_ID || "").trim(),
     TIPO: String(x?.TIPO || x?.Tipo || x?.tipo || x?.TipoDocumento || "").trim(),
     CODIGO: String(x?.CODIGO || x?.Codigo || x?.CodigoIndicador || "").trim(),
@@ -4858,13 +4872,17 @@ function getExplorerRows_(){
     const nombreLower = String(base.Nombre || "").toLowerCase();
     const isNamedWord = /\.docx(?:$|\s|\))/i.test(nombreLower);
     const isNamedPdf = /\.pdf(?:$|\s|\))/i.test(nombreLower);
-    const isPhysicalSource = isNamedWord || isNamedPdf;
+    const isLogicalSource = r?.IS_LOGICAL === true || String(r?.IS_LOGICAL || "").toLowerCase() === "true";
+    const hasPhysicalSignal = !!(base.DOC_ID || base.PDF_ID || base.WordUrl || base.PdfUrl || r?.HAS_WORD || r?.HAS_PDF || isNamedWord || isNamedPdf);
 
-    // Tabs lógicas: excluir completamente filas que ya representan archivo físico (.docx/.pdf).
+    // Tabs lógicas: solo entidad principal lógica.
     if(!wantFiles){
-      if(isPhysicalSource) return [];
+      if(!isLogicalSource && hasPhysicalSignal) return [];
       return [base];
     }
+
+    // Tabs de archivos: nunca mostrar filas lógicas.
+    if(isLogicalSource) return [];
 
     const rowsOut = [];
     const wordUrlLower = String(base.WordUrl || "").toLowerCase();
