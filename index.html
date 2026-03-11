@@ -90,7 +90,7 @@
      forzar un valor concreto o usar DEMO.
 =========================== */
 // principal: la URL del web‑app (se evalúa en runtime)
-let SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbzHA32D2rtdAxiMKTYGZqiwA3-ztjz2tKUZjU9D3q-8lo83W6J_Ai3WU4VtNsnYk533zg/exec";
+let SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbzdeXzWaFLsYGyAQQ72NdqGl4aQSB1Ef0jzl11C1p8jsBSsZIL8gSSagDIqpHFQ94oI/exec";
 const CONFIG_KEY_WEBAPP_URL = "CONFIG_SHEETS_WEBAPP_URL";
 
 function getSavedWebAppUrl(){
@@ -1100,7 +1100,7 @@ function buildAnalisisInterpretacion(textoPrincipal, evidencias){
 
 function buildFichaWebSnapshot_(){
   return {
-    AreaResponsable: $("f_AreaResponsable")?.value || "",
+    AreaResponsable: getFichaAreaValue_(),
     CodigoIndicador: ($("f_CodigoIndicador")?.value || "").trim(),
     NumeroIndicador: ($("f_NumeroIndicador")?.value || "").trim(),
     ResponsableIndicador: ($("f_ResponsableIndicador")?.value || "").trim(),
@@ -1468,13 +1468,29 @@ function updateCodigoFromArea(){
   const out = $("f_CodigoIndicador");
   if(!sel || !out) return;
 
-  const prefix = (sel.value||"").trim();
+  const prefix = getFichaAreaValue_();
   if(!prefix){ out.value=""; $("f_NumeroIndicador").value = ""; return; }
 
   const nnn = nextNumberForPrefix(prefix);
   out.value = `${prefix}${nnn}`;
   // Autollenar el campo oculto NumeroIndicador solo con el número
   $("f_NumeroIndicador").value = nnn;
+}
+
+function getFichaAreaValue_(){
+  const sel = $("f_AreaResponsable");
+  if(!sel) return "";
+
+  let v = String(sel.value || "").trim();
+  if(v) return v;
+
+  // Fallback robusto: cuando el value llega vacio, intenta resolver por texto visible.
+  const opt = sel.options && sel.selectedIndex >= 0 ? sel.options[sel.selectedIndex] : null;
+  const txt = String(opt?.text || "").trim();
+  if(!txt || /^selecciona/i.test(txt)) return "";
+
+  const found = AREAS_CATALOGO.find(x => String(x?.NombreArea || "").trim().toLowerCase() === txt.toLowerCase());
+  return String(found?.Area || "").trim();
 }
 
 /* =========================================================
@@ -1916,7 +1932,12 @@ function validateFicha(){
     return v;
   };
 
-  const area = must("f_AreaResponsable");
+  const area = getFichaAreaValue_();
+  if(!area){
+    const a = $("f_AreaResponsable");
+    if(a) a.classList.add("err");
+    ok = false;
+  }
   const cod = must("f_CodigoIndicador");
   const resp = must("f_ResponsableIndicador");
   const nom = must("f_NombreIndicador");
@@ -1981,7 +2002,7 @@ async function saveFicha(opts){
   const row = modelFicha();
   const fichaSnapshot = buildFichaWebSnapshot_();
 
-  row.AreaResponsable = $("f_AreaResponsable").value;
+  row.AreaResponsable = getFichaAreaValue_();
   row.CodigoIndicador = ($("f_CodigoIndicador").value||"").trim();
   // Asegurar que NumeroIndicador siempre se envía correctamente
   let numInd = Number($("f_NumeroIndicador")?.value||0);
@@ -2132,7 +2153,7 @@ function openFichaPreviewPDF(){
 
   const codigo = $("f_CodigoIndicador").value;
   const nombre = $("f_NombreIndicador").value;
-  const areaLabel = getAreaLabel($("f_AreaResponsable").value);
+  const areaLabel = getAreaLabel(getFichaAreaValue_());
 
   $("pdfSub").textContent = `Ficha Técnica · ${codigo}`;
   $("pdfContent").innerHTML = `
@@ -2238,7 +2259,7 @@ async function generateFichaPreviewDoc(previewWin){
 
   try {
     const payload = modelFicha();
-    payload.AreaResponsable = $("f_AreaResponsable").value;
+    payload.AreaResponsable = getFichaAreaValue_();
     payload.CodigoIndicador = ($("f_CodigoIndicador").value||"").trim();
     payload.ResponsableIndicador = ($("f_ResponsableIndicador").value||"").trim();
     payload.NombreIndicador = ($("f_NombreIndicador").value||"").trim();
@@ -4265,21 +4286,20 @@ function refreshDashboard(){
   const area = $("d_Area")?.value || "";
   const per = $("d_PeriodoYM")?.value || "";
 
-  // analisis filtrado
-  let rows = [...(CACHE.analisis||[])];
+  // Dashboard: SOLO analisis valido (nada de fichas ni docs fisicos como fuente).
+  let rows = [...(CACHE.analisis||[])]
+    .filter(r => !isDeletedRowGlobal_(r))
+    .filter(r => String(r?.CodigoIndicador || "").trim())
+    .filter(r => String(r?.PeriodoYM || "").trim());
 
   if(area) rows = rows.filter(r=>r.AreaResponsable===area);
   if(per) rows = rows.filter(r=>r.PeriodoYM===per);
 
-  // total indicadores = fichas (filtradas por area)
-  let fichas = [...(CACHE.fichas||[])];
-  if(area) fichas = fichas.filter(f=>f.AreaResponsable===area);
-
-  // para tabla: usar fichas+analisis, pero si no hay periodo seleccionado, usar último por código
+  // Tabla resumen: consolidada solo desde analisis.
   const tableRows = buildDashboardTableRows(area, per);
 
   // KPIs
-  const total = fichas.length;
+  const total = Array.from(new Set(rows.map(r => String(r.CodigoIndicador || "").trim()).filter(Boolean))).length;
   const valid = tableRows.filter(x=>x.Resultado!==null && x.Meta!==null);
   const cumpleN = valid.filter(x=>x.Cumple===true).length;
   const noN = valid.filter(x=>x.Cumple===false).length;
@@ -4333,11 +4353,12 @@ function refreshDashboard(){
 }
 
 function buildDashboardTableRows(area, per){
-  let fichas = [...(CACHE.fichas||[])];
-  if(area) fichas = fichas.filter(f=>f.AreaResponsable===area);
+  // Fuente unica: analisis valido.
+  const a = [...(CACHE.analisis||[])]
+    .filter(r => !isDeletedRowGlobal_(r))
+    .filter(r => String(r?.CodigoIndicador || "").trim())
+    .filter(r => String(r?.PeriodoYM || "").trim());
 
-  // map code => last analysis (by period)
-  const a = [...(CACHE.analisis||[])];
   const lastByCode = new Map();
   for(const row of a){
     if(area && row.AreaResponsable!==area) continue;
@@ -4352,19 +4373,22 @@ function buildDashboardTableRows(area, per){
     }
   }
 
-  const out = fichas.map(f=>{
-    const ar = lastByCode.get(f.CodigoIndicador) || null;
-    const meta = Number(f.MetaObjetivo);
-    const res = ar ? Number(ar.ResultadoObtenido) : null;
-    const cum = (ar && Number.isFinite(meta) && Number.isFinite(res)) ? (res>=meta) : null;
+  const out = Array.from(lastByCode.values()).map(ar=>{
+    const codigo = String(ar?.CodigoIndicador || "").trim();
+    const f = fichaByCodigo(codigo) || null; // solo enriquecimiento visual, no fuente de inclusion
+    const meta = Number(ar?.MetaObjetivo);
+    const res = Number(ar?.ResultadoObtenido);
+    const hasMeta = Number.isFinite(meta);
+    const hasRes = Number.isFinite(res);
+    const cum = (hasMeta && hasRes) ? (res>=meta) : null;
 
     return {
-      Codigo: f.CodigoIndicador,
-      Nombre: f.NombreIndicador||"",
-      AreaLabel: getAreaLabel(f.AreaResponsable),
-      PeriodoLabel: ar?.PeriodoLabel || (ar?.PeriodoYM ? periodoHuman(ar.PeriodoYM) : ""),
-      Resultado: (ar && Number.isFinite(res)) ? res : null,
-      Meta: Number.isFinite(meta) ? meta : null,
+      Codigo: codigo,
+      Nombre: String(ar?.NombreIndicador || f?.NombreIndicador || ""),
+      AreaLabel: getAreaLabel(String(ar?.AreaResponsable || f?.AreaResponsable || "")),
+      PeriodoLabel: String(ar?.PeriodoLabel || "") || periodoHuman(String(ar?.PeriodoYM || "")),
+      Resultado: hasRes ? res : null,
+      Meta: hasMeta ? meta : null,
       Cumple: cum
     };
   });
