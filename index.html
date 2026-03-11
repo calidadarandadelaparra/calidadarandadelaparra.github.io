@@ -90,7 +90,7 @@
      forzar un valor concreto o usar DEMO.
 =========================== */
 // principal: la URL del web‑app (se evalúa en runtime)
-let SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbwYoSq0nbstjQ5NzE938vCybE0ja0oFFwDRQpLEboymtVpZ1Z3XAV31saE-oa3lsQPikw/exec";
+let SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbytKl8pLxpQ0sb8rwXCKmS4uGl4pd3hacT583PAi4HnNAtGsyum6FOCGCZb23z7xjMs/exec";
 const CONFIG_KEY_WEBAPP_URL = "CONFIG_SHEETS_WEBAPP_URL";
 
 function getSavedWebAppUrl(){
@@ -313,6 +313,31 @@ function periodoHuman(ym){
 
 function isDeletedStatus_(value){
   return String(value || "").trim().toUpperCase() === "ELIMINADO";
+}
+
+function extractDriveFileIdFromUrl_(value){
+  const raw = String(value || "").trim();
+  if(!raw) return "";
+  if(/^[a-zA-Z0-9_-]{20,}$/.test(raw)) return raw;
+  let m = raw.match(/\/d\/([a-zA-Z0-9_-]{20,})/);
+  if(m && m[1]) return m[1];
+  m = raw.match(/[?&]id=([a-zA-Z0-9_-]{20,})/);
+  if(m && m[1]) return m[1];
+  return "";
+}
+
+function isDeletedRowGlobal_(row){
+  if(!row || typeof row !== "object") return false;
+  const status = String(row?.Status || row?.status || row?.ESTADO || row?.Estado || "").trim().toUpperCase();
+  if(status === "ELIMINADO") return true;
+
+  const fechaDel = String(row?.FECHA_ELIMINACION || row?.FechaEliminacion || row?.deletedAt || row?.DeletedAt || "").trim();
+  if(fechaDel) return true;
+
+  const existeRaw = row?.Existe;
+  const existe = String(existeRaw == null ? "" : existeRaw).trim().toLowerCase();
+  if(existe && ["false", "0", "no", "n", "eliminado"].includes(existe)) return true;
+  return false;
 }
 
 function toNumLoose_(value){
@@ -1240,7 +1265,7 @@ async function loadAll(){
 
   // map ficha rows to new property names (and parse JSON lists)
   CACHE.fichas = f.ok ? (f.data||[])
-    .filter(r => !isDeletedStatus_(r?.Status || r?.status || r?.ESTADO || r?.Estado))
+    .filter(r => !isDeletedRowGlobal_(r))
     .map(r=>{
     const out = Object.assign({}, r);
     // migrate old -> new
@@ -1259,7 +1284,7 @@ async function loadAll(){
     return out;
   }) : [];
   CACHE.analisis = a.ok ? (a.data||[])
-    .filter(r => String(r?.Status || r?.status || "").toUpperCase() !== "ELIMINADO")
+    .filter(r => !isDeletedRowGlobal_(r))
     .map(r=>({
       ...r,
       PeriodoYM: String(r?.PeriodoYM || r?.periodo || "").trim(),
@@ -1279,7 +1304,7 @@ async function loadAll(){
   )) : [];
   CACHE.docs = d.ok ? (()=>{
     const src = (d.data||[])
-      .filter(x => !isDeletedStatus_(x?.Status || x?.status || x?.ESTADO || x?.Estado));
+      .filter(x => !isDeletedRowGlobal_(x));
     const seen = new Set();
     return src.filter(x=>{
       const key = String(x?.Key || x?.ID_REGISTRO || "").trim();
@@ -1318,7 +1343,7 @@ async function loadAll(){
     WordUrl: String(x?.WordUrl || "").trim(),
     PdfUrl: String(x?.PdfUrl || "").trim(),
     Nombre: String(x?.Nombre || "").trim()
-  })).filter(x => x.ID_REGISTRO && !isDeletedStatus_(x.ESTADO)) : [];
+  })).filter(x => x.ID_REGISTRO && !isDeletedRowGlobal_(x)) : [];
 
   if(forensicOn_() && FORENSIC_TRACE.active){
     const targetId = String(FORENSIC_TRACE.targetId || "").trim();
@@ -2508,12 +2533,12 @@ function fichasByArea(prefix){
 }
 function analisisByCodigo(codigo){
   return (CACHE.analisis||[]).filter(a=>
-    a.CodigoIndicador===codigo && String(a.Status||a.status||"").toUpperCase() !== "ELIMINADO"
+    a.CodigoIndicador===codigo && !isDeletedRowGlobal_(a)
   );
 }
 function findAnalisis(codigo, periodoYM){
   return (CACHE.analisis||[]).find(a=>
-    a.CodigoIndicador===codigo && a.PeriodoYM===periodoYM && String(a.Status||a.status||"").toUpperCase() !== "ELIMINADO"
+    a.CodigoIndicador===codigo && a.PeriodoYM===periodoYM && !isDeletedRowGlobal_(a)
   ) || null;
 }
 function cumpleFrom(meta, resultado){
@@ -2928,7 +2953,7 @@ async function refreshHistoryByCodigo_(codigo){
         ResultadoObtenido: Number(x?.ResultadoObtenido ?? x?.Resultado ?? x?.resultado)
       }))
       .filter(x => String(x.CodigoIndicador||"").trim() === code)
-      .filter(x => String(x.Status || x.status || "").toUpperCase() !== "ELIMINADO")
+      .filter(x => !isDeletedRowGlobal_(x))
       .filter(x => /^\d{4}-\d{2}$/.test(String(x.PeriodoYM || "")));
 
     const tsOf = (row, fallbackIdx) => {
@@ -2974,7 +2999,7 @@ function getHistoryRowsForCodigo_(codigo){
   if(!code) return [];
   const hist = window.__AN_HISTORY_BY_CODIGO?.[code];
   if(Array.isArray(hist) && hist.length){
-    return hist.filter(x => String(x?.Status || x?.status || "").toUpperCase() !== "ELIMINADO");
+    return hist.filter(x => !isDeletedRowGlobal_(x));
   }
   return analisisByCodigo(code);
 }
@@ -2999,7 +3024,7 @@ function getAllRowsForCodigo_(codigo){
   const fromHistory = getHistoryRowsForCodigo_(codigo).map(normalizeOne);
   const fromCache = (CACHE.analisis || []).map(normalizeOne)
     .filter(x => String(x.CodigoIndicador).toUpperCase() === code)
-    .filter(x => String(x?.Status || x?.status || "").toUpperCase() !== "ELIMINADO");
+    .filter(x => !isDeletedRowGlobal_(x));
 
   const merged = fromHistory.concat(fromCache)
     .filter(x => /^\d{4}-\d{2}$/.test(String(x.PeriodoYM || "")));
@@ -4798,8 +4823,11 @@ function getExplorerRows_(){
     const pdfByType = /pdf/.test(typeHints);
     const wordByType = /(msword|wordprocessingml|word)/.test(typeHints);
 
-    const includeWordRaw = (r.HAS_WORD === true) || !!(base.DOC_ID || base.WordUrl) || isNamedWord || wordByUrl || wordByType;
-    const includePdfRaw = (r.HAS_PDF === true) || !!(base.PDF_ID || base.PdfUrl) || isNamedPdf || pdfByUrl || pdfByType;
+    const wordFileId = extractDriveFileIdFromUrl_(base.DOC_ID) || extractDriveFileIdFromUrl_(base.WordUrl);
+    const pdfFileId = extractDriveFileIdFromUrl_(base.PDF_ID) || extractDriveFileIdFromUrl_(base.PdfUrl);
+
+    const includeWordRaw = (r.HAS_WORD === true) || !!(wordFileId || base.WordUrl) || isNamedWord || wordByUrl || wordByType;
+    const includePdfRaw = (r.HAS_PDF === true) || !!(pdfFileId || base.PdfUrl) || isNamedPdf || pdfByUrl || pdfByType;
 
     // Prioridad solicitada: si hay señal explicita de PDF y no hay evidencia explicita de Word, etiquetar como PDF.
     let includePdf = includePdfRaw;
@@ -4809,6 +4837,7 @@ function getExplorerRows_(){
     }
 
     if(includeWord){
+      const canDeletePhysical = !!wordFileId;
       rowsOut.push({
         ...base,
         __key: base.__key + "::WORD",
@@ -4818,11 +4847,12 @@ function getExplorerRows_(){
         __typeHints: typeHints,
         __deleteMode: "physical",
         __assetKind: "WORD",
-        __deleteRef: { idRegistro: base.__recordId, mode: "physical", fileKind: "WORD" },
-        __rowTipoLabel: "Archivo Word"
+        __deleteRef: { idRegistro: base.__recordId, mode: "physical", fileKind: "WORD", fileId: wordFileId },
+        __rowTipoLabel: canDeletePhysical ? "Archivo Word" : "Archivo Word (sin ID)"
       });
     }
     if(includePdf){
+      const canDeletePhysical = !!pdfFileId;
       rowsOut.push({
         ...base,
         __key: base.__key + "::PDF",
@@ -4832,8 +4862,8 @@ function getExplorerRows_(){
         __typeHints: typeHints,
         __deleteMode: "physical",
         __assetKind: "PDF",
-        __deleteRef: { idRegistro: base.__recordId, mode: "physical", fileKind: "PDF" },
-        __rowTipoLabel: "Archivo PDF"
+        __deleteRef: { idRegistro: base.__recordId, mode: "physical", fileKind: "PDF", fileId: pdfFileId },
+        __rowTipoLabel: canDeletePhysical ? "Archivo PDF" : "Archivo PDF (sin ID)"
       });
     }
     return rowsOut;
@@ -4845,7 +4875,7 @@ function getExplorerRows_(){
 }
 
 function getActiveDocRecordForRow_(row){
-  const docs = (CACHE.docs || []).filter(x => !isDeletedStatus_(x?.Status || x?.status || x?.ESTADO || x?.Estado));
+  const docs = (CACHE.docs || []).filter(x => !isDeletedRowGlobal_(x));
   const byId = docs.find(x => String(x?.Key || "").trim() === String(row?.__recordId || "").trim());
   if(byId) return byId;
   let matches = [];
@@ -4930,12 +4960,14 @@ function confirmarEliminacion(delRef, btn){
     ? {
         idRegistro: String(delRef.idRegistro || "").trim(),
         mode: String(delRef.mode || "logical").trim(),
-        fileKind: String(delRef.fileKind || "").trim().toUpperCase()
+        fileKind: String(delRef.fileKind || "").trim().toUpperCase(),
+        fileId: String(delRef.fileId || "").trim()
       }
     : {
         idRegistro: String(delRef || "").trim(),
         mode: "logical",
-        fileKind: ""
+        fileKind: "",
+        fileId: ""
       };
 
   const modal = $("confirmDeleteModal");
@@ -4997,6 +5029,7 @@ async function eliminarDocumento(delRef, btn){
       ? {
           idRegistro: id,
           fileKind: ref.fileKind,
+          fileId: ref.fileId,
           __forensic: forensicOn_(),
           __traceId: FORENSIC_TRACE.traceId,
           __targetId: id,
@@ -5107,7 +5140,8 @@ function renderExplorerDetail_(row){
   const deleteRef = {
     idRegistro: String(row?.__deleteRef?.idRegistro || row?.__recordId || "").trim(),
     mode: String(row?.__deleteRef?.mode || row?.__deleteMode || "logical").trim(),
-    fileKind: String(row?.__deleteRef?.fileKind || row?.__assetKind || "").trim().toUpperCase()
+    fileKind: String(row?.__deleteRef?.fileKind || row?.__assetKind || "").trim().toUpperCase(),
+    fileId: String(row?.__deleteRef?.fileId || "").trim()
   };
 
   const links = getDocLinksForRow_(row);
@@ -5120,7 +5154,8 @@ function renderExplorerDetail_(row){
   if(links.carpeta) actions.push(`<a href="${links.carpeta}" target="_blank" class="btn btn-soft">Abrir Carpeta</a>`);
   if(deleteRef.idRegistro){
     if(deleteRef.mode === "physical" && deleteRef.fileKind){
-      actions.push(`<button class="btn btn-danger" id="btnExplorerDeleteNow" data-recordid="${escapeHtml(deleteRef.idRegistro)}" data-delmode="physical" data-filekind="${escapeHtml(deleteRef.fileKind)}">Eliminar ${escapeHtml(deleteRef.fileKind)}</button>`);
+      const canDeletePhysical = !!deleteRef.fileId;
+      actions.push(`<button class="btn btn-danger" id="btnExplorerDeleteNow" data-recordid="${escapeHtml(deleteRef.idRegistro)}" data-delmode="physical" data-filekind="${escapeHtml(deleteRef.fileKind)}" data-fileid="${escapeHtml(deleteRef.fileId || "")}" ${canDeletePhysical ? "" : "disabled"}>Eliminar ${escapeHtml(deleteRef.fileKind)}</button>`);
     } else {
       actions.push(`<button class="btn btn-danger" id="btnExplorerDeleteNow" data-recordid="${escapeHtml(deleteRef.idRegistro)}" data-delmode="logical">Eliminar</button>`);
     }
@@ -5132,7 +5167,8 @@ function renderExplorerDetail_(row){
     delBtn.onclick = ()=>confirmarEliminacion({
       idRegistro: delBtn.getAttribute("data-recordid") || "",
       mode: delBtn.getAttribute("data-delmode") || "logical",
-      fileKind: delBtn.getAttribute("data-filekind") || ""
+      fileKind: delBtn.getAttribute("data-filekind") || "",
+      fileId: delBtn.getAttribute("data-fileid") || ""
     }, delBtn);
   }
 }
@@ -5259,7 +5295,7 @@ function refreshExplorador(){
         <td class="p-2">
           <button class="btn btn-soft" data-detail="${escapeHtml(r.__key)}">Ver detalle</button>
           <button class="btn btn-soft" data-preview="${escapeHtml(r.__key)}">Vista previa</button>
-          <button class="btn btn-danger" data-del="${escapeHtml(r.__key)}" data-recordid="${escapeHtml(r.__deleteRef?.idRegistro || "")}" data-delmode="${escapeHtml(r.__deleteRef?.mode || "logical")}" data-filekind="${escapeHtml(r.__deleteRef?.fileKind || "")}" ${r.__deleteRef?.idRegistro ? "" : "disabled"}>Eliminar</button>
+          <button class="btn btn-danger" data-del="${escapeHtml(r.__key)}" data-recordid="${escapeHtml(r.__deleteRef?.idRegistro || "")}" data-delmode="${escapeHtml(r.__deleteRef?.mode || "logical")}" data-filekind="${escapeHtml(r.__deleteRef?.fileKind || "")}" data-fileid="${escapeHtml(r.__deleteRef?.fileId || "")}" ${(r.__deleteRef?.idRegistro && (r.__deleteRef?.mode !== "physical" || r.__deleteRef?.fileId)) ? "" : "disabled"}>Eliminar</button>
         </td>
       </tr>
     `;
@@ -5299,7 +5335,8 @@ function refreshExplorador(){
       confirmarEliminacion({
         idRegistro,
         mode: String(row?.__deleteRef?.mode || b.getAttribute("data-delmode") || "logical"),
-        fileKind: String(row?.__deleteRef?.fileKind || b.getAttribute("data-filekind") || "")
+        fileKind: String(row?.__deleteRef?.fileKind || b.getAttribute("data-filekind") || ""),
+        fileId: String(row?.__deleteRef?.fileId || b.getAttribute("data-fileid") || "")
       }, b);
     });
   });
