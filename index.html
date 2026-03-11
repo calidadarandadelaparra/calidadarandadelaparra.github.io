@@ -127,6 +127,34 @@ function refreshApiMode_(){
 }
 refreshApiMode_();
 
+// Instrumentacion temporal forense para delete en Explorador.
+const FORENSIC_DELETE_ENABLED = true;
+const FORENSIC_TRACE = {
+  targetId: "",
+  traceId: "",
+  active: false,
+  lastAction: ""
+};
+
+function forensicOn_(){
+  return !!FORENSIC_DELETE_ENABLED;
+}
+
+function forensicLog_(stage, data){
+  if(!forensicOn_()) return;
+  try { console.log("[FORENSIC_EXPLORER]", stage, data || {}); } catch(_) {}
+}
+
+function setForensicTarget_(idRegistro, action){
+  if(!forensicOn_()) return;
+  const id = String(idRegistro || "").trim();
+  if(!id) return;
+  FORENSIC_TRACE.targetId = id;
+  FORENSIC_TRACE.traceId = "fx-" + Date.now() + "-" + Math.random().toString(36).slice(2,8);
+  FORENSIC_TRACE.active = true;
+  FORENSIC_TRACE.lastAction = String(action || "");
+}
+
 const SESSION_HOURS = 8;
 
 const LS_KEYS = {
@@ -635,6 +663,14 @@ function seedDemo(){
 
 async function apiFetch(action, payload={}){
   refreshApiMode_();
+  if(forensicOn_()){
+    forensicLog_("apiFetch.begin", {
+      action,
+      payload,
+      useDemo: USE_DEMO,
+      tab: window.__EX_TAB || ""
+    });
+  }
   if(USE_DEMO) return demoApi(action, payload);
   const url = SHEETS_WEBAPP_URL || getWebAppUrl();
   if(!url) return fail_("CONFIG_WEBAPP_URL_MISSING");
@@ -724,6 +760,13 @@ function humanAuthMessage_(code, fallback){
 
 function demoApi(action, payload){
   seedDemo();
+  if(forensicOn_() && (/^explorer\./i.test(String(action || "")) || /^deleteRecord$/i.test(String(action || "")))){
+    forensicLog_("demoApi.action", {
+      action,
+      payload,
+      note: "Flujo en DEMO/localStorage; no persiste en Sheets"
+    });
+  }
   const fichas = lsRead(LS_KEYS.FICHAS, []);
   const analisis = lsRead(LS_KEYS.ANALISIS, []);
   const prop = lsRead(LS_KEYS.PROP, []);
@@ -1177,13 +1220,22 @@ const CACHE = {
 };
 
 async function loadAll(){
+  const explorerPayload = (forensicOn_() && FORENSIC_TRACE.active)
+    ? {
+        __forensic: true,
+        __traceId: FORENSIC_TRACE.traceId,
+        __targetId: FORENSIC_TRACE.targetId,
+        __from: "loadAll"
+      }
+    : {};
+
   const [f, a, p, d, s, e] = await Promise.all([
     apiFetch("fichas.list"),
     apiFetch("analisis.list"),
     apiFetch("prop.list"),
     apiFetch("docs.list"),
     apiFetch("seg.list"),
-    apiFetch("explorer.listRegistros")
+    apiFetch("explorer.listRegistros", explorerPayload)
   ]);
 
   // map ficha rows to new property names (and parse JSON lists)
@@ -1267,6 +1319,22 @@ async function loadAll(){
     PdfUrl: String(x?.PdfUrl || "").trim(),
     Nombre: String(x?.Nombre || "").trim()
   })).filter(x => x.ID_REGISTRO && !isDeletedStatus_(x.ESTADO)) : [];
+
+  if(forensicOn_() && FORENSIC_TRACE.active){
+    const targetId = String(FORENSIC_TRACE.targetId || "").trim();
+    const rawItems = Array.isArray(e?.data) ? e.data : [];
+    const rawMatch = rawItems.find(x => String(x?.ID_REGISTRO || x?.Key || x?.DOC_ID || "").trim() === targetId) || null;
+    const cacheMatch = (CACHE.explorer || []).find(x => String(x?.ID_REGISTRO || "").trim() === targetId) || null;
+    forensicLog_("loadAll.explorer.after", {
+      traceId: FORENSIC_TRACE.traceId,
+      useDemo: USE_DEMO,
+      targetId,
+      explorerRawCount: rawItems.length,
+      cacheExplorerCount: CACHE.explorer.length,
+      rawMatch,
+      cacheMatch
+    });
+  }
 
   console.log("[EXPLORER_LIST] ok=", !!(e && e.ok), "message=", e?.message || "", "rawCount=", Array.isArray(e?.data) ? e.data.length : 0);
   console.log("[CACHE_EXPLORER] cargados:", CACHE.explorer.length, CACHE.explorer.slice(0,3));
@@ -4902,10 +4970,41 @@ async function eliminarDocumento(delRef, btn){
   try {
     const isPhysical = ref.mode === "physical";
     const action = isPhysical ? "explorer.deleteArchivo" : "explorer.deleteRegistro";
+    setForensicTarget_(id, action);
     const payload = isPhysical
-      ? { idRegistro: id, fileKind: ref.fileKind }
-      : { idRegistro: id };
+      ? {
+          idRegistro: id,
+          fileKind: ref.fileKind,
+          __forensic: forensicOn_(),
+          __traceId: FORENSIC_TRACE.traceId,
+          __targetId: id,
+          __tab: window.__EX_TAB || ""
+        }
+      : {
+          idRegistro: id,
+          __forensic: forensicOn_(),
+          __traceId: FORENSIC_TRACE.traceId,
+          __targetId: id,
+          __tab: window.__EX_TAB || ""
+        };
+
+    const cacheExplorerBefore = (CACHE.explorer || []).length;
+    const cacheDocsBefore = (CACHE.docs || []).length;
+    forensicLog_("delete.click", {
+      traceId: FORENSIC_TRACE.traceId,
+      tab: window.__EX_TAB || "",
+      action,
+      payload,
+      idUsado: id,
+      cacheExplorerBefore,
+      cacheDocsBefore
+    });
+
     const r = await apiFetch(action, payload);
+    forensicLog_("delete.backend.response", {
+      traceId: FORENSIC_TRACE.traceId,
+      response: r
+    });
     if(!r?.ok){
       mostrarToast(r?.message || "No se pudo eliminar el registro.", "err");
       return;
@@ -4919,10 +5018,31 @@ async function eliminarDocumento(delRef, btn){
     }
 
     // UX inmediato: retirar del cache local y refrescar antes de recargar estricto desde backend.
+    const beforeApplyExplorer = (CACHE.explorer || []).length;
+    const beforeApplyDocs = (CACHE.docs || []).length;
     applyDeleteResultToCaches_(ref);
+    const afterApplyExplorer = (CACHE.explorer || []).length;
+    const afterApplyDocs = (CACHE.docs || []).length;
+    forensicLog_("delete.applyDeleteResultToCaches", {
+      traceId: FORENSIC_TRACE.traceId,
+      ref,
+      beforeApplyExplorer,
+      afterApplyExplorer,
+      beforeApplyDocs,
+      afterApplyDocs
+    });
     refreshExplorador();
 
     await recargarExplorador();
+
+    const regresa = (CACHE.explorer || []).find(x => String(x?.ID_REGISTRO || "").trim() === String(ref.idRegistro || "").trim()) || null;
+    forensicLog_("delete.after.relist", {
+      traceId: FORENSIC_TRACE.traceId,
+      targetId: String(ref.idRegistro || "").trim(),
+      cacheExplorerCount: (CACHE.explorer || []).length,
+      reappeared: !!regresa,
+      reappearedRow: regresa
+    });
   } catch(err) {
     mostrarToast(String(err?.message || err || "Error inesperado"), "err");
   } finally {
@@ -5038,6 +5158,25 @@ function refreshExplorador(){
     $("e_DetailSheets").innerHTML = "Selecciona un registro para ver el detalle.";
     $("e_DetailActions").innerHTML = "";
     return;
+  }
+
+  if(forensicOn_()){
+    const targetId = String(FORENSIC_TRACE.targetId || "").trim();
+    const rowForensic = rows.find(r => String(r?.__recordId || "").trim() === targetId) || rows[0] || null;
+    if(rowForensic){
+      const d = getActiveDocRecordForRow_(rowForensic) || {};
+      forensicLog_("render.row", {
+        tab: window.__EX_TAB || "",
+        row: rowForensic,
+        visibleName: rowForensic.Nombre || "",
+        __recordId: rowForensic.__recordId || "",
+        Key: d.Key || "",
+        ID_REGISTRO: rowForensic.__recordId || "",
+        DocId: d.DocId || "",
+        PdfId: d.PdfId || "",
+        FileId: d.FileId || ""
+      });
+    }
   }
 
   tb.innerHTML = rows.map(r=>{
