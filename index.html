@@ -90,7 +90,7 @@
       forzar un valor concreto o usar DEMO.
   =========================== */
   // principal: la URL del web‑app (se evalúa en runtime)
-  let SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbybYBVQY7eQ6v6qym8pM4vs5zfIYd5TwBvfPBJ0CEUhbaaNeVvXikwdP-N7tWG4YfpU6w/exec";
+  let SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbzOzE4wKi4SzV3i_SL3L-163-HPeo83Im0eKLBwi4sqLNa9GyWoSyQ1bX3l2gLBePaLeg/exec";
   const CONFIG_KEY_WEBAPP_URL = "CONFIG_SHEETS_WEBAPP_URL";
 
   function getSavedWebAppUrl(){
@@ -385,6 +385,11 @@
         .map(x=>String(x?.PeriodoYM || ""))
         .filter(x=>/^\d{4}-\d{2}$/.test(x))
     )).sort();
+  }
+
+  function getLatestPeriodoRegistradoByCodigo(codigo){
+    const arr = getUniquePeriodosRegistradosByCodigo(codigo);
+    return arr.length ? arr[arr.length - 1] : "";
   }
 
   function getNextPeriodoDisponible(codigo, periodicidad){
@@ -2984,7 +2989,8 @@
     clearAnalisisDocDraft_();
   }
 
-  async function cargarIndicadorAnalisis(){
+  async function cargarIndicadorAnalisis(opts){
+    opts = opts || {};
     const area = $("a_Area").value;
     const codigo = $("a_Codigo").value;
 
@@ -3017,12 +3023,33 @@
     $("a_FormulaHint").textContent = `Fórmula: (${formulaNum||"N"}/${formulaDen||"D"})*${f}  · Etiqueta: ${formulaEtiqueta||""}`;
 
     await refreshHistoryByCodigo_(codigo);
-    const periodoSugerido = getNextPeriodoDisponible(codigo, ficha.PeriodicidadMedicion || "");
-    if(periodoSugerido){
-      $("a_PeriodoYM").value = periodoSugerido;
+
+    const preferPeriodo = String(opts.preferPeriodo || "").trim();
+    const latestPeriodo = getLatestPeriodoRegistradoByCodigo(codigo);
+    const nextPeriodo = getNextPeriodoDisponible(codigo, ficha.PeriodicidadMedicion || "");
+    const hasPreferredExisting = !!(preferPeriodo && getAnalisisByCodigoPeriodo_(codigo, preferPeriodo));
+    const periodoInicial = preferPeriodo || latestPeriodo || nextPeriodo;
+    if(periodoInicial){
+      $("a_PeriodoYM").value = periodoInicial;
     }
+
+    if(hasPreferredExisting || (!preferPeriodo && latestPeriodo)){
+      const existing = getAnalisisByCodigoPeriodo_(codigo, $("a_PeriodoYM").value);
+      if(existing){
+        if($("a_Num")) $("a_Num").value = existing.NumValor ?? "";
+        if($("a_Den")) $("a_Den").value = existing.DenValor ?? "";
+        if($("a_Resultado")) $("a_Resultado").value = existing.ResultadoObtenido ?? existing.Resultado ?? "";
+        if($("a_Analisis")) $("a_Analisis").value = existing.AnalisisPrincipal || existing.AnalisisInterpretacion || "";
+      }
+    }
+
     updatePeriodosRegistrados();
-    checkDuplicadoPeriodo();
+    if(hasPreferredExisting || (!preferPeriodo && latestPeriodo)){
+      setPeriodoValidationMessage("");
+      syncPeriodoLockState_(false);
+    } else {
+      checkDuplicadoPeriodo();
+    }
     recalcResultadoAndUI();
     // chart con históricos al cargar indicador
     const series = buildSeriesForCodigo(codigo);
@@ -5595,25 +5622,24 @@
     renderNumbered("f_ObservacionesList", false, true);
   }
 
-  function openAnalisisView(key){
+  async function openAnalisisView(key){
     const parts = key.split("-");
     const codigo = parts[1];
     const periodo = parts.slice(2).join("-");
     const a = analisisByCodigo(codigo).find(x=>x.PeriodoYM===periodo);
     if(!a) return toast("err","No encontrado","Análisis no existe.");
     showSection("secAnalisis");
-    renderAnalisis();
 
     $("a_Area").value = a.AreaResponsable || "";
     fillCodigoByArea();
     $("a_Codigo").value = a.CodigoIndicador || "";
-    cargarIndicadorAnalisis();
+    await cargarIndicadorAnalisis({ preferPeriodo: a.PeriodoYM || "" });
 
     $("a_PeriodoYM").value = a.PeriodoYM || "";
     $("a_Num").value = a.NumValor || "";
     $("a_Den").value = a.DenValor || "";
     $("a_Resultado").value = a.ResultadoObtenido || "";
-    $("a_Analisis").value = a.AnalisisInterpretacion || "";
+    $("a_Analisis").value = a.AnalisisPrincipal || a.AnalisisInterpretacion || "";
 
     // disable editing
     ["a_PeriodoYM","a_Num","a_Den","a_Resultado","a_Analisis"].forEach(id=>{
