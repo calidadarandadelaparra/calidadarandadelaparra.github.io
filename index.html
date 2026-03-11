@@ -90,7 +90,7 @@
      forzar un valor concreto o usar DEMO.
 =========================== */
 // principal: la URL del web‑app (se evalúa en runtime)
-let SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbzX5jhmucizxbADBu5_3OnpGaxppOIeF7rez_fy3w7jYvIUA1b6FlkTtVr5u6V3DLUvxQ/exec";
+let SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbwYoSq0nbstjQ5NzE938vCybE0ja0oFFwDRQpLEboymtVpZ1Z3XAV31saE-oa3lsQPikw/exec";
 const CONFIG_KEY_WEBAPP_URL = "CONFIG_SHEETS_WEBAPP_URL";
 
 function getSavedWebAppUrl(){
@@ -4789,8 +4789,24 @@ function getExplorerRows_(){
     }
 
     const rowsOut = [];
-    const includeWord = (r.HAS_WORD === true) || !!(base.DOC_ID || base.WordUrl);
-    const includePdf = (r.HAS_PDF === true) || !!(base.PDF_ID || base.PdfUrl);
+    const wordUrlLower = String(base.WordUrl || "").toLowerCase();
+    const pdfUrlLower = String(base.PdfUrl || "").toLowerCase();
+    const typeHints = String(r?.MimeType || r?.mimeType || r?.FileType || r?.fileType || "").toLowerCase();
+
+    const pdfByUrl = /\.pdf(?:$|[?#])/i.test(pdfUrlLower) || /\.pdf(?:$|[?#])/i.test(wordUrlLower);
+    const wordByUrl = /\.(doc|docx)(?:$|[?#])/i.test(wordUrlLower) || /\.(doc|docx)(?:$|[?#])/i.test(pdfUrlLower);
+    const pdfByType = /pdf/.test(typeHints);
+    const wordByType = /(msword|wordprocessingml|word)/.test(typeHints);
+
+    const includeWordRaw = (r.HAS_WORD === true) || !!(base.DOC_ID || base.WordUrl) || isNamedWord || wordByUrl || wordByType;
+    const includePdfRaw = (r.HAS_PDF === true) || !!(base.PDF_ID || base.PdfUrl) || isNamedPdf || pdfByUrl || pdfByType;
+
+    // Prioridad solicitada: si hay señal explicita de PDF y no hay evidencia explicita de Word, etiquetar como PDF.
+    let includePdf = includePdfRaw;
+    let includeWord = includeWordRaw;
+    if(includePdf && !wordByUrl && !wordByType && !isNamedWord && !r.HAS_WORD){
+      includeWord = false;
+    }
 
     if(includeWord){
       rowsOut.push({
