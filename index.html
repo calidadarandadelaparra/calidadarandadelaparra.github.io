@@ -90,7 +90,7 @@
       forzar un valor concreto o usar DEMO.
   =========================== */
   // principal: la URL del web‑app (se evalúa en runtime)
-  let SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbzZK4-GJke_VuUMp6MmsSnC0GzxstnIF6u0gZKMSm7yujPxZS8OkG4CO2DjKPmPkAZQ-g/exec";
+  let SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbzeWNYHBzceoEFPWiOquMiCCNZM6cPc12IAqtvmOAZCyFDrbKael5YeCsn-xOWFfZ_SSw/exec";
   const CONFIG_KEY_WEBAPP_URL = "CONFIG_SHEETS_WEBAPP_URL";
 
   function getSavedWebAppUrl(){
@@ -3882,6 +3882,10 @@
 
       const chartDataUrl = getChartDataUrl();
       console.log("[GRAPH_DEBUG] chartDataUrl length=", chartDataUrl.length);
+      // Aviso visible si el canvas no capturó nada (canvas oculto o sin datos)
+      if(!chartDataUrl || chartDataUrl.length < 100){
+        toast("warn","Gráfica no capturada","El canvas no generó imagen (length=" + (chartDataUrl||"").length + "). Revisa que haya resultado calculado.");
+      }
 
       const payloadPreview = {
         CodigoIndicador: codigo,
@@ -3951,6 +3955,29 @@
           periodo: perYM,
           baseName: d.baseName || ""
         };
+
+        // ── INSERCIÓN DE GRÁFICO SEPARADA (belt-and-suspenders) ──────────────
+        // Llama a insertarGraficoEnDoc_ independientemente del pipeline principal.
+        // Si el pipeline ya lo insertó, la función detecta la imagen y sólo limpia el texto.
+        // Si no lo insertó (Code.gs no actualizado / placeholder diferente), lo inserta ahora.
+        if(d.docId && chartDataUrl && chartDataUrl.length > 100){
+          try {
+            btn.textContent = "Pegando gráfica…";
+            const gfRes = await apiFetch("docs.insertGrafico", { docId: d.docId, dataUrl: chartDataUrl });
+            console.log('[GRAFICO_SEPARADO]', gfRes);
+            if(gfRes && gfRes.ok){
+              toast("ok","Gráfica insertada", gfRes.message || "OK");
+            } else {
+              toast("warn","Gráfica no insertada", (gfRes && gfRes.message) || "Respuesta vacía");
+            }
+          } catch(gfErr){
+            console.warn('[GRAFICO_SEPARADO_ERR]', gfErr);
+            toast("warn","Error al insertar gráfica", String(gfErr));
+          }
+        } else if(!d.docId){
+          toast("warn","Sin docId","No se pudo obtener el ID del documento para insertar la gráfica.");
+        }
+        // ─────────────────────────────────────────────────────────────────────
         if(d.linkDocx){
           if(previewWin && !previewWin.closed) previewWin.location.href = d.linkDocx;
           else window.location.href = d.linkDocx;
