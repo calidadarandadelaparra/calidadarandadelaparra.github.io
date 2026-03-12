@@ -90,7 +90,7 @@
       forzar un valor concreto o usar DEMO.
   =========================== */
   // principal: la URL del web‑app (se evalúa en runtime)
-  let SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbwUbi7-ht2a0GR6J1qUUUtXD8HeLFHN1WhGwEyhtmS-_YMe-6zGfYddypaYOyGV_LaLyg/exec";
+  let SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbxVBidjEQpBwTkioQYXri4acb2XzzB4J7o18RxoKAr2dbmd8ceTDvw2QvkgqKEQed0zaQ/exec";
   const CONFIG_KEY_WEBAPP_URL = "CONFIG_SHEETS_WEBAPP_URL";
 
   function getSavedWebAppUrl(){
@@ -3868,15 +3868,20 @@
       const analisisPrincipal = ($("a_Analisis").value||"").replace(/^(\s*\n)+/, "").trimStart().trimEnd();
 
       // Force chart redraw before capturing dataUrl to ensure canvas is painted
-      if(fichaPrev && Number.isFinite(resPrev)){
+      {
         const series = buildSeriesForCodigo(codigo);
         const per = perYM || nowYM();
-        const idx = series.findIndex(x=>x.PeriodoYM===per);
-        const point = { PeriodoYM: per, PeriodoLabel: periodoHuman(per), Resultado: resPrev };
-        if(idx>=0) series[idx] = point; else series.push(point);
-        series.sort((a,b)=>a.PeriodoYM.localeCompare(b.PeriodoYM));
+        if(Number.isFinite(resPrev)){
+          const idx = series.findIndex(x=>x.PeriodoYM===per);
+          const point = { PeriodoYM: per, PeriodoLabel: periodoHuman(per), Resultado: resPrev };
+          if(idx>=0) series[idx] = point; else series.push(point);
+        }
+        series.sort((a,b)=>(a.PeriodoYM||"").localeCompare(b.PeriodoYM||""));
         drawAnalisisChart(series, metaPrev);
       }
+
+      const chartDataUrl = getChartDataUrl();
+      console.log("[GRAPH_DEBUG] chartDataUrl length=", chartDataUrl.length);
 
       const payloadPreview = {
         CodigoIndicador: codigo,
@@ -3896,7 +3901,7 @@
         Cumple: (resPrev >= metaPrev),
         AnalisisPrincipal: analisisPrincipal,
         AnalisisInterpretacion: buildAnalisisInterpretacion(analisisPrincipal, evidenciasPreview),
-        GraficoDataUrl: getChartDataUrl(),
+        GraficoDataUrl: chartDataUrl,
         Responsable: fichaPrev?.ResponsableIndicador || "",
         FirmaResponsableDataUrl: (window.__FIRMAS?.ResponsableDataUrl || ""),
         Status: "BORRADOR",
