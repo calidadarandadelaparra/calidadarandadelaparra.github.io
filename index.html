@@ -90,7 +90,7 @@
       forzar un valor concreto o usar DEMO.
   =========================== */
   // principal: la URL del web‑app (se evalúa en runtime)
-  let SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbzG_CD4g4FtyxD_Jhz1iOoiXTCHGuW8OVZZpz_OmvVbdfTQiZ_kL3RlBzhhVCmNXwbc3A/exec";
+  let SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbzMXv9-l2ZGFeq_ouVpRI1zbkkqnAG4J0hDXoO11tIQAdAsJquBb4fHzWaWIbND2018Dw/exec";
   const CONFIG_KEY_WEBAPP_URL = "CONFIG_SHEETS_WEBAPP_URL";
 
   function getSavedWebAppUrl(){
@@ -3960,15 +3960,20 @@
         };
 
         // ── INSERCIÓN DE GRÁFICO SEPARADA ──────────────────────────────────
-        const _gfPanel = document.getElementById('graphDiagPanel');
+        // Panel de diagnóstico: se crea dinámicamente si no existe
+        let _gfPanel = document.getElementById('graphDiagPanel');
+        if(!_gfPanel){
+          _gfPanel = document.createElement('div');
+          _gfPanel.id = 'graphDiagPanel';
+          _gfPanel.style.cssText = 'margin-top:8px;padding:10px;background:#fefce8;border:2px solid #ca8a04;border-radius:8px;font-size:12px;font-family:monospace;white-space:pre-wrap;max-height:200px;overflow-y:auto;';
+          btn.parentNode.insertBefore(_gfPanel, btn.nextSibling);
+        }
+        _gfPanel.style.display = 'block';
+        _gfPanel.innerHTML = '<b>Diagnóstico gráfico:</b><br>';
         const _gfLog = (msg, color) => {
           console.log('[GRAFICO]', msg);
-          if(_gfPanel){
-            _gfPanel.style.display = 'block';
-            _gfPanel.innerHTML += `<div style="color:${color||'#000'}">${escapeHtml(msg)}</div>`;
-          }
+          _gfPanel.innerHTML += `<div style="color:${color||'#222'}">${msg}</div>`;
         };
-        if(_gfPanel){ _gfPanel.innerHTML = '<b>Diagnóstico gráfico:</b><br>'; _gfPanel.style.display='block'; }
 
         _gfLog('chartDataUrl.length = ' + (chartDataUrl||'').length, (chartDataUrl||'').length > 100 ? '#166534' : '#991b1b');
         _gfLog('docId = ' + (d.docId || 'NO RECIBIDO'), d.docId ? '#166534' : '#991b1b');
