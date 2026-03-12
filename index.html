@@ -90,7 +90,7 @@
       forzar un valor concreto o usar DEMO.
   =========================== */
   // principal: la URL del web‑app (se evalúa en runtime)
-  let SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbwjXRobPmeJ5586BX7CHxwgXSgzNWrZCA480I0TjSnW3EVFNBdz4wdvFligrG1_dGXR2g/exec";
+  let SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycby7p_VjDwcBP0zblCAU9jzLmXh1FnVyrpoHxgOhxGAlXlWNvDZnjtlv_FUxPgbzerjFeA/exec";
   const CONFIG_KEY_WEBAPP_URL = "CONFIG_SHEETS_WEBAPP_URL";
 
   function getSavedWebAppUrl(){
@@ -2382,6 +2382,7 @@
     });
 
     $("btnLogin").addEventListener("click", async ()=>{
+      const btn = $("btnLogin");
       const name = ($("loginName").value||"").trim();
       const u = normalizeCorpEmail_(($("loginUser").value||"").trim().toLowerCase());
       const area = ($("loginArea").value||"").trim();
@@ -2398,35 +2399,46 @@
         return;
       }
 
-      const r = await apiFetch("auth.login", { Email: u, Password: p });
-      if(!r?.ok){
-        $("loginMsg").textContent = humanAuthMessage_(r?.message, "No se pudo iniciar sesión.");
-        $("loginMsg").classList.remove("hidden");
-        return;
-      }
+      /* — estado de carga — */
+      const btnOrigHTML = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<span class="inline-block h-4 w-4 rounded-full border-2 border-white/40 border-t-white animate-spin align-middle"></span> Iniciando sesión…';
+      $("loginMsg").classList.add("hidden");
 
-      const me = r.data || {};
-      const userArea = me.Area || area || "";
-      if(authModalMode === "quality" && !isQualityArea_(userArea)){
-        $("loginMsg").textContent = "Este acceso está restringido para usuarios del área de Calidad.";
-        $("loginMsg").classList.remove("hidden");
-        return;
-      }
+      try{
+        const r = await apiFetch("auth.login", { Email: u, Password: p });
+        if(!r?.ok){
+          $("loginMsg").textContent = humanAuthMessage_(r?.message, "No se pudo iniciar sesión.");
+          $("loginMsg").classList.remove("hidden");
+          return;
+        }
 
-      setSession({
-        name: me.Nombre || name || "",
-        email: me.Email || u,
-        area: userArea,
-        expiresAt: new Date(Date.now()+SESSION_HOURS*3600*1000).toISOString()
-      });
-      await loadAll();
-      setUiLocked_(false);
-      $("loginModal").classList.add("hidden");
-      toast("ok","Acceso autorizado", `Bienvenido, ${me.Nombre || name || "usuario"}.`);
+        const me = r.data || {};
+        const userArea = me.Area || area || "";
+        if(authModalMode === "quality" && !isQualityArea_(userArea)){
+          $("loginMsg").textContent = "Este acceso está restringido para usuarios del área de Calidad.";
+          $("loginMsg").classList.remove("hidden");
+          return;
+        }
 
-      if(pendingTarget){
-        const t=pendingTarget; pendingTarget=null;
-        showSection(t);
+        setSession({
+          name: me.Nombre || name || "",
+          email: me.Email || u,
+          area: userArea,
+          expiresAt: new Date(Date.now()+SESSION_HOURS*3600*1000).toISOString()
+        });
+        await loadAll();
+        setUiLocked_(false);
+        $("loginModal").classList.add("hidden");
+        toast("ok","Acceso autorizado", `Bienvenido, ${me.Nombre || name || "usuario"}.`);
+
+        if(pendingTarget){
+          const t=pendingTarget; pendingTarget=null;
+          showSection(t);
+        }
+      }finally{
+        btn.disabled = false;
+        btn.innerHTML = btnOrigHTML;
       }
     });
 
