@@ -90,7 +90,7 @@
       forzar un valor concreto o usar DEMO.
   =========================== */
   // principal: la URL del web‑app (se evalúa en runtime)
-  let SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbxF3Co8WLw54y3diFxySDMVDqS-LYe1RqOryDAlbiGVllr2fvLJICWffd09g4i-d2qOMQ/exec";
+  let SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbygTzjKRH6z2KM_l7Ft4or_nud0brW52HSctAAqCjgAYRkWFAD03jyxtAD057j1sqvl6A/exec";
   const CONFIG_KEY_WEBAPP_URL = "CONFIG_SHEETS_WEBAPP_URL";
 
   function getSavedWebAppUrl(){
@@ -2937,6 +2937,7 @@
     $("a_DupMsg").classList.add("hidden");
     $("a_SaveMsg").classList.add("hidden");
     syncPeriodoLockState_(false);
+    window.__AN_ACTIVE_FICHA = null;
     // hide proposals when resetting
     togglePropSection(false);
 
@@ -2987,6 +2988,9 @@
       toast("err","No encontrado","No existe ficha para este código.");
       return;
     }
+
+    // Keep a reference so recalcResultadoAndUI works even if CACHE.fichas is stale
+    window.__AN_ACTIVE_FICHA = ficha;
 
     // Mostrar bloque info
     $("a_InfoBlock").classList.remove("hidden");
@@ -3243,7 +3247,7 @@
 
   function recalcResultadoAndUI(){
     const codigo = $("a_Codigo").value;
-    const ficha = codigo ? fichaByCodigo(codigo) : null;
+    const ficha = codigo ? (fichaByCodigo(codigo) || window.__AN_ACTIVE_FICHA || null) : null;
 
     const n = Number($("a_Num").value);
     const d = Number($("a_Den").value);
