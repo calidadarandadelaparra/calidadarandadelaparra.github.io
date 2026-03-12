@@ -90,7 +90,7 @@
       forzar un valor concreto o usar DEMO.
   =========================== */
   // principal: la URL del web‑app (se evalúa en runtime)
-  let SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycby7p_VjDwcBP0zblCAU9jzLmXh1FnVyrpoHxgOhxGAlXlWNvDZnjtlv_FUxPgbzerjFeA/exec";
+  let SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbxZVcaElgsBsN49-afB09XiOtE4PwLLZtCqiJekh1_KmK_iqumGg7uMOkdICO8oRztTgA/exec";
   const CONFIG_KEY_WEBAPP_URL = "CONFIG_SHEETS_WEBAPP_URL";
 
   function getSavedWebAppUrl(){
@@ -4356,12 +4356,13 @@
         showSection("secAnalisis");
         renderAnalisis();
         // set values after render
-        setTimeout(()=>{
-          $("a_Area").value = area || (fichaByCodigo(b.getAttribute("data-open-anal"))?.AreaResponsable || "");
+        setTimeout(async ()=>{
+          const cod = b.getAttribute("data-open-anal");
+          $("a_Area").value = area || (fichaByCodigo(cod)?.AreaResponsable || "");
           fillCodigoByArea();
-          $("a_Codigo").value = b.getAttribute("data-open-anal");
+          $("a_Codigo").value = cod;
           updatePeriodosRegistrados();
-          cargarIndicadorAnalisis();
+          await cargarIndicadorAnalisis();
         }, 50);
       });
     });
