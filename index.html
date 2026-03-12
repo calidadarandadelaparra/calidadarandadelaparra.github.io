@@ -90,7 +90,7 @@
       forzar un valor concreto o usar DEMO.
   =========================== */
   // principal: la URL del web‑app (se evalúa en runtime)
-  let SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbygTzjKRH6z2KM_l7Ft4or_nud0brW52HSctAAqCjgAYRkWFAD03jyxtAD057j1sqvl6A/exec";
+  let SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbwUbi7-ht2a0GR6J1qUUUtXD8HeLFHN1WhGwEyhtmS-_YMe-6zGfYddypaYOyGV_LaLyg/exec";
   const CONFIG_KEY_WEBAPP_URL = "CONFIG_SHEETS_WEBAPP_URL";
 
   function getSavedWebAppUrl(){
@@ -3861,11 +3861,23 @@
 
     if(!hasCurrentDraft){
       const previewWin = extWin || window.open("about:blank", "_blank");
-      const fichaPrev = fichaByCodigo(codigo);
+      const fichaPrev = fichaByCodigo(codigo) || window.__AN_ACTIVE_FICHA || null;
       const metaPrev = Number(fichaPrev?.MetaObjetivo);
       const resPrev = Number($("a_Resultado").value);
       const evidenciasPreview = buildAnalisisEvidenceList_(window.__EVID||[]);
       const analisisPrincipal = ($("a_Analisis").value||"").replace(/^(\s*\n)+/, "").trimStart().trimEnd();
+
+      // Force chart redraw before capturing dataUrl to ensure canvas is painted
+      if(fichaPrev && Number.isFinite(resPrev)){
+        const series = buildSeriesForCodigo(codigo);
+        const per = perYM || nowYM();
+        const idx = series.findIndex(x=>x.PeriodoYM===per);
+        const point = { PeriodoYM: per, PeriodoLabel: periodoHuman(per), Resultado: resPrev };
+        if(idx>=0) series[idx] = point; else series.push(point);
+        series.sort((a,b)=>a.PeriodoYM.localeCompare(b.PeriodoYM));
+        drawAnalisisChart(series, metaPrev);
+      }
+
       const payloadPreview = {
         CodigoIndicador: codigo,
         AreaResponsable: $("a_Area").value,
@@ -3904,6 +3916,11 @@
         UpdatedAt: nowISO()
       };
       Object.keys(payloadPreview).forEach(k=>{
+        // Never strip fields that the backend needs for placeholder replacement
+        const keep = ['CodigoIndicador','NombreIndicador','TipoIndicador','Objetivo',
+          'Resultado','ResultadoObtenido','Periodo','PeriodoYM','PeriodoLabel',
+          'Area','AreaResponsable','AreaLabel','GraficoDataUrl','Cumple'];
+        if(keep.includes(k)) return;
         const v3 = payloadPreview[k];
         if(v3 == null || (typeof v3==='string' && v3.trim()==='') ||
           (Array.isArray(v3)&&v3.length===0)) delete payloadPreview[k];
