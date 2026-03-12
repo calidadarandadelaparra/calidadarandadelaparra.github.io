@@ -90,7 +90,7 @@
       forzar un valor concreto o usar DEMO.
   =========================== */
   // principal: la URL del web‑app (se evalúa en runtime)
-  let SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbwXWx8KTIQhdrIB8PpCaqFFaddeE8FIJ5zDqdgcEi2JOznHmRxUrLIa54zK1da4nJO-4A/exec";
+  let SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbx-mQLTJ-Yz5wNSYwd2sa2XipuYbQzji41ZPc2m_EZ172ijesrkv9vhL3Y7HSuU6JbKYA/exec";
   const CONFIG_KEY_WEBAPP_URL = "CONFIG_SHEETS_WEBAPP_URL";
 
   function getSavedWebAppUrl(){
@@ -2077,6 +2077,8 @@
     const idx = (CACHE.fichas || []).findIndex(x => String(x?.CodigoIndicador || "") === String(row.CodigoIndicador || ""));
     if(idx >= 0) CACHE.fichas[idx] = { ...(CACHE.fichas[idx] || {}), ...fichaLocal };
     else CACHE.fichas.push(fichaLocal);
+
+    await loadAll();
 
     if(!opts.silent){
       $("f_SaveMsg").classList.remove("hidden");
