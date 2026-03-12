@@ -90,7 +90,7 @@
       forzar un valor concreto o usar DEMO.
   =========================== */
   // principal: la URL del web‑app (se evalúa en runtime)
-  let SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbyIeZalbK5rfO0Vioqbg_MQHQt1Mvxr7BSMwVefb1C1oBnr-h5ZMqCP_ivB266br-n4hQ/exec";
+  let SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbzkVXtPV0yCujPS4DigtuG3KRjt1Sxv-Y21At477gmYIIDTwlqwtL5Rg8swYW-JEkm8gQ/exec";
   const CONFIG_KEY_WEBAPP_URL = "CONFIG_SHEETS_WEBAPP_URL";
 
   function getSavedWebAppUrl(){
@@ -3943,6 +3943,7 @@
         }
 
         const d = rp.data || {};
+        if(d._graphDebug) console.log('[GRAPH_DEBUG_RESPONSE]', JSON.stringify(d._graphDebug, null, 2));
         window.__AN_DOC_DRAFT = {
           docId: d.docId,
           linkDocx: d.linkDocx,
