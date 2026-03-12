@@ -90,7 +90,7 @@
       forzar un valor concreto o usar DEMO.
   =========================== */
   // principal: la URL del web‑app (se evalúa en runtime)
-  let SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbzeWNYHBzceoEFPWiOquMiCCNZM6cPc12IAqtvmOAZCyFDrbKael5YeCsn-xOWFfZ_SSw/exec";
+  let SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbzG_CD4g4FtyxD_Jhz1iOoiXTCHGuW8OVZZpz_OmvVbdfTQiZ_kL3RlBzhhVCmNXwbc3A/exec";
   const CONFIG_KEY_WEBAPP_URL = "CONFIG_SHEETS_WEBAPP_URL";
 
   function getSavedWebAppUrl(){
@@ -2852,6 +2852,9 @@
               <button id="btnAGuardar" class="btn btn-primary">Generar vista previa del Word-PDF</button>
             </div>
 
+            <!-- PANEL DIAGNÓSTICO GRÁFICA (visible tras guardar) -->
+            <div id="graphDiagPanel" style="display:none;margin-top:8px;padding:10px;background:#fefce8;border:2px solid #ca8a04;border-radius:8px;font-size:12px;font-family:monospace;white-space:pre-wrap;max-height:200px;overflow-y:auto;"></div>
+
             <div id="a_SaveMsg" class="hidden rounded-2xl border border-emerald-200 bg-emerald-50 text-emerald-900 p-3 text-sm">
               <div class="font-extrabold">Guardado correctamente</div>
               <div>El análisis se guardó en la base de datos.</div>
@@ -3956,26 +3959,43 @@
           baseName: d.baseName || ""
         };
 
-        // ── INSERCIÓN DE GRÁFICO SEPARADA (belt-and-suspenders) ──────────────
-        // Llama a insertarGraficoEnDoc_ independientemente del pipeline principal.
-        // Si el pipeline ya lo insertó, la función detecta la imagen y sólo limpia el texto.
-        // Si no lo insertó (Code.gs no actualizado / placeholder diferente), lo inserta ahora.
-        if(d.docId && chartDataUrl && chartDataUrl.length > 100){
+        // ── INSERCIÓN DE GRÁFICO SEPARADA ──────────────────────────────────
+        const _gfPanel = document.getElementById('graphDiagPanel');
+        const _gfLog = (msg, color) => {
+          console.log('[GRAFICO]', msg);
+          if(_gfPanel){
+            _gfPanel.style.display = 'block';
+            _gfPanel.innerHTML += `<div style="color:${color||'#000'}">${escapeHtml(msg)}</div>`;
+          }
+        };
+        if(_gfPanel){ _gfPanel.innerHTML = '<b>Diagnóstico gráfico:</b><br>'; _gfPanel.style.display='block'; }
+
+        _gfLog('chartDataUrl.length = ' + (chartDataUrl||'').length, (chartDataUrl||'').length > 100 ? '#166534' : '#991b1b');
+        _gfLog('docId = ' + (d.docId || 'NO RECIBIDO'), d.docId ? '#166534' : '#991b1b');
+
+        if(!chartDataUrl || chartDataUrl.length < 100){
+          _gfLog('❌ ERROR: El canvas no capturó imagen. Asegúrate de tener resultado calculado.', '#991b1b');
+          alert('ERROR GRÁFICA: El canvas no capturó imagen. Revisa que haya resultado calculado antes de guardar. (length=' + (chartDataUrl||'').length + ')');
+        } else if(!d.docId){
+          _gfLog('❌ ERROR: No se recibió docId del servidor.', '#991b1b');
+        } else {
           try {
-            btn.textContent = "Pegando gráfica…";
-            const gfRes = await apiFetch("docs.insertGrafico", { docId: d.docId, dataUrl: chartDataUrl });
-            console.log('[GRAFICO_SEPARADO]', gfRes);
+            btn.textContent = 'Pegando gráfica…';
+            _gfLog('⏳ Llamando docs.insertGrafico con docId=' + d.docId + ' dataLen=' + chartDataUrl.length, '#92400e');
+            const gfRes = await apiFetch('docs.insertGrafico', { docId: d.docId, dataUrl: chartDataUrl });
+            const gfMsg = (gfRes && gfRes.message) || JSON.stringify(gfRes);
             if(gfRes && gfRes.ok){
-              toast("ok","Gráfica insertada", gfRes.message || "OK");
+              _gfLog('✅ Gráfica insertada: ' + gfMsg, '#166534');
+              toast('ok','Gráfica insertada', gfMsg);
             } else {
-              toast("warn","Gráfica no insertada", (gfRes && gfRes.message) || "Respuesta vacía");
+              _gfLog('❌ Gráfica NO insertada: ' + gfMsg, '#991b1b');
+              toast('warn','Gráfica no insertada', gfMsg);
             }
           } catch(gfErr){
-            console.warn('[GRAFICO_SEPARADO_ERR]', gfErr);
-            toast("warn","Error al insertar gráfica", String(gfErr));
+            const gfErrMsg = String(gfErr);
+            _gfLog('❌ Excepción docs.insertGrafico: ' + gfErrMsg, '#991b1b');
+            toast('warn','Error al insertar gráfica', gfErrMsg);
           }
-        } else if(!d.docId){
-          toast("warn","Sin docId","No se pudo obtener el ID del documento para insertar la gráfica.");
         }
         // ─────────────────────────────────────────────────────────────────────
         if(d.linkDocx){
