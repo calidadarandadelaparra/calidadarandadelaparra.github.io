@@ -90,7 +90,7 @@
       forzar un valor concreto o usar DEMO.
   =========================== */
   // principal: la URL del web‑app (se evalúa en runtime)
-  let SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbzZrEfbR-zLphk_Am8IQzOuZrwTLRBTp7-H_5eDlemgF6DE6QnTNp9yIRvUF2W8HQGo/exec";
+  let SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbzCk9juS3MsrYZQcGGR2GOdTsq8tNYqj-ZTQp435mOwdPZwZTtRwRKqlMc_nY2OXNTl7A/exec";
   const CONFIG_KEY_WEBAPP_URL = "CONFIG_SHEETS_WEBAPP_URL";
 
   function getSavedWebAppUrl(){
@@ -166,6 +166,7 @@
     USERS: "HAP_BD_USUARIOS",
     AUTH_CODES: "HAP_AUTH_CODES",
     SESSION: "HAP_SESSION",
+    ANALISIS_UI: "HAP_ANALISIS_UI_STATE",
   };
 
   const MESES = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
@@ -1272,6 +1273,94 @@
     seg: [],
     explorer: []
   };
+
+  function histDebug_(tag, data){
+    try { console.log(tag, data || {}); } catch(_) {}
+  }
+
+  function getAnalisisUIState_(){
+    if(window.__AN_UI_STATE) return window.__AN_UI_STATE;
+    const saved = safeJsonParse_(localStorage.getItem(LS_KEYS.ANALISIS_UI), {}) || {};
+    window.__AN_HISTORY_BY_CODIGO = window.__AN_HISTORY_BY_CODIGO || {};
+    window.__AN_HISTORY_TS_BY_CODIGO = window.__AN_HISTORY_TS_BY_CODIGO || {};
+    window.__AN_UI_STATE = {
+      selectedArea: String(saved.selectedArea || ""),
+      selectedCodigo: String(saved.selectedCodigo || ""),
+      selectedPeriodo: String(saved.selectedPeriodo || ""),
+      userSelectedPeriodo: !!saved.userSelectedPeriodo,
+      loadingCount: 0,
+      lastRenderToken: 0,
+      historyPromises: {},
+      historyByCodigo: window.__AN_HISTORY_BY_CODIGO,
+      skipAutoLoadOnce: false
+    };
+    return window.__AN_UI_STATE;
+  }
+
+  function persistAnalisisUIState_(){
+    const st = getAnalisisUIState_();
+    localStorage.setItem(LS_KEYS.ANALISIS_UI, JSON.stringify({
+      selectedArea: st.selectedArea || "",
+      selectedCodigo: st.selectedCodigo || "",
+      selectedPeriodo: st.selectedPeriodo || "",
+      userSelectedPeriodo: !!st.userSelectedPeriodo
+    }));
+  }
+
+  function showLoadingOverlay(msg){
+    const st = getAnalisisUIState_();
+    st.loadingCount = Number(st.loadingCount || 0) + 1;
+    const ov = $("a_LoadingOverlay");
+    if(!ov) return;
+    const txt = $("a_LoadingOverlayText");
+    if(txt) txt.textContent = msg || "Cargando historial de datos...";
+    ov.classList.remove("hidden");
+  }
+
+  function hideLoadingOverlay(){
+    const st = getAnalisisUIState_();
+    st.loadingCount = Math.max(0, Number(st.loadingCount || 0) - 1);
+    if(st.loadingCount > 0) return;
+    const ov = $("a_LoadingOverlay");
+    if(ov) ov.classList.add("hidden");
+  }
+
+  function setSelectedPeriodo(periodo, source){
+    const st = getAnalisisUIState_();
+    const next = String(periodo || "").trim();
+    if(source === "reset"){
+      st.selectedPeriodo = "";
+      st.userSelectedPeriodo = false;
+    } else if(source !== "user" && st.userSelectedPeriodo && st.selectedPeriodo && next && st.selectedPeriodo !== next){
+      histDebug_("[PERIODO_AUTORESET_BLOCKED]", { kept: st.selectedPeriodo, ignored: next, source: String(source || "") });
+    } else if(next){
+      st.selectedPeriodo = next;
+      if(source === "user"){
+        st.userSelectedPeriodo = true;
+        histDebug_("[PERIODO_USER_SET]", { periodo: next });
+      } else if(source === "init"){
+        histDebug_("[PERIODO_INIT]", { periodo: next });
+      } else {
+        histDebug_("[PERIODO_PRESERVED]", { periodo: next, source: String(source || "") });
+      }
+    }
+    persistAnalisisUIState_();
+    const el = $("a_PeriodoYM");
+    if(el && el.value !== st.selectedPeriodo) el.value = st.selectedPeriodo;
+    return st.selectedPeriodo;
+  }
+
+  function renderPeriodoActual(){
+    const st = getAnalisisUIState_();
+    const el = $("a_PeriodoYM");
+    if(!el) return;
+    if(st.selectedPeriodo){
+      if(el.value !== st.selectedPeriodo) el.value = st.selectedPeriodo;
+      histDebug_("[PERIODO_PRESERVED]", { periodo: st.selectedPeriodo });
+      return;
+    }
+    setSelectedPeriodo(nowYM(), "init");
+  }
 
   function buildExplorerValidityIndex_(rows){
     const fichaCodes = new Set();
@@ -2619,12 +2708,16 @@
     return (CACHE.fichas||[]).filter(f=>f.AreaResponsable===prefix);
   }
   function analisisByCodigo(codigo){
-    return (CACHE.analisis||[]).filter(a=>
+    const hist = window.__AN_HISTORY_BY_CODIGO?.[codigo];
+    const source = Array.isArray(hist) ? hist : (CACHE.analisis||[]);
+    return source.filter(a=>
       a.CodigoIndicador===codigo && !isDeletedRowGlobal_(a)
     );
   }
   function findAnalisis(codigo, periodoYM){
-    return (CACHE.analisis||[]).find(a=>
+    const hist = window.__AN_HISTORY_BY_CODIGO?.[codigo];
+    const source = Array.isArray(hist) ? hist : (CACHE.analisis||[]);
+    return source.find(a=>
       a.CodigoIndicador===codigo && a.PeriodoYM===periodoYM && !isDeletedRowGlobal_(a)
     ) || null;
   }
@@ -2665,6 +2758,13 @@
   function renderAnalisis(){
     const sec = $("secAnalisis");
     sec.innerHTML = `
+      <div id="a_LoadingOverlay" class="hidden fixed inset-0 z-50 bg-white/70 backdrop-blur-sm">
+        <div class="h-full w-full flex items-center justify-center">
+          <div class="rounded-2xl border border-slate-200 bg-white px-6 py-4 shadow-xl">
+            <div id="a_LoadingOverlayText" class="font-extrabold text-navy">Cargando historial de datos...</div>
+          </div>
+        </div>
+      </div>
       <div class="card">
         <div class="card-h">
           <div class="font-extrabold text-navy text-lg">Análisis del Indicador (Estilo Macro)</div>
@@ -2871,15 +2971,30 @@
       .map(o=>`<option value="${escapeHtml(o.Area)}">${escapeHtml(o.NombreArea)}</option>`).join("");
 
     // eventos
-    $("btnAReset").addEventListener("click", ()=>resetAnalisisUI(true));
+    $("btnAReset").addEventListener("click", ()=>{
+      const st = getAnalisisUIState_();
+      st.selectedArea = "";
+      st.selectedCodigo = "";
+      setSelectedPeriodo("", "reset");
+      persistAnalisisUIState_();
+      resetAnalisisUI(true);
+    });
 
     aArea.addEventListener("change", ()=>{
+      const st = getAnalisisUIState_();
+      st.selectedArea = $("a_Area").value || "";
+      st.selectedCodigo = "";
+      persistAnalisisUIState_();
       fillCodigoByArea();
-      resetAnalisisUI(false);
+      resetAnalisisUI(false, { preservePeriodo:true, preserveContext:true });
+      renderPeriodoActual();
     });
 
     $("a_Codigo").addEventListener("change", async ()=>{
-      await refreshHistoryByCodigo_($("a_Codigo").value);
+      const st = getAnalisisUIState_();
+      st.selectedCodigo = $("a_Codigo").value || "";
+      persistAnalisisUIState_();
+      await ensureHistorialLoaded($("a_Codigo").value, { showOverlay:false });
       updatePeriodosRegistrados();
       recalcResultadoAndUI();
     });
@@ -2889,6 +3004,7 @@
     $("a_Num").addEventListener("input", ()=>recalcResultadoAndUI());
     $("a_Den").addEventListener("input", ()=>recalcResultadoAndUI());
     $("a_PeriodoYM").addEventListener("input", ()=>{
+      setSelectedPeriodo($("a_PeriodoYM").value, "user");
       checkDuplicadoPeriodo();
       recalcResultadoAndUI();
     });
@@ -2904,7 +3020,11 @@
     $("a_Evidencias").addEventListener("change", (e)=>handleEvidenceFiles(e));
     $("a_FirmaResponsable").addEventListener("change", (e)=>handleFirmaFile(e, "Responsable"));
 
-    $("btnABorrador").addEventListener("click", ()=>resetAnalisisUI(false));
+    $("btnABorrador").addEventListener("click", ()=>{
+      setSelectedPeriodo("", "reset");
+      persistAnalisisUIState_();
+      resetAnalisisUI(false);
+    });
     $("btnASaveAnalisis").addEventListener("click", ()=>saveAnalisisAndFile());
     $("btnAGuardar").addEventListener("click", ()=>{
       const preOpened = window.open("about:blank", "_blank");
@@ -2914,7 +3034,24 @@
       $("a_FirmasCard")?.scrollIntoView({ behavior:"smooth", block:"center" });
     });
     // init: props starts with 1 row
-    resetAnalisisUI(true);
+    resetAnalisisUI(true, { preservePeriodo:true, preserveContext:true });
+    const st = getAnalisisUIState_();
+    if(st.selectedArea){
+      $("a_Area").value = st.selectedArea;
+      fillCodigoByArea();
+      if(st.selectedCodigo) $("a_Codigo").value = st.selectedCodigo;
+    }
+    renderPeriodoActual();
+    const shouldAutoLoad = !!(st.selectedArea && st.selectedCodigo && !st.skipAutoLoadOnce);
+    st.skipAutoLoadOnce = false;
+    if(shouldAutoLoad){
+      setTimeout(()=>{
+        const cur = getAnalisisUIState_();
+        if(cur.selectedArea === st.selectedArea && cur.selectedCodigo === st.selectedCodigo){
+          cargarIndicadorAnalisis();
+        }
+      }, 0);
+    }
   }
 
   function fillCodigoByArea(){
@@ -2934,7 +3071,11 @@
       .map(f=>`<option value="${escapeHtml(f.CodigoIndicador)}">${escapeHtml(f.CodigoIndicador)} · ${escapeHtml(f.NombreIndicador)}</option>`).join("");
   }
 
-  function resetAnalisisUI(full){
+  function resetAnalisisUI(full, opts){
+    opts = opts || {};
+    const st = getAnalisisUIState_();
+    const preservePeriodo = !!opts.preservePeriodo;
+    const preserveContext = !!opts.preserveContext;
     $("a_InfoBlock").classList.add("hidden");
     $("a_FormBlock").classList.add("hidden");
     $("a_DupMsg").classList.add("hidden");
@@ -2944,13 +3085,13 @@
     // hide proposals when resetting
     togglePropSection(false);
 
-    if(full){
+    if(full && !preserveContext){
       $("a_Area").value = "";
       $("a_Codigo").innerHTML = `<option value="">Selecciona área primero…</option>`;
       $("a_PeriodosRegistrados").innerHTML = `Selecciona un código para ver periodos.`;
     }
 
-    $("a_PeriodoYM").value = "";
+    $("a_PeriodoYM").value = preservePeriodo ? (st.selectedPeriodo || "") : "";
     $("a_Num").value = "";
     $("a_Den").value = "";
     $("a_Resultado").value = "";
@@ -2978,6 +3119,7 @@
 
   async function cargarIndicadorAnalisis(opts){
     opts = opts || {};
+    const st = getAnalisisUIState_();
     const area = $("a_Area").value;
     const codigo = $("a_Codigo").value;
 
@@ -2985,6 +3127,19 @@
       toast("err","Faltan datos","Selecciona Área y Código.");
       return;
     }
+
+    st.selectedArea = area;
+    st.selectedCodigo = codigo;
+    persistAnalisisUIState_();
+
+    if(st.selectedPeriodo){
+      histDebug_("[PERIODO_PRESERVED]", { periodo: st.selectedPeriodo, source: "cargarIndicadorAnalisis" });
+    } else {
+      renderPeriodoActual();
+    }
+
+    const renderToken = ++st.lastRenderToken;
+    histDebug_("[RENDER_HISTORY_START]", { code: codigo, token: renderToken, periodo: st.selectedPeriodo || "" });
 
     const ficha = fichaByCodigo(codigo);
     if(!ficha){
@@ -3012,15 +3167,31 @@
     const formulaEtiqueta = normalizeFormulaOperandForHint_(ficha.FormulaEtiqueta, "");
     $("a_FormulaHint").textContent = `Fórmula: (${formulaNum||"N"}/${formulaDen||"D"})*${f}  · Etiqueta: ${formulaEtiqueta||""}`;
 
-    await refreshHistoryByCodigo_(codigo);
+    try {
+      await ensureHistorialLoaded(codigo, { showOverlay:true });
+    } catch(err){
+      if(renderToken === st.lastRenderToken){
+        toast("err","Historial","No se pudo cargar el historial.");
+      }
+      return;
+    }
 
-    const preferPeriodo = String(opts.preferPeriodo || "").trim();
+    if(renderToken !== st.lastRenderToken || st.selectedCodigo !== codigo){
+      histDebug_("[PERIODO_AUTORESET_BLOCKED]", {
+        code: codigo,
+        staleToken: renderToken,
+        currentToken: st.lastRenderToken
+      });
+      return;
+    }
+
+    const preferPeriodo = String(opts.preferPeriodo || st.selectedPeriodo || "").trim();
     const latestPeriodo = getLatestPeriodoRegistradoByCodigo(codigo);
     const nextPeriodo = getNextPeriodoDisponible(codigo, ficha.PeriodicidadMedicion || "");
     const hasPreferredExisting = !!(preferPeriodo && getAnalisisByCodigoPeriodo_(codigo, preferPeriodo));
-    const periodoInicial = preferPeriodo || latestPeriodo || nextPeriodo;
+    const periodoInicial = st.selectedPeriodo || preferPeriodo || latestPeriodo || nextPeriodo;
     if(periodoInicial){
-      $("a_PeriodoYM").value = periodoInicial;
+      setSelectedPeriodo(periodoInicial, st.selectedPeriodo ? "preserve" : "init");
     }
 
     if(hasPreferredExisting || (!preferPeriodo && latestPeriodo)){
@@ -3044,20 +3215,38 @@
     // chart con históricos al cargar indicador
     const series = buildSeriesForCodigo(codigo);
     drawAnalisisChart(series, Number(ficha.MetaObjetivo||0));
+    histDebug_("[RENDER_HISTORY_OK]", {
+      code: codigo,
+      token: renderToken,
+      visible: series.length,
+      periodo: $("a_PeriodoYM").value || ""
+    });
   }
 
-  async function refreshHistoryByCodigo_(codigo){
+  async function ensureHistorialLoaded(codigo, opts){
+    return await refreshHistoryByCodigo_(codigo, opts);
+  }
+
+  async function refreshHistoryByCodigo_(codigo, opts){
+    opts = opts || {};
+    const st = getAnalisisUIState_();
     const code = (codigo || "").trim();
     if(!code) return;
-    window.__AN_HISTORY_BY_CODIGO = window.__AN_HISTORY_BY_CODIGO || {};
+    st.historyByCodigo = window.__AN_HISTORY_BY_CODIGO = window.__AN_HISTORY_BY_CODIGO || {};
     window.__AN_HISTORY_TS_BY_CODIGO = window.__AN_HISTORY_TS_BY_CODIGO || {};
     const prevRows = Array.isArray(window.__AN_HISTORY_BY_CODIGO[code]) ? window.__AN_HISTORY_BY_CODIGO[code] : [];
     const prevTs = Number(window.__AN_HISTORY_TS_BY_CODIGO[code] || 0);
-    if(prevRows.length && (Date.now() - prevTs) < 45000){
-      return;
+    if(!opts.force && Array.isArray(prevRows) && (prevRows.length || prevTs) && (Date.now() - prevTs) < 45000){
+      histDebug_("[HIST_LOAD_OK]", { code, source: "memory", count: prevRows.length });
+      return prevRows;
     }
+    if(!opts.force && st.historyPromises[code]) return st.historyPromises[code];
 
-    const normalizeRows = (input)=>{
+    histDebug_("[HIST_LOAD_START]", { code, force: !!opts.force });
+    if(opts.showOverlay !== false) showLoadingOverlay("Cargando historial de datos...");
+
+    const req = (async()=>{
+      const normalizeRows = (input)=>{
       const raw = Array.isArray(input)
         ? input
         : (Array.isArray(input?.items) ? input.items : []);
@@ -3086,35 +3275,49 @@
         if(!prev || point.__ts >= prev.__ts) byPeriodo.set(key, point);
       });
 
-      return Array.from(byPeriodo.values())
+        return Array.from(byPeriodo.values())
         .map(({__ts, ...rest})=>rest)
         .sort((a,b)=>String(a.PeriodoYM).localeCompare(String(b.PeriodoYM)));
-    };
+      };
 
-    let rows = [];
-    let r = await apiFetch("getAnalisisHistoryByCodigo", { CodigoIndicador: code });
-    if(r?.ok) rows = normalizeRows(r.data);
+      try {
+        let rows = [];
+        let r = await apiFetch("getAnalisisHistoryByCodigo", { CodigoIndicador: code });
+        if(r?.ok) rows = normalizeRows(r.data);
 
-    if(!rows.length){
-      rows = normalizeRows(CACHE.analisis || []);
-    }
+        if(!rows.length){
+          rows = normalizeRows(CACHE.analisis || []);
+        }
 
-    if(!rows.length && prevRows.length){
-      rows = prevRows.slice();
-    }
+        if(!rows.length && prevRows.length){
+          rows = prevRows.slice();
+        }
 
-    window.__AN_HISTORY_BY_CODIGO[code] = rows;
-    window.__AN_HISTORY_TS_BY_CODIGO[code] = Date.now();
+        window.__AN_HISTORY_BY_CODIGO[code] = rows;
+        window.__AN_HISTORY_TS_BY_CODIGO[code] = Date.now();
 
-    const others = (CACHE.analisis || []).filter(x => String(x?.CodigoIndicador || "") !== code);
-    CACHE.analisis = others.concat(rows);
+        const others = (CACHE.analisis || []).filter(x => String(x?.CodigoIndicador || "") !== code);
+        CACHE.analisis = others.concat(rows);
+        histDebug_("[HIST_LOAD_OK]", { code, source: rows.length ? "backend" : "fallback", count: rows.length });
+        return rows;
+      } catch(err){
+        histDebug_("[HIST_LOAD_FAIL]", { code, reason: String(err && (err.message || err)) });
+        throw err;
+      } finally {
+        delete st.historyPromises[code];
+        if(opts.showOverlay !== false) hideLoadingOverlay();
+      }
+    })();
+
+    st.historyPromises[code] = req;
+    return await req;
   }
 
   function getHistoryRowsForCodigo_(codigo){
     const code = String(codigo || "").trim();
     if(!code) return [];
     const hist = window.__AN_HISTORY_BY_CODIGO?.[code];
-    if(Array.isArray(hist) && hist.length){
+    if(Array.isArray(hist)){
       return hist.filter(x => !isDeletedRowGlobal_(x));
     }
     return analisisByCodigo(code);
@@ -3279,7 +3482,8 @@
     if(ficha){
       const meta = Number(ficha.MetaObjetivo||0);
       const series = buildSeriesForCodigo(codigo);
-      const per = $("a_PeriodoYM").value || nowYM();
+      const st = getAnalisisUIState_();
+      const per = $("a_PeriodoYM").value || st.selectedPeriodo || nowYM();
       if(per && res!==null){
         // agrega/override temporal
         const idx = series.findIndex(x=>x.PeriodoYM===per);
@@ -3696,7 +3900,7 @@
     }
 
     await loadAll();
-    await refreshHistoryByCodigo_(codigo);
+    await refreshHistoryByCodigo_(codigo, { force:true, showOverlay:false });
 
     // refresca chips/histórico del indicador actual
     updatePeriodosRegistrados();
@@ -5676,6 +5880,12 @@
     const periodo = parts.slice(2).join("-");
     const a = analisisByCodigo(codigo).find(x=>x.PeriodoYM===periodo);
     if(!a) return toast("err","No encontrado","Análisis no existe.");
+    const st = getAnalisisUIState_();
+    st.selectedArea = a.AreaResponsable || "";
+    st.selectedCodigo = a.CodigoIndicador || "";
+    st.skipAutoLoadOnce = true;
+    setSelectedPeriodo(a.PeriodoYM || "", "user");
+    persistAnalisisUIState_();
     showSection("secAnalisis");
 
     $("a_Area").value = a.AreaResponsable || "";
@@ -5688,6 +5898,7 @@
     $("a_Den").value = a.DenValor || "";
     $("a_Resultado").value = a.ResultadoObtenido || "";
     $("a_Analisis").value = a.AnalisisPrincipal || a.AnalisisInterpretacion || "";
+    recalcResultadoAndUI();
 
     // disable editing
     ["a_PeriodoYM","a_Num","a_Den","a_Resultado","a_Analisis"].forEach(id=>{
