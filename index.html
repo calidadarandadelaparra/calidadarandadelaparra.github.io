@@ -90,7 +90,7 @@
       forzar un valor concreto o usar DEMO.
   =========================== */
   // principal: la URL del web‑app (se evalúa en runtime)
-  let SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbxVc3aGWy2Uv6k0vm5pcqFTFI3kliNmyDWdg55Qrsiy_CUcCOEmslkgEV1S-KDOR8P5lw/exec";
+  let SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbwWod1WFDe_vVryR26DxuXUv_P1jz_67Npi3hLH6Z5jgf-AhwtVMtjrCsuU7_gwpnchGQ/exec";
   const CONFIG_KEY_WEBAPP_URL = "CONFIG_SHEETS_WEBAPP_URL";
 
   function getSavedWebAppUrl(){
@@ -3105,8 +3105,13 @@
     if(shouldAutoLoad){
       setTimeout(()=>{
         const cur = getAnalisisUIState_();
-        if(cur.selectedArea === st.selectedArea && cur.selectedCodigo === st.selectedCodigo){
-          cargarIndicadorAnalisis();
+        if(
+          cur.selectedArea === st.selectedArea &&
+          cur.selectedCodigo === st.selectedCodigo &&
+          $("a_Area")?.value &&
+          $("a_Codigo")?.value
+        ){
+          cargarIndicadorAnalisis({ silentMissingFields:true });
         }
       }, 0);
     }
@@ -3182,7 +3187,11 @@
     const codigo = $("a_Codigo").value;
 
     if(!area || !codigo){
-      toast("err","Faltan datos","Selecciona Área y Código.");
+      if(!opts.silentMissingFields){
+        toast("err","Faltan datos","Selecciona Área y Código.");
+      } else {
+        histDebug_("[RENDER_HISTORY_SKIP]", { reason: "missing_area_or_codigo" });
+      }
       return;
     }
 
@@ -4705,7 +4714,7 @@
           fillCodigoByArea();
           $("a_Codigo").value = cod;
           updatePeriodosRegistrados();
-          await cargarIndicadorAnalisis();
+          await cargarIndicadorAnalisis({ silentMissingFields:true });
         }, 50);
       });
     });
