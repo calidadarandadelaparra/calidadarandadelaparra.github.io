@@ -90,7 +90,7 @@
       forzar un valor concreto o usar DEMO.
   =========================== */
   // principal: la URL del web‑app (se evalúa en runtime)
-  let SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbzCk9juS3MsrYZQcGGR2GOdTsq8tNYqj-ZTQp435mOwdPZwZTtRwRKqlMc_nY2OXNTl7A/exec";
+  let SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbxVc3aGWy2Uv6k0vm5pcqFTFI3kliNmyDWdg55Qrsiy_CUcCOEmslkgEV1S-KDOR8P5lw/exec";
   const CONFIG_KEY_WEBAPP_URL = "CONFIG_SHEETS_WEBAPP_URL";
 
   function getSavedWebAppUrl(){
@@ -478,6 +478,20 @@
 
   <!-- TOAST -->
   <div id="toastRoot" class="toast hidden no-print"></div>
+
+  <div id="appLoadingOverlay" class="hidden fixed inset-0 z-[10000] bg-white/80 backdrop-blur-sm no-print">
+    <div class="h-full w-full flex items-center justify-center p-4">
+      <div class="w-full max-w-md rounded-2xl border border-slate-200 bg-white px-6 py-5 shadow-xl">
+        <div class="flex items-center gap-3">
+          <div class="h-6 w-6 rounded-full border-4 border-slate-200 border-t-sky-500 animate-spin"></div>
+          <div>
+            <div id="appLoadingText" class="font-extrabold text-navy">Cargando historial de datos...</div>
+            <div class="text-sm text-slate-500">Espera un momento mientras se prepara la información.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- LOGIN MODAL (CALIDAD) -->
   <div id="loginModal" class="hidden modal-backdrop no-print">
@@ -1325,6 +1339,22 @@
     if(ov) ov.classList.add("hidden");
   }
 
+  function showAppLoadingOverlay(msg){
+    window.__APP_LOADING_COUNT = Number(window.__APP_LOADING_COUNT || 0) + 1;
+    const ov = $("appLoadingOverlay");
+    if(!ov) return;
+    const txt = $("appLoadingText");
+    if(txt) txt.textContent = msg || "Cargando historial de datos...";
+    ov.classList.remove("hidden");
+  }
+
+  function hideAppLoadingOverlay(){
+    window.__APP_LOADING_COUNT = Math.max(0, Number(window.__APP_LOADING_COUNT || 0) - 1);
+    if(window.__APP_LOADING_COUNT > 0) return;
+    const ov = $("appLoadingOverlay");
+    if(ov) ov.classList.add("hidden");
+  }
+
   function setSelectedPeriodo(periodo, source){
     const st = getAnalisisUIState_();
     const next = String(periodo || "").trim();
@@ -1394,6 +1424,9 @@
   }
 
   async function loadAll(){
+    showAppLoadingOverlay("Cargando historial de datos...");
+    histDebug_("[APP_LOAD_START]", { source: "loadAll" });
+    try {
     const explorerPayload = (forensicOn_() && FORENSIC_TRACE.active)
       ? {
           __forensic: true,
@@ -1516,6 +1549,19 @@
     if(!(e && e.ok)) console.warn("[EXPLORER_LIST] backend error:", e?.message || "sin detalle");
 
     fillAreaSelects();
+    histDebug_("[APP_LOAD_OK]", {
+      fichas: CACHE.fichas.length,
+      analisis: CACHE.analisis.length,
+      docs: CACHE.docs.length,
+      seg: CACHE.seg.length,
+      explorer: CACHE.explorer.length
+    });
+    } catch(err){
+      histDebug_("[APP_LOAD_FAIL]", { reason: String(err && (err.message || err)) });
+      throw err;
+    } finally {
+      hideAppLoadingOverlay();
+    }
   }
 
   /* =========================================================
@@ -2430,8 +2476,12 @@
     });
 
     $("btnSync").addEventListener("click", async ()=>{
-      await loadAll();
-      toast("ok","Sincronizado", USE_DEMO ? "DEMO actualizado" : "Cargado desde Sheets");
+      try {
+        await loadAll();
+        toast("ok","Sincronizado", USE_DEMO ? "DEMO actualizado" : "Cargado desde Sheets");
+      } catch(err){
+        toast("err","Error","No se pudo sincronizar la información.");
+      }
     });
 
     $("btnLogout").addEventListener("click", ()=>{
@@ -2518,15 +2568,19 @@
           area: userArea,
           expiresAt: new Date(Date.now()+SESSION_HOURS*3600*1000).toISOString()
         });
-        await loadAll();
         setUiLocked_(false);
         $("loginModal").classList.add("hidden");
+        await loadAll();
         toast("ok","Acceso autorizado", `Bienvenido, ${me.Nombre || name || "usuario"}.`);
 
         if(pendingTarget){
           const t=pendingTarget; pendingTarget=null;
           showSection(t);
         }
+      }catch(err){
+        $("loginMsg").textContent = "No se pudo cargar la información inicial. Intenta de nuevo.";
+        $("loginMsg").classList.remove("hidden");
+        histDebug_("[APP_LOAD_FAIL]", { source: "login", reason: String(err && (err.message || err)) });
       }finally{
         btn.disabled = false;
         btn.innerHTML = btnOrigHTML;
@@ -2667,7 +2721,11 @@
     } else {
       setUiLocked_(false);
     }
-    await loadAll();
+    try {
+      await loadAll();
+    } catch(err){
+      toast("err","Error","No se pudo cargar la información inicial.");
+    }
   });
   </script>
 
