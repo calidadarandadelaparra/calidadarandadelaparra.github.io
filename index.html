@@ -731,12 +731,19 @@
     const url = SHEETS_WEBAPP_URL || getWebAppUrl();
     if(!url) return fail_("CONFIG_WEBAPP_URL_MISSING");
 
-    const parseJsonSafe_ = async (res) => {
+    const parseJsonSafe_ = async (res, transport) => {
       const txt = await res.text();
+      if(!res.ok){
+        const msg = `Apps Script ${transport} HTTP ${res.status}: ${txt || res.statusText || "sin detalle"}`;
+        console.error("[APPS_SCRIPT_HTTP_ERROR]", { action, transport, status: res.status, body: txt });
+        return fail_(msg);
+      }
       try {
         return JSON.parse(txt);
-      } catch(_) {
-        return fail_("RESPUESTA_INVALIDA_API");
+      } catch(parseErr) {
+        const msg = `Apps Script devolvió una respuesta no JSON por ${transport}: ${txt || parseErr?.message || parseErr}`;
+        console.error("[APPS_SCRIPT_PARSE_ERROR]", { action, transport, error: parseErr, body: txt });
+        return fail_(msg);
       }
     };
 
@@ -763,11 +770,11 @@
         cache: "no-store",
         body: JSON.stringify({ action, payload })
       }, timeoutMs);
-      return await parseJsonSafe_(res);
+      return await parseJsonSafe_(res, "POST");
     } catch(err) {
-      console.warn("apiFetch POST failed, attempting GET fallback", err);
+      console.error("[APPS_SCRIPT_POST_FAIL]", { action, error: err, payload });
       if(!allowGetFallback){
-        return fail_("Error de red al conectar con Apps Script. Intenta de nuevo en unos segundos.");
+        return fail_(err?.message || String(err) || "Error al conectar con Apps Script");
       }
     }
 
@@ -776,10 +783,10 @@
                 `&payload=${encodeURIComponent(payloadJson)}` +
                 `&_ts=${Date.now()}`;
       const res2 = await fetchWithTimeout_(url + qp, { method:"GET", cache:"no-store" }, timeoutMs);
-      return await parseJsonSafe_(res2);
+      return await parseJsonSafe_(res2, "GET");
     } catch(err2) {
-      console.error("apiFetch GET fallback also failed", err2);
-      return fail_("Error de red al conectar con Apps Script. Verifica el despliegue /exec y vuelve a intentar.");
+      console.error("[APPS_SCRIPT_GET_FAIL]", { action, error: err2, payload });
+      return fail_(err2?.message || String(err2) || "Error al conectar con Apps Script");
     }
   }
 
@@ -2185,7 +2192,7 @@
       console.log('apiFetch result', r);
     } catch(e) {
       console.error('fetch threw', e);
-      toast("err","Error de red", String(e));
+      toast("err","Error", e?.message || String(e));
       return;
     } finally {
       // restore button
@@ -2360,7 +2367,8 @@
       clearFichaDocDraft_();
       return true;
     } catch(e){
-      toast("err","Error de red", String(e));
+      console.error(e);
+      toast("err","Error", e?.message || String(e));
       return false;
     } finally {
       btn.disabled = false;
@@ -2426,7 +2434,8 @@
       toast("ok","Vista previa lista","Ahora pulsa 'Guardar ficha/Guardar archivo'.");
     } catch(e){
       try { previewWin && !previewWin.closed && previewWin.close(); } catch(_) {}
-      toast("err","Error de red", String(e));
+      console.error(e);
+      toast("err","Error", e?.message || String(e));
     } finally {
       btn.disabled = false;
       btn.textContent = orig;
@@ -4285,7 +4294,8 @@
         return true;
       } catch(e){
         try { previewWin && !previewWin.closed && previewWin.close(); } catch(_) {}
-        toast("err","Error de red", String(e));
+        console.error(e);
+        toast("err","Error", e?.message || String(e));
         return false;
       } finally {
         btn.disabled = false;
@@ -4341,7 +4351,8 @@
     } catch(e){
       try { docWin && !docWin.closed && docWin.close(); } catch(_) {}
       try { pdfWin && !pdfWin.closed && pdfWin.close(); } catch(_) {}
-      toast("err","Error de red", String(e));
+      console.error(e);
+      toast("err","Error", e?.message || String(e));
       return false;
     } finally {
       btn.disabled = false;
@@ -6546,7 +6557,8 @@
       }
     } catch(e){
       try { preOpened && !preOpened.closed && preOpened.close(); } catch(_) {}
-      toast("err","Error de red", String(e));
+      console.error(e);
+      toast("err","Error", e?.message || String(e));
     } finally {
       if(btn){
         btn.disabled = false;
