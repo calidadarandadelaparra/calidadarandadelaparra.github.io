@@ -2996,8 +2996,12 @@
 
   async function cargarIndicadorAnalisis(opts){
     opts = opts || {};
-    const area = $("a_Area").value;
-    const codigo = $("a_Codigo").value;
+    const useOverlay = opts.showOverlay !== false;
+    if(useOverlay) showAppLoadingOverlay("Cargando historial de datos...");
+    try {
+      if(useOverlay) await waitForOverlayPaint_();
+      const area = $("a_Area").value;
+      const codigo = $("a_Codigo").value;
 
     if(!area || !codigo){
       toast("err","Faltan datos","Selecciona Área y Código.");
@@ -3062,6 +3066,9 @@
     // chart con históricos al cargar indicador
     const series = buildSeriesForCodigo(codigo);
     drawAnalisisChart(series, Number(ficha.MetaObjetivo||0));
+    } finally {
+      if(useOverlay) hideAppLoadingOverlay();
+    }
   }
 
   async function refreshHistoryByCodigo_(codigo){
@@ -4650,20 +4657,89 @@
   /* =========================================================
     HOOK: cuando se abre sección, renderiza
   ========================================================= */
+  function ensureAppLoadingOverlay_(){
+    let overlay = document.getElementById("appLoadingOverlay");
+    if(overlay) return overlay;
+
+    overlay = document.createElement("div");
+    overlay.id = "appLoadingOverlay";
+    overlay.className = "hidden";
+    overlay.style.cssText = [
+      "position:fixed",
+      "inset:0",
+      "z-index:9999",
+      "display:none",
+      "align-items:center",
+      "justify-content:center",
+      "background:rgba(255,255,255,.55)",
+      "backdrop-filter:blur(10px)",
+      "-webkit-backdrop-filter:blur(10px)"
+    ].join(";");
+    overlay.innerHTML = `
+      <div style="display:flex;align-items:center;gap:14px;min-width:280px;max-width:92vw;padding:22px 24px;border-radius:18px;background:rgba(255,255,255,.96);border:1px solid rgba(37,99,235,.12);box-shadow:0 24px 60px rgba(15,23,42,.18);">
+        <div aria-hidden="true" style="width:22px;height:22px;border-radius:999px;border:3px solid #bfdbfe;border-top-color:#2563eb;animation:appLoadingSpin .9s linear infinite;"></div>
+        <div id="appLoadingOverlayText" style="font-size:14px;font-weight:700;color:#0f172a;">Cargando...</div>
+      </div>
+    `;
+    if(!document.getElementById("appLoadingOverlayStyle")){
+      const style = document.createElement("style");
+      style.id = "appLoadingOverlayStyle";
+      style.textContent = "@keyframes appLoadingSpin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}";
+      document.head.appendChild(style);
+    }
+    document.body.appendChild(overlay);
+    return overlay;
+  }
+
+  function showAppLoadingOverlay(message){
+    const overlay = ensureAppLoadingOverlay_();
+    const textEl = document.getElementById("appLoadingOverlayText");
+    if(textEl) textEl.textContent = String(message || "Cargando...");
+    overlay.style.display = "flex";
+    overlay.classList.remove("hidden");
+  }
+
+  function hideAppLoadingOverlay(){
+    const overlay = document.getElementById("appLoadingOverlay");
+    if(!overlay) return;
+    overlay.style.display = "none";
+    overlay.classList.add("hidden");
+  }
+
+  function waitForOverlayPaint_(){
+    return new Promise(resolve => requestAnimationFrame(()=>setTimeout(resolve, 0)));
+  }
+
   (function hookShowSection(){
     const original = showSection;
-    window.showSection = function(id){
+    window.showSection = async function(id){
       original(id);
 
       // Render dinámico al entrar
       if(id==="secFicha"){
         renderFichaForm();
+        return;
       }
       if(id==="secAnalisis"){
-        renderAnalisis();
+        showAppLoadingOverlay("Cargando historial de datos...");
+        try {
+          await waitForOverlayPaint_();
+          renderAnalisis();
+        } finally {
+          hideAppLoadingOverlay();
+        }
+        return;
       }
       if(id==="secDashboard"){
-        renderDashboard();
+        showAppLoadingOverlay("Cargando dashboard...");
+        try {
+          await waitForOverlayPaint_();
+          const needsLoad = !Array.isArray(CACHE?.analisis) || !CACHE.analisis.length;
+          if(needsLoad) await loadAll();
+          renderDashboard();
+        } finally {
+          hideAppLoadingOverlay();
+        }
       }
     }
   })();
@@ -6300,16 +6376,29 @@
   ========================================================= */
   (function hookMore(){
     const original = window.showSection;
-    window.showSection = function(id){
-      original(id);
+    window.showSection = async function(id){
+      await original(id);
 
       if(id==="secExplorador"){
-        renderExplorador();
-        fillExplorerCodigo();
-        recargarExplorador();
+        showAppLoadingOverlay("Cargando explorador...");
+        try {
+          await waitForOverlayPaint_();
+          renderExplorador();
+          fillExplorerCodigo();
+          await recargarExplorador();
+        } finally {
+          hideAppLoadingOverlay();
+        }
+        return;
       }
       if(id==="secSeguimiento"){
-        renderSeguimiento();
+        showAppLoadingOverlay("Cargando seguimiento...");
+        try {
+          await waitForOverlayPaint_();
+          renderSeguimiento();
+        } finally {
+          hideAppLoadingOverlay();
+        }
       }
     }
   })();
