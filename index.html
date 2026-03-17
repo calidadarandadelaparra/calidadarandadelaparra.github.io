@@ -90,7 +90,7 @@
       forzar un valor concreto o usar DEMO.
   =========================== */
   // principal: la URL del web‑app (se evalúa en runtime)
-  let SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbx2tQef8qGGb1uFY4CBGLI3kO8b752wb7v3TmIvKmz-USysDbcF0JS8RPJ4pwseof-A0Q/exec";
+  let SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbxQfsKJ4S1uaE-iyyYaV5ro5YR-G72NfjpKNGldkyYy0ywaG9LyQSWwSgj76g65aP3itQ/exec";
   const CONFIG_KEY_WEBAPP_URL = "CONFIG_SHEETS_WEBAPP_URL";
 
   function getSavedWebAppUrl(){
@@ -1332,119 +1332,131 @@
         }
       : {};
 
-    const [f, a, p, d, s, e] = await Promise.all([
-      apiFetch("fichas.list"),
-      apiFetch("analisis.list"),
-      apiFetch("prop.list"),
-      apiFetch("docs.list"),
-      apiFetch("seg.list"),
-      apiFetch("explorer.listRegistros", explorerPayload)
-    ]);
-
-    // map ficha rows to new property names (and parse JSON lists)
-    CACHE.fichas = f.ok ? (f.data||[])
-      .filter(r => !isDeletedRowGlobal_(r))
-      .map(r=>{
-      const out = Object.assign({}, r);
-      // migrate old -> new
-      out.FormulaEtiqueta = out.FormulaEtiqueta || out.Etiqueta || "";
-      out.FormulaNumerador = out.FormulaNumerador || out.NumeradorTxt || "";
-      out.FormulaDenominador = out.FormulaDenominador || out.DenominadorTxt || "";
-      out.FormulaFactor = out.FormulaFactor || out.Factor || 1;
-      out.ResponsableIndicador = out.ResponsableIndicador || out.ResponsableMedicion || "";
-      // arrays stored as JSON in Fuente or as explicit fields
-      try { out.FuentesRecoleccion = JSON.parse(out.Fuente||"[]"); } catch(_){
-        out.FuentesRecoleccion = out.Fuente ? [out.Fuente] : [];
-      }
-      out.Terminos = out.Terminos || [];
-      out.Observaciones = out.Observaciones || [];
-      out.WEB_SNAPSHOT = safeJsonParse_(out.WEB_SNAPSHOT, out.WEB_SNAPSHOT || null);
-      return out;
-    }) : [];
-    CACHE.analisis = a.ok ? (a.data||[])
-      .filter(r => !isDeletedRowGlobal_(r))
-      .map(r=>({
-        ...r,
-        PeriodoYM: normalizePeriodoYMFront_(r?.PeriodoYM || r?.periodo || ""),
-        PeriodoLabel: String(r?.PeriodoLabel || "").trim() || periodoHuman(normalizePeriodoYMFront_(r?.PeriodoYM || r?.periodo || "")),
-        WEB_SNAPSHOT: safeJsonParse_(r.WEB_SNAPSHOT, r.WEB_SNAPSHOT || null)
-      })) : [];
-    CACHE.prop = p.ok ? (p.data||[]).map(x=>(
-      {
-        ...x,
-        CodigoIndicador: String(x?.CodigoIndicador || "").trim(),
-        PeriodoYM: normalizePeriodoYMFront_(x?.PeriodoYM || ""),
-        Index: Number(x?.Index || 0) || 0,
-        Accion: String(x?.Accion || "").trim(),
-        Responsable: String(x?.Responsable || "").trim(),
-        FechaCompromiso: String(x?.FechaCompromiso || "").trim()
-      }
-    )) : [];
-    CACHE.docs = d.ok ? (()=>{
-      const src = (d.data||[])
-        .filter(x => !isDeletedRowGlobal_(x));
-      const seen = new Set();
-      return src.filter(x=>{
-        const key = String(x?.Key || x?.ID_REGISTRO || "").trim();
-        if(!key) return false;
-        if(seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      }).map(x=>(
-        {
-          ...x,
-          TipoDocumento: x.TipoDocumento || x.Tipo || "Otro",
-          DocName: x.DocName || x.Nombre || "",
-          WordUrl: x.WordUrl || x.Link || "",
-          PdfUrl: x.PdfUrl || "",
-          FileId: x.FileId || x.Key || ""
-        }
-      ));
-    })() : [];
-    CACHE.seg = s.ok ? (s.data||[]).map(x=>({
-      ...x,
-      Items: Array.isArray(x?.Items) ? x.Items : safeJsonParse_(x?.Items, x?.Items || [])
-    })) : [];
-
-    CACHE.explorer = e.ok ? (e.data || []).map(x => ({
-      IS_LOGICAL: x?.IS_LOGICAL === true || String(x?.IS_LOGICAL || "").toLowerCase() === "true",
-      ID_REGISTRO: String(x?.ID_REGISTRO || x?.id_registro || x?.Key || x?.key || x?.DOC_ID || "").trim(),
-      TIPO: String(x?.TIPO || x?.Tipo || x?.tipo || x?.TipoDocumento || "").trim(),
-      CODIGO: String(x?.CODIGO || x?.Codigo || x?.CodigoIndicador || "").trim(),
-      AREA: String(x?.AREA || x?.Area || x?.AreaResponsable || "").trim(),
-      PERIODO: normalizePeriodoYMFront_(x?.PERIODO || x?.Periodo || x?.PeriodoYM || ""),
-      ESTADO: String(x?.ESTADO || x?.Estado || x?.Status || "").trim(),
-      FECHA_ELIMINACION: String(x?.FECHA_ELIMINACION || x?.FechaEliminacion || "").trim(),
-      DOC_ID: String(x?.DOC_ID || x?.DocId || x?.FileId || "").trim(),
-      PDF_ID: String(x?.PDF_ID || x?.PdfId || "").trim(),
-      HAS_WORD: Boolean(x?.HAS_WORD) || String(x?.HAS_WORD || "").toLowerCase() === "true",
-      HAS_PDF: Boolean(x?.HAS_PDF) || String(x?.HAS_PDF || "").toLowerCase() === "true",
-      WordUrl: String(x?.WordUrl || "").trim(),
-      PdfUrl: String(x?.PdfUrl || "").trim(),
-      Nombre: String(x?.Nombre || "").trim()
-    })).filter(x => x.ID_REGISTRO && !isDeletedRowGlobal_(x)) : [];
-
-    if(forensicOn_() && FORENSIC_TRACE.active){
-      const targetId = String(FORENSIC_TRACE.targetId || "").trim();
-      const rawItems = Array.isArray(e?.data) ? e.data : [];
-      const rawMatch = rawItems.find(x => String(x?.ID_REGISTRO || x?.Key || x?.DOC_ID || "").trim() === targetId) || null;
-      const cacheMatch = (CACHE.explorer || []).find(x => String(x?.ID_REGISTRO || "").trim() === targetId) || null;
-      forensicLog_("loadAll.explorer.after", {
-        traceId: FORENSIC_TRACE.traceId,
-        useDemo: USE_DEMO,
-        targetId,
-        explorerRawCount: rawItems.length,
-        cacheExplorerCount: CACHE.explorer.length,
-        rawMatch,
-        cacheMatch
-      });
+    const overlay = document.getElementById("appLoadingOverlay");
+    const overlayAlreadyVisible = !!(overlay && overlay.style.display !== "none" && !overlay.classList.contains("hidden"));
+    if(!overlayAlreadyVisible){
+      showAppLoadingOverlay("Cargando datos...");
+      await waitForOverlayPaint_();
     }
 
-    console.log("[EXPLORER_LIST] ok=", !!(e && e.ok), "message=", e?.message || "", "rawCount=", Array.isArray(e?.data) ? e.data.length : 0);
-    console.log("[CACHE_EXPLORER] cargados:", CACHE.explorer.length, CACHE.explorer.slice(0,3));
-    if(!(e && e.ok)) console.warn("[EXPLORER_LIST] backend error:", e?.message || "sin detalle");
+    try {
+      const [f, a, p, s] = await Promise.all([
+        apiFetch("fichas.list"),
+        apiFetch("analisis.list"),
+        apiFetch("prop.list"),
+        apiFetch("seg.list")
+      ]);
 
-    fillAreaSelects();
+      CACHE.fichas = f.ok ? (f.data||[])
+        .filter(r => !isDeletedRowGlobal_(r))
+        .map(r=>{
+        const out = Object.assign({}, r);
+        out.FormulaEtiqueta = out.FormulaEtiqueta || out.Etiqueta || "";
+        out.FormulaNumerador = out.FormulaNumerador || out.NumeradorTxt || "";
+        out.FormulaDenominador = out.FormulaDenominador || out.DenominadorTxt || "";
+        out.FormulaFactor = out.FormulaFactor || out.Factor || 1;
+        out.ResponsableIndicador = out.ResponsableIndicador || out.ResponsableMedicion || "";
+        try { out.FuentesRecoleccion = JSON.parse(out.Fuente||"[]"); } catch(_){
+          out.FuentesRecoleccion = out.Fuente ? [out.Fuente] : [];
+        }
+        out.Terminos = out.Terminos || [];
+        out.Observaciones = out.Observaciones || [];
+        out.WEB_SNAPSHOT = safeJsonParse_(out.WEB_SNAPSHOT, out.WEB_SNAPSHOT || null);
+        return out;
+      }) : [];
+      CACHE.analisis = a.ok ? (a.data||[])
+        .filter(r => !isDeletedRowGlobal_(r))
+        .map(r=>({
+          ...r,
+          PeriodoYM: normalizePeriodoYMFront_(r?.PeriodoYM || r?.periodo || ""),
+          PeriodoLabel: String(r?.PeriodoLabel || "").trim() || periodoHuman(normalizePeriodoYMFront_(r?.PeriodoYM || r?.periodo || "")),
+          WEB_SNAPSHOT: safeJsonParse_(r.WEB_SNAPSHOT, r.WEB_SNAPSHOT || null)
+        })) : [];
+      CACHE.prop = p.ok ? (p.data||[]).map(x=>(
+        {
+          ...x,
+          CodigoIndicador: String(x?.CodigoIndicador || "").trim(),
+          PeriodoYM: normalizePeriodoYMFront_(x?.PeriodoYM || ""),
+          Index: Number(x?.Index || 0) || 0,
+          Accion: String(x?.Accion || "").trim(),
+          Responsable: String(x?.Responsable || "").trim(),
+          FechaCompromiso: String(x?.FechaCompromiso || "").trim()
+        }
+      )) : [];
+      CACHE.seg = s.ok ? (s.data||[]).map(x=>({
+        ...x,
+        Items: Array.isArray(x?.Items) ? x.Items : safeJsonParse_(x?.Items, x?.Items || [])
+      })) : [];
+
+      fillAreaSelects();
+      if(!overlayAlreadyVisible) hideAppLoadingOverlay();
+
+      const [d, e] = await Promise.all([
+        apiFetch("docs.list"),
+        apiFetch("explorer.listRegistros", explorerPayload)
+      ]);
+
+      CACHE.docs = d.ok ? (()=> {
+        const src = (d.data||[]).filter(x => !isDeletedRowGlobal_(x));
+        const seen = new Set();
+        return src.filter(x=>{
+          const key = String(x?.Key || x?.ID_REGISTRO || "").trim();
+          if(!key) return false;
+          if(seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        }).map(x=>(
+          {
+            ...x,
+            TipoDocumento: x.TipoDocumento || x.Tipo || "Otro",
+            DocName: x.DocName || x.Nombre || "",
+            WordUrl: x.WordUrl || x.Link || "",
+            PdfUrl: x.PdfUrl || "",
+            FileId: x.FileId || x.Key || ""
+          }
+        ));
+      })() : [];
+      CACHE.explorer = e.ok ? (e.data || []).map(x => ({
+        IS_LOGICAL: x?.IS_LOGICAL === true || String(x?.IS_LOGICAL || "").toLowerCase() === "true",
+        ID_REGISTRO: String(x?.ID_REGISTRO || x?.id_registro || x?.Key || x?.key || x?.DOC_ID || "").trim(),
+        TIPO: String(x?.TIPO || x?.Tipo || x?.tipo || x?.TipoDocumento || "").trim(),
+        CODIGO: String(x?.CODIGO || x?.Codigo || x?.CodigoIndicador || "").trim(),
+        AREA: String(x?.AREA || x?.Area || x?.AreaResponsable || "").trim(),
+        PERIODO: normalizePeriodoYMFront_(x?.PERIODO || x?.Periodo || x?.PeriodoYM || ""),
+        ESTADO: String(x?.ESTADO || x?.Estado || x?.Status || "").trim(),
+        FECHA_ELIMINACION: String(x?.FECHA_ELIMINACION || x?.FechaEliminacion || "").trim(),
+        DOC_ID: String(x?.DOC_ID || x?.DocId || x?.FileId || "").trim(),
+        PDF_ID: String(x?.PDF_ID || x?.PdfId || "").trim(),
+        HAS_WORD: Boolean(x?.HAS_WORD) || String(x?.HAS_WORD || "").toLowerCase() === "true",
+        HAS_PDF: Boolean(x?.HAS_PDF) || String(x?.HAS_PDF || "").toLowerCase() === "true",
+        WordUrl: String(x?.WordUrl || "").trim(),
+        PdfUrl: String(x?.PdfUrl || "").trim(),
+        Nombre: String(x?.Nombre || "").trim()
+      })).filter(x => x.ID_REGISTRO && !isDeletedRowGlobal_(x)) : [];
+
+      if(forensicOn_() && FORENSIC_TRACE.active){
+        const targetId = String(FORENSIC_TRACE.targetId || "").trim();
+        const rawItems = Array.isArray(e?.data) ? e.data : [];
+        const rawMatch = rawItems.find(x => String(x?.ID_REGISTRO || x?.Key || x?.DOC_ID || "").trim() === targetId) || null;
+        const cacheMatch = (CACHE.explorer || []).find(x => String(x?.ID_REGISTRO || "").trim() === targetId) || null;
+        forensicLog_("loadAll.explorer.after", {
+          traceId: FORENSIC_TRACE.traceId,
+          useDemo: USE_DEMO,
+          targetId,
+          explorerRawCount: rawItems.length,
+          cacheExplorerCount: CACHE.explorer.length,
+          rawMatch,
+          cacheMatch
+        });
+      }
+
+      console.log("[EXPLORER_LIST] ok=", !!(e && e.ok), "message=", e?.message || "", "rawCount=", Array.isArray(e?.data) ? e.data.length : 0);
+      console.log("[CACHE_EXPLORER] cargados:", CACHE.explorer.length, CACHE.explorer.slice(0,3));
+      if(!(e && e.ok)) console.warn("[EXPLORER_LIST] backend error:", e?.message || "sin detalle");
+    } catch(err){
+      if(!overlayAlreadyVisible) hideAppLoadingOverlay();
+      throw err;
+    }
   }
 
   /* =========================================================
@@ -4706,6 +4718,14 @@
     overlay.classList.add("hidden");
   }
 
+  function getAnalisisUIState_(){
+    return {
+      selectedArea: String($("a_Area")?.value || "").trim(),
+      selectedCodigo: String($("a_Codigo")?.value || "").trim(),
+      selectedPeriodo: String($("a_PeriodoYM")?.value || "").trim()
+    };
+  }
+
   function waitForOverlayPaint_(){
     return new Promise(resolve => requestAnimationFrame(()=>setTimeout(resolve, 0)));
   }
@@ -4721,12 +4741,14 @@
         return;
       }
       if(id==="secAnalisis"){
-        showAppLoadingOverlay("Cargando historial de datos...");
+        showAppLoadingOverlay("Cargando datos del indicador...");
         try {
           await waitForOverlayPaint_();
           renderAnalisis();
         } finally {
-          hideAppLoadingOverlay();
+          if(!getAnalisisUIState_().selectedCodigo){
+            hideAppLoadingOverlay();
+          }
         }
         return;
       }
