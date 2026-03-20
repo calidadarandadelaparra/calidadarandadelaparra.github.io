@@ -286,7 +286,13 @@
   =========================== */
   const BUILD_ID = "SEGDBG-20260319-01";
   const FRONT_BUILD_ID = "GH-AI-20260319-01";
+  const DEBUG = false;
   const $ = (id)=>document.getElementById(id);
+
+  function debugLog_(){
+    if(!DEBUG) return;
+    try { console.log.apply(console, arguments); } catch(_) {}
+  }
 
   function mountFrontBuildBadge_(){
     let el = document.getElementById("frontBuildBadge");
@@ -1275,18 +1281,86 @@
   }
   function setSession(obj){ localStorage.setItem(LS_KEYS.SESSION, JSON.stringify(obj)); }
   function clearSession(){ localStorage.removeItem(LS_KEYS.SESSION); }
+  function normalizeComparableText_(value){
+    return String(value || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .trim();
+  }
+  function getCurrentUser(){
+    const s = getSession();
+    if(!s || typeof s !== "object") return null;
+    return {
+      name: String(s.name || s.Nombre || s.nombre || "").trim(),
+      email: String(s.email || s.Email || s.correo || "").trim(),
+      area: String(s.area || s.Area || s.departamento || s.department || "").trim(),
+      raw: s
+    };
+  }
+  function isCalidadValue_(value){
+    return normalizeComparableText_(value).includes("calidad");
+  }
+  function isCalidadUser(){
+    const user = getCurrentUser();
+    if(!user) return false;
+    const candidates = [user.email, user.name, user.area];
+    try {
+      Object.keys(user.raw || {}).forEach((k)=>{
+        const v = user.raw[k];
+        if(v == null) return;
+        if(typeof v === "object"){
+          try { candidates.push(JSON.stringify(v)); } catch(_) {}
+          return;
+        }
+        candidates.push(String(v));
+      });
+    } catch(_) {}
+    return candidates.some(isCalidadValue_);
+  }
   function isQualityArea_(area){
-    const txt = String(area || "").trim().toLowerCase();
-    return txt.includes("calidad");
+    return isCalidadValue_(area);
+  }
+  function setProtectedButtonState_(el, allow){
+    if(!el) return;
+    el.disabled = !allow;
+    el.classList.toggle("opacity-50", !allow);
+    el.classList.toggle("cursor-not-allowed", !allow);
+    el.setAttribute("aria-disabled", allow ? "false" : "true");
+    if(allow) el.removeAttribute("title");
+    else el.setAttribute("title", "Acceso restringido al área de Calidad");
+  }
+  function syncCalidadAccessUi_(){
+    const allow = isQuality();
+    document.querySelectorAll('.navBtn[data-protected="1"]').forEach(btn=>{
+      btn.classList.toggle("hidden", !allow);
+      btn.setAttribute("aria-hidden", allow ? "false" : "true");
+    });
+    ["goDashboard","goExplorador","goSeguimiento"].forEach(id=>{
+      setProtectedButtonState_($(id), allow);
+    });
+
+    let hint = $("calidadAccessHint");
+    const host = $("goDashboard")?.parentElement?.parentElement || null;
+    if(!hint && host){
+      hint = document.createElement("div");
+      hint.id = "calidadAccessHint";
+      hint.className = "hidden mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900";
+      hint.textContent = "Dashboard, Explorador y Seguimiento están disponibles solo para usuarios del área de Calidad.";
+      host.appendChild(hint);
+    }
+    if(hint) hint.classList.toggle("hidden", allow);
+    debugLog_("[CALIDAD_UI_SYNC]", { allow, user: getCurrentUser() });
   }
   function setUiLocked_(locked){
-    ["appHeader","appMain","appFooter"].forEach(id=>$(id)?.classList.toggle("hidden", !!locked));
+    ["appHeader","appMain","appFooter","assistantDock"].forEach(id=>$(id)?.classList.toggle("hidden", !!locked));
+    if(!locked) syncCalidadAccessUi_();
   }
   function isQuality(){
     const s = getSession();
     if(!s) return false;
     const exp = new Date(s.expiresAt).getTime();
-    return !!(s.email && Date.now() < exp && isQualityArea_(s.area));
+    return !!(s.email && Date.now() < exp && isCalidadUser());
   }
   let pendingTarget = null;
   let authModalMode = "quality";
@@ -1343,10 +1417,13 @@
     $("loginModal").classList.remove("hidden");
   }
 
-  function requireQuality(target){
+  function requireCalidadAccess(target){
     if(isQuality()) return true;
     openAuthModal_("quality", target);
     return false;
+  }
+  function requireQuality(target){
+    return requireCalidadAccess(target);
   }
 
   /* =========================================================
@@ -2618,6 +2695,310 @@
     return f ? f.NombreArea : (prefix||"");
   }
 
+  function getActiveSectionId_(){
+    const active = Array.from(document.querySelectorAll(".spaSection"))
+      .find(sec => !sec.classList.contains("hidden"));
+    return active ? active.id : "";
+  }
+
+  function getAssistantAnalisisContext_(){
+    const codigo = String($("a_Codigo")?.value || "").trim();
+    const ficha = codigo ? fichaByCodigo(codigo) : null;
+    const periodo = String($("a_PeriodoYM")?.value || "").trim();
+    const metaRaw = Number(ficha?.MetaObjetivo);
+    const resRaw = Number($("a_Resultado")?.value);
+    const meta = Number.isFinite(metaRaw) ? metaRaw : null;
+    const resultado = Number.isFinite(resRaw) ? resRaw : null;
+    return {
+      codigo,
+      nombre: String(ficha?.NombreIndicador || $("a_Nombre")?.textContent || "").trim(),
+      area: String(getAreaLabel(ficha?.AreaResponsable || $("a_Area")?.value || "")).trim(),
+      periodo,
+      periodoLabel: periodo ? periodoHuman(periodo) : "",
+      meta,
+      resultado,
+      cumple: (meta !== null && resultado !== null) ? cumpleFrom(meta, resultado) : null,
+      formula: String($("a_FormulaHint")?.textContent || "").trim(),
+      analisis: String($("a_Analisis")?.value || "").trim()
+    };
+  }
+
+  function getAssistantFichaContext_(){
+    return {
+      codigo: String($("f_CodigoIndicador")?.value || "").trim(),
+      area: String(getAreaLabel(getFichaAreaValue_())).trim(),
+      nombre: String($("f_NombreIndicador")?.value || "").trim(),
+      objetivo: String($("f_Objetivo")?.value || "").trim(),
+      meta: String($("f_Meta")?.value || "").trim(),
+      periodicidad: String($("f_Periodicidad")?.value || "").trim()
+    };
+  }
+
+  function getAssistantMissingFields_(){
+    const section = getActiveSectionId_();
+    if(section === "secFicha" && $("f_NombreIndicador")){
+      const missing = [];
+      if(!String($("f_AreaResponsable")?.value || "").trim()) missing.push("Área responsable");
+      if(!String($("f_ResponsableIndicador")?.value || "").trim()) missing.push("Responsable del indicador");
+      if(!String($("f_NombreIndicador")?.value || "").trim()) missing.push("Nombre del indicador");
+      if(!String($("f_TipoIndicador")?.value || "").trim()) missing.push("Tipo de indicador");
+      if(!String($("f_Periodicidad")?.value || "").trim()) missing.push("Periodicidad");
+      if(!String($("f_Objetivo")?.value || "").trim()) missing.push("Objetivo");
+      if(!String($("f_Meta")?.value || "").trim()) missing.push("Meta");
+      if(!String($("f_NumTxt")?.value || "").trim()) missing.push("Numerador");
+      if(!String($("f_DenTxt")?.value || "").trim()) missing.push("Denominador");
+      return missing;
+    }
+
+    if(section === "secAnalisis" && $("a_Analisis")){
+      const missing = [];
+      if(!String($("a_Area")?.value || "").trim()) missing.push("Área");
+      if(!String($("a_Codigo")?.value || "").trim()) missing.push("Código");
+      if(!String($("a_PeriodoYM")?.value || "").trim()) missing.push("Periodo");
+      if(!String($("a_Num")?.value || "").trim()) missing.push("Numerador");
+      if(!String($("a_Den")?.value || "").trim()) missing.push("Denominador");
+      if(!String($("a_Analisis")?.value || "").trim()) missing.push("Análisis");
+      if(!String(window.__FIRMAS?.ResponsableDataUrl || "").trim()) missing.push("Firma del responsable");
+      return missing;
+    }
+
+    return [];
+  }
+
+  function getAssistantProposalSeeds_(ctx){
+    const name = normalizeComparableText_(ctx?.nombre || "");
+    if(name.includes("tiempo") || name.includes("espera") || name.includes("respuesta")){
+      return [
+        "Revisar el cuello de botella del proceso y definir un responsable por turno para reducir tiempos muertos.",
+        "Monitorear diariamente el indicador hasta recuperar la meta y documentar desviaciones relevantes.",
+        "Estandarizar el flujo operativo con un checklist corto para evitar retrasos repetitivos."
+      ];
+    }
+    if(name.includes("infeccion") || name.includes("seguridad") || name.includes("evento")){
+      return [
+        "Reforzar la adherencia al protocolo y verificar su cumplimiento con muestreo semanal.",
+        "Retroalimentar al personal involucrado sobre el hallazgo y la causa probable detectada.",
+        "Dar seguimiento puntual a la evidencia correctiva hasta confirmar la recuperación del indicador."
+      ];
+    }
+    if(name.includes("satisfaccion") || name.includes("queja") || name.includes("experiencia")){
+      return [
+        "Identificar los motivos recurrentes reportados por el usuario y priorizar el más frecuente.",
+        "Asignar una acción puntual por responsable con fecha compromiso y evidencia verificable.",
+        "Reevaluar el indicador en el siguiente corte para confirmar que la intervención tuvo efecto."
+      ];
+    }
+    return [
+      "Analizar la causa principal de la desviación y documentarla de forma breve y objetiva.",
+      "Asignar una acción correctiva concreta con responsable y fecha compromiso.",
+      "Dar seguimiento en el próximo periodo para validar recuperación del resultado."
+    ];
+  }
+
+  function buildAssistantStatusReply_(){
+    const user = getCurrentUser();
+    if(!user){
+      return "No detecto una sesión activa. Inicia sesión para poder identificar tu área y darte apoyo contextual.";
+    }
+    return [
+      `Usuario detectado: ${user.name || "Sin nombre"}.`,
+      `Correo: ${user.email || "Sin correo"}.`,
+      `Área/Departamento: ${user.area || "Sin área registrada"}.`,
+      `Acceso a Dashboard/Explorador/Seguimiento: ${isQuality() ? "habilitado" : "restringido"}.`
+    ].join("\n");
+  }
+
+  function buildAssistantMissingReply_(){
+    const missing = getAssistantMissingFields_();
+    if(!missing.length){
+      return "En la pantalla actual no detecto campos obligatorios faltantes de los que controlo. Si quieres, también puedo ayudarte a interpretar el resultado o sugerir redacción.";
+    }
+    return "Campos pendientes detectados:\n- " + missing.join("\n- ");
+  }
+
+  function buildAssistantInterpretacionReply_(){
+    const ctx = getAssistantAnalisisContext_();
+    if(!ctx.codigo){
+      return "Para interpretar el resultado necesito que cargues un indicador en la sección de Análisis.";
+    }
+    if(ctx.meta === null || ctx.resultado === null){
+      return "Ya detecté el indicador, pero aún me faltan Meta y/o Resultado para generar una interpretación útil.";
+    }
+
+    const statusTxt = ctx.cumple === true ? "CUMPLE" : "NO CUMPLE";
+    const delta = ctx.resultado - ctx.meta;
+    const deltaTxt = fmtNum(Math.abs(delta));
+    const driftTxt = delta === 0 ? "exactamente en la meta" : (delta > 0 ? `${deltaTxt} por arriba de la meta` : `${deltaTxt} por debajo de la meta`);
+    const actionTxt = ctx.cumple === true
+      ? "Conviene mantener el control operativo actual y seguir monitoreando el comportamiento del indicador para sostener el resultado."
+      : "Conviene analizar la causa principal de la desviación, definir acciones correctivas y dar seguimiento puntual al compromiso.";
+
+    return [
+      `Indicador: ${ctx.nombre || ctx.codigo}.`,
+      `Periodo: ${ctx.periodoLabel || "Sin periodo seleccionado"}.`,
+      `Resultado: ${fmtNum(ctx.resultado)} vs meta ${fmtNum(ctx.meta)}.`,
+      `Interpretación: el indicador ${statusTxt} y se encuentra ${driftTxt}.`,
+      actionTxt
+    ].join("\n");
+  }
+
+  function buildAssistantPropuestasReply_(){
+    const ctx = getAssistantAnalisisContext_();
+    if(!ctx.codigo){
+      return "Carga primero un indicador en Análisis y te propongo acciones con mejor contexto.";
+    }
+    const seeds = getAssistantProposalSeeds_(ctx);
+    return "Propuestas sugeridas:\n- " + seeds.join("\n- ");
+  }
+
+  function buildAssistantRedaccionReply_(){
+    const ctx = getAssistantAnalisisContext_();
+    if(!ctx.codigo){
+      return "Para redactar un párrafo útil necesito que cargues un indicador en Análisis.";
+    }
+    if(ctx.meta === null || ctx.resultado === null){
+      return "Puedo ayudarte a redactar, pero primero necesito Meta y Resultado calculados.";
+    }
+
+    const statusSentence = ctx.cumple === true
+      ? "cumplió con la meta establecida"
+      : "no alcanzó la meta establecida";
+    const closeSentence = ctx.cumple === true
+      ? "Se recomienda mantener las acciones que favorecen este desempeño y continuar con el monitoreo para sostener la tendencia."
+      : "Se recomienda identificar la causa principal de la desviación, implementar acciones correctivas específicas y verificar su cumplimiento en el siguiente corte.";
+    const currentBase = ctx.analisis
+      ? ` Como referencia de la captura actual, se observa que ${ctx.analisis.replace(/\s+/g, " ").trim()}`
+      : "";
+
+    return [
+      `Durante ${ctx.periodoLabel || "el periodo evaluado"}, el indicador ${ctx.nombre || ctx.codigo} registró un resultado de ${fmtNum(ctx.resultado)} frente a una meta de ${fmtNum(ctx.meta)}, por lo que ${statusSentence}.`,
+      closeSentence + currentBase
+    ].join(" ");
+  }
+
+  function buildAssistantAccessReply_(){
+    const user = getCurrentUser();
+    if(!user){
+      return "No detecto una sesión activa. Inicia sesión para validar si tienes acceso a los módulos de Calidad.";
+    }
+    if(isQuality()){
+      return `Tu sesión actual sí pertenece a Calidad (${user.area || "área detectada"}) y tiene acceso normal a Dashboard, Explorador y Seguimiento.`;
+    }
+    return `Tu sesión actual no está marcada como Calidad (${user.area || "sin área registrada"}). Por seguridad, Dashboard, Explorador y Seguimiento permanecen restringidos.`;
+  }
+
+  function buildAssistantHelpReply_(){
+    return [
+      "Puedo ayudarte con estas tareas:",
+      "- Decirte qué usuario/área detecto y si tienes acceso de Calidad.",
+      "- Revisar campos faltantes en Ficha o Análisis.",
+      "- Interpretar resultado vs meta del análisis cargado.",
+      "- Sugerir acciones cuando un indicador no cumple.",
+      "- Redactar un párrafo base para el análisis actual."
+    ].join("\n");
+  }
+
+  function buildAssistantReply_(input){
+    const txt = String(input || "").trim();
+    const norm = normalizeComparableText_(txt);
+    if(!norm) return "Escribe una pregunta y te apoyo con contexto del sistema.";
+
+    if(norm.includes("quien soy") || norm.includes("mi area") || norm.includes("mi area") || norm.includes("usuario") || norm.includes("sesion")){
+      return buildAssistantStatusReply_();
+    }
+    if(norm.includes("dashboard") || norm.includes("explorador") || norm.includes("seguimiento") || norm.includes("calidad") || norm.includes("acceso")){
+      return buildAssistantAccessReply_();
+    }
+    if(norm.includes("falta") || norm.includes("faltan") || norm.includes("pendiente") || norm.includes("completar") || norm.includes("guardar")){
+      return buildAssistantMissingReply_();
+    }
+    if(norm.includes("propuesta") || norm.includes("propuestas") || norm.includes("accion") || norm.includes("acciones") || norm.includes("mejora")){
+      return buildAssistantPropuestasReply_();
+    }
+    if(norm.includes("redaccion") || norm.includes("redaccion") || norm.includes("redacta") || norm.includes("parrafo") || norm.includes("parrafo")){
+      return buildAssistantRedaccionReply_();
+    }
+    if(norm.includes("analisis") || norm.includes("analisis") || norm.includes("interpret") || norm.includes("resultado") || norm.includes("meta") || norm.includes("cumple")){
+      return buildAssistantInterpretacionReply_();
+    }
+    return buildAssistantHelpReply_();
+  }
+
+  function appendAssistantMessage_(role, text){
+    const history = $("assistantHistory");
+    if(!history) return;
+
+    const row = document.createElement("div");
+    row.className = role === "user" ? "flex justify-end" : "flex justify-start";
+
+    const bubble = document.createElement("div");
+    bubble.className = role === "user"
+      ? "max-w-[88%] rounded-2xl bg-navy px-4 py-3 text-sm text-white whitespace-pre-wrap"
+      : "max-w-[88%] rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 whitespace-pre-wrap";
+    bubble.textContent = String(text || "").trim();
+
+    row.appendChild(bubble);
+    history.appendChild(row);
+    history.scrollTop = history.scrollHeight;
+  }
+
+  function mountAssistantWidget_(){
+    if($("assistantDock")) return;
+
+    const wrap = document.createElement("div");
+    wrap.id = "assistantDock";
+    wrap.innerHTML = `
+      <button id="assistantToggle" type="button" class="btn btn-primary fixed bottom-4 left-4 z-[9998] shadow-xl">
+        Asistente
+      </button>
+      <div id="assistantPanel" class="hidden fixed bottom-4 left-4 z-[9999] w-[calc(100vw-2rem)] max-w-md overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">
+        <div class="flex items-center justify-between bg-navy px-4 py-3 text-white">
+          <div>
+            <div class="text-[11px] font-extrabold text-white/70">ASISTENTE OPERATIVO</div>
+            <div class="font-extrabold">Apoyo contextual</div>
+          </div>
+          <button id="assistantClose" type="button" class="text-xs font-extrabold text-white/80 hover:text-white">Cerrar</button>
+        </div>
+        <div id="assistantHistory" class="max-h-80 space-y-3 overflow-y-auto bg-slate-50 p-4"></div>
+        <div class="space-y-2 border-t border-slate-200 bg-white p-3">
+          <input id="assistantInput" class="input" placeholder="Ej. ¿Qué me falta para guardar?, interpreta este resultado, dame propuestas..." />
+          <div class="flex gap-2">
+            <button id="assistantSend" type="button" class="btn btn-primary flex-1">Enviar</button>
+          </div>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(wrap);
+
+    $("assistantToggle")?.addEventListener("click", ()=>{
+      $("assistantPanel")?.classList.remove("hidden");
+      $("assistantToggle")?.classList.add("hidden");
+      $("assistantInput")?.focus();
+    });
+    $("assistantClose")?.addEventListener("click", ()=>{
+      $("assistantPanel")?.classList.add("hidden");
+      $("assistantToggle")?.classList.remove("hidden");
+    });
+    $("assistantSend")?.addEventListener("click", ()=>{
+      const input = $("assistantInput");
+      const question = String(input?.value || "").trim();
+      if(!question) return;
+      appendAssistantMessage_("user", question);
+      input.value = "";
+      const answer = buildAssistantReply_(question);
+      appendAssistantMessage_("assistant", answer);
+      debugLog_("[ASSISTANT]", { question, answer, section: getActiveSectionId_(), user: getCurrentUser() });
+    });
+    $("assistantInput")?.addEventListener("keydown", (e)=>{
+      if(e.key === "Enter"){
+        e.preventDefault();
+        $("assistantSend")?.click();
+      }
+    });
+
+    appendAssistantMessage_("assistant", "Hola. Puedo ayudarte a validar acceso por área, detectar campos faltantes, interpretar resultados y sugerir redacción o acciones.");
+  }
+
   /* =========================================================
     WIRES PRINCIPALES (PARTE 2)
   ========================================================= */
@@ -2877,10 +3258,12 @@
     console.warn("[FRONT_BUILD_ID]", FRONT_BUILD_ID);
     window.__FRONT_BUILD_ID__ = FRONT_BUILD_ID;
     mountFrontBuildBadge_();
+    mountAssistantWidget_();
     seedDemo();
     refreshApiMode_();
     setModeTags();
     wireHeaderNav();
+    syncCalidadAccessUi_();
     showSection("secInicio");
     const s = getSession();
     const active = !!(s && s.expiresAt && Date.now() < new Date(s.expiresAt).getTime());
