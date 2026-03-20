@@ -86,7 +86,7 @@
       forzar un valor concreto o usar DEMO.
   =========================== */
   // principal: la URL del web‑app (se evalúa en runtime)
-  let SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbwRVQTVMxHpH76OJAdJ7eIEMHzuWcxgNvFTSBIS-SbE7A5Sy9K6VxL4yLTHjc5RdR1ijQ/exec";
+  let SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbzFSQuRxSjurcg9oEXy40fi1QEe_bxZHcZHRW6KCcjAGmn4s9XxHyqVUFXXnrcRf00gEg/exec";
   const CONFIG_KEY_WEBAPP_URL = "CONFIG_SHEETS_WEBAPP_URL";
 
   function getSavedWebAppUrl(){
@@ -4401,7 +4401,7 @@
         _gfPanel.innerHTML = '<b>Diagnóstico gráfico:</b><br>';
         const _gfLog = (msg, color) => {
           console.log('[GRAFICO]', msg);
-          _gfPanel.innerHTML += `<div style="color:${color||'#222'}">${msg}</div>`;
+          _gfPanel.innerHTML += `<div style="color:${color||'#222'}">${escapeHtml(msg)}</div>`;
         };
 
         _gfLog('chartDataUrl.length = ' + (chartDataUrl||'').length, (chartDataUrl||'').length > 100 ? '#166534' : '#991b1b');
