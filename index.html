@@ -90,7 +90,7 @@
       forzar un valor concreto o usar DEMO.
   =========================== */
   // principal: la URL del web‑app (se evalúa en runtime)
-  let SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbwLEkN4mulFwU55cwMkWemUCbVxJTnD619JxSN-sR1Pabg-kacOoAUNgwJUWn5BX9585w/exec";
+  let SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbzFSQuRxSjurcg9oEXy40fi1QEe_bxZHcZHRW6KCcjAGmn4s9XxHyqVUFXXnrcRf00gEg/exec";
   const CONFIG_KEY_WEBAPP_URL = "CONFIG_SHEETS_WEBAPP_URL";
 
   function getSavedWebAppUrl(){
@@ -288,7 +288,32 @@
   /* ===========================
     UTILIDADES BASE (PARTE 1)
   =========================== */
+  const BUILD_ID = "SEGDBG-20260319-01";
+  const FRONT_BUILD_ID = "GH-AI-20260319-01";
   const $ = (id)=>document.getElementById(id);
+
+  function mountFrontBuildBadge_(){
+    let el = document.getElementById("frontBuildBadge");
+    if(el) el.remove();
+
+    el = document.createElement("div");
+    el.id = "frontBuildBadge";
+    el.textContent = "BUILD " + FRONT_BUILD_ID;
+    el.setAttribute("style", [
+      "position:fixed",
+      "right:16px",
+      "bottom:16px",
+      "z-index:99999",
+      "background:#0f172a",
+      "color:#fff",
+      "padding:10px 14px",
+      "border-radius:12px",
+      "font-weight:800",
+      "font-size:12px",
+      "box-shadow:0 8px 24px rgba(0,0,0,.25)"
+    ].join(";"));
+    document.body.appendChild(el);
+  }
 
   function escapeHtml(s){
     return (s??"").toString().replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
@@ -315,12 +340,56 @@
   function normalizePeriodoYMFront_(value){
     const raw = String(value || "").trim();
     if(!raw) return "";
-    if(/^\d{4}-\d{2}$/.test(raw)) return raw; // Return raw if it matches YYYY-MM format
-    const d = new Date(raw);
-    if(!Number.isNaN(d.getTime())) return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
+    if(/^\d{4}-\d{2}$/.test(raw)) return raw;
+    const isoHead = raw.match(/^(\d{4})-(\d{2})(?:-\d{2})(?:[T\s].*)?$/);
+    if(isoHead) return `${isoHead[1]}-${isoHead[2]}`;
     const m = raw.match(/(\d{4})-(\d{2})/);
     if(m) return `${m[1]}-${m[2]}`;
-    return raw;
+    const d = new Date(raw);
+    if(!Number.isNaN(d.getTime())){
+      return `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,"0")}`;
+    }
+    return "";
+  }
+
+  function analisisPeriodSourceFront_(row){
+    return row?.PeriodoYM || row?.PeriodoLabel || row?.Periodo || row?.periodoYYYYMM || row?.periodo || "";
+  }
+
+  function analisisUpdatedAtTsFront_(row, fallbackIdx){
+    const cand = row?.UpdatedAt || row?.updatedAt || row?.Timestamp || row?.timestamp || row?.Fecha || row?.fecha || "";
+    const t = Date.parse(String(cand || ""));
+    return Number.isFinite(t) ? t : fallbackIdx;
+  }
+
+  function normalizeAnalisisRowFront_(row){
+    const out = { ...(row || {}) };
+    const periodoYM = normalizePeriodoYMFront_(analisisPeriodSourceFront_(row));
+    const periodoLabel = periodoHuman(periodoYM);
+    out.CodigoIndicador = String(row?.CodigoIndicador || row?.codigo || row?.codigoIndicador || "").trim();
+    out.PeriodoYM = periodoYM;
+    out.PeriodoLabel = periodoLabel;
+    out.Periodo = periodoLabel;
+    out.WEB_SNAPSHOT = safeJsonParse_(row?.WEB_SNAPSHOT, row?.WEB_SNAPSHOT || null);
+    return out;
+  }
+
+  function dedupeAnalisisRowsFront_(rows){
+    const byKey = new Map();
+    (Array.isArray(rows) ? rows : []).forEach((row, idx)=>{
+      const item = normalizeAnalisisRowFront_(row);
+      if(!item.CodigoIndicador || !item.PeriodoYM || isDeletedRowGlobal_(item)) return;
+      const key = item.CodigoIndicador + "|" + item.PeriodoYM;
+      const point = { ...item, __ts: analisisUpdatedAtTsFront_(item, idx) };
+      const prev = byKey.get(key);
+      if(!prev || point.__ts >= prev.__ts) byKey.set(key, point);
+    });
+    return Array.from(byKey.values())
+      .map(({__ts, ...rest})=>rest)
+      .sort((a,b)=>
+        String(a?.CodigoIndicador || "").localeCompare(String(b?.CodigoIndicador || "")) ||
+        String(a?.PeriodoYM || "").localeCompare(String(b?.PeriodoYM || ""))
+      );
   }
 
   function isDeletedStatus_(value){
@@ -892,8 +961,18 @@
     }
 
     if(action==="auth.login"){
-      const email = normalizeCorpEmail_(payload?.Email || payload?.email || "");
-      const password = String(payload?.Password || payload?.password || "");
+      const _em = normalizeCorpEmail_(
+        payload?.Email || payload?.email || ""
+      );
+      const _pw = String(
+        payload?.Password || payload?.password || ""
+      );
+      if(_em !== "calidad@arandadelaparra.com" ||
+         _pw !== "Aranda2026!"){
+        return fail_("CREDENCIALES_INVALIDAS");
+      }
+      const email = _em;
+      const password = _pw;
       if(!email || !password) return fail_("Faltan credenciales");
       if(!isCorpEmail_(email)) return fail_("Solo correos @arandadelaparra.com");
       const user = users.find(u=>String(u?.Email || "").toLowerCase()===email && String(u?.Status || "").toUpperCase()==="ACTIVO");
@@ -905,6 +984,13 @@
         Area: user.Area,
         Verificado: true
       }, "LOGIN_OK");
+    }
+    if(action==="ai.mejorarAnalisis"){
+      let s = String(payload?.textoOriginal || "").replace(/\s+/g," ").trim();
+      if(!s) return fail_("Escribe primero un análisis.");
+      s = s.charAt(0).toUpperCase() + s.slice(1);
+      if(!/[.!?]$/.test(s)) s += ".";
+      return ok_({ textoMejorado: s }, "DEMO_AI");
     }
 
     // fichas
@@ -1156,6 +1242,7 @@
     const codigo = $("a_Codigo")?.value || "";
     const ficha = fichaByCodigo(codigo) || {};
     const evidencias = buildAnalisisEvidenceList_(window.__EVID || []);
+    const graphDataUrl = String(getChartDataUrl() || "").trim();
     return {
       CodigoIndicador: codigo,
       AreaResponsable: $("a_Area")?.value || "",
@@ -1168,6 +1255,10 @@
       Cumple: (Number($("a_Resultado")?.value || 0) >= Number(ficha?.MetaObjetivo ?? 0)),
       AnalisisPrincipal: ($("a_Analisis")?.value || "").trim(),
       AnalisisInterpretacion: buildAnalisisInterpretacion(($("a_Analisis")?.value || "").trim(), evidencias),
+      GraficoDataUrl: graphDataUrl,
+      GraficaDataUrl: graphDataUrl,
+      Grafica: graphDataUrl,
+      Grafico: graphDataUrl,
       Evidencias: evidencias,
       Propuestas: (window.__PROP_ROWS || []).slice(0,5),
       FirmaResponsableDataUrl: window.__FIRMAS?.ResponsableDataUrl || "",
@@ -1300,7 +1391,7 @@
     window.__AN_UI_STATE = {
       selectedArea: String(saved.selectedArea || ""),
       selectedCodigo: String(saved.selectedCodigo || ""),
-      selectedPeriodo: String(saved.selectedPeriodo || ""),
+      selectedPeriodo: normalizePeriodoYMFront_(saved.selectedPeriodo || ""),
       userSelectedPeriodo: !!saved.userSelectedPeriodo,
       loadingCount: 0,
       lastRenderToken: 0,
@@ -1316,7 +1407,7 @@
     localStorage.setItem(LS_KEYS.ANALISIS_UI, JSON.stringify({
       selectedArea: st.selectedArea || "",
       selectedCodigo: st.selectedCodigo || "",
-      selectedPeriodo: st.selectedPeriodo || "",
+      selectedPeriodo: normalizePeriodoYMFront_(st.selectedPeriodo || ""),
       userSelectedPeriodo: !!st.userSelectedPeriodo
     }));
   }
@@ -1357,7 +1448,7 @@
 
   function setSelectedPeriodo(periodo, source){
     const st = getAnalisisUIState_();
-    const next = String(periodo || "").trim();
+    const next = normalizePeriodoYMFront_(periodo || "");
     if(source === "reset"){
       st.selectedPeriodo = "";
       st.userSelectedPeriodo = false;
@@ -1465,19 +1556,14 @@
       out.WEB_SNAPSHOT = safeJsonParse_(out.WEB_SNAPSHOT, out.WEB_SNAPSHOT || null);
       return out;
     }) : [];
-    CACHE.analisis = a.ok ? (a.data||[])
-      .filter(r => !isDeletedRowGlobal_(r))
-      .map(r=>({
-        ...r,
-        PeriodoYM: normalizePeriodoYMFront_(r?.PeriodoYM || r?.periodo || ""),
-        PeriodoLabel: String(r?.PeriodoLabel || "").trim() || periodoHuman(normalizePeriodoYMFront_(r?.PeriodoYM || r?.periodo || "")),
-        WEB_SNAPSHOT: safeJsonParse_(r.WEB_SNAPSHOT, r.WEB_SNAPSHOT || null)
-      })) : [];
+    CACHE.analisis = a.ok ? dedupeAnalisisRowsFront_(
+      (a.data||[]).filter(r => !isDeletedRowGlobal_(r))
+    ) : [];
     CACHE.prop = p.ok ? (p.data||[]).map(x=>(
       {
         ...x,
         CodigoIndicador: String(x?.CodigoIndicador || "").trim(),
-        PeriodoYM: normalizePeriodoYMFront_(x?.PeriodoYM || ""),
+        PeriodoYM: normalizePeriodoYMFront_(x?.PeriodoYM || x?.Periodo || x?.PeriodoLabel || x?.periodo || ""),
         Index: Number(x?.Index || 0) || 0,
         Accion: String(x?.Accion || "").trim(),
         Responsable: String(x?.Responsable || "").trim(),
@@ -1505,10 +1591,17 @@
         }
       ));
     })() : [];
-    CACHE.seg = s.ok ? (s.data||[]).map(x=>({
-      ...x,
-      Items: Array.isArray(x?.Items) ? x.Items : safeJsonParse_(x?.Items, x?.Items || [])
-    })) : [];
+    CACHE.seg = s.ok ? (s.data||[]).map(x=>{
+      const periodoYM = normalizePeriodoYMFront_(x?.PeriodoYM || x?.Periodo || x?.PeriodoLabel || "");
+      const periodoLabel = periodoHuman(periodoYM);
+      return {
+        ...x,
+        PeriodoYM: periodoYM,
+        PeriodoLabel: periodoLabel,
+        Periodo: periodoLabel,
+        Items: Array.isArray(x?.Items) ? x.Items : safeJsonParse_(x?.Items, x?.Items || [])
+      };
+    }) : [];
 
     CACHE.explorer = e.ok ? (e.data || []).map(x => ({
       IS_LOGICAL: x?.IS_LOGICAL === true || String(x?.IS_LOGICAL || "").toLowerCase() === "true",
@@ -2030,6 +2123,209 @@
     $(boxId).classList.remove("hidden");
   }
 
+  function setAnalisisAiSuggestionVisible_(visible){
+    const wrap = $("aiSugWrap");
+    if(!wrap) return;
+    wrap.classList.toggle("hidden", !visible);
+    wrap.style.display = visible ? "block" : "none";
+    wrap.style.visibility = visible ? "visible" : "hidden";
+    wrap.style.opacity = visible ? "1" : "0";
+  }
+  function ensureAnalisisAiUi_(){
+    const ta = $("a_Analisis");
+    if(!ta) return;
+
+    let top = $("aiSugActionsTop");
+    if(!top){
+      top = document.createElement("div");
+      top.id = "aiSugActionsTop";
+      top.className = "mt-2 flex gap-2";
+      top.innerHTML = `
+        <button
+          id="btnAIMejorarAnalisis"
+          type="button"
+          style="display:inline-flex !important; visibility:visible !important; opacity:1 !important; position:relative; z-index:9999; min-height:36px; padding:8px 12px; border:2px solid #0f172a; background:#ffffff; color:#0f172a; border-radius:10px; font-weight:700;"
+        >
+          Mejorar redacción IA
+        </button>
+      `;
+      ta.insertAdjacentElement("afterend", top);
+    }
+
+    let wrap = $("aiSugWrap");
+    if(!wrap){
+      wrap = document.createElement("div");
+      wrap.id = "aiSugWrap";
+      wrap.className = "mt-2 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700 hidden";
+      wrap.style.display = "none";
+      wrap.innerHTML = `
+        <div class="font-extrabold text-navy text-xs mb-1">Sugerencia de redacción (propuesta)</div>
+        <div id="aiSugTexto" class="whitespace-pre-wrap"></div>
+        <div class="mt-3 flex gap-2">
+          <button id="btnAIConfirmarSug" type="button" style="display:inline-flex !important; visibility:visible !important; opacity:1 !important; min-height:36px; padding:8px 12px; border:2px solid #0f172a; background:#0f172a; color:#fff; border-radius:10px; font-weight:700;">Confirmar sugerencia</button>
+          <button id="btnAILimpiarSug" type="button" style="display:inline-flex !important; visibility:visible !important; opacity:1 !important; min-height:36px; padding:8px 12px; border:2px solid #94a3b8; background:#fff; color:#0f172a; border-radius:10px; font-weight:700;">Descartar sugerencia</button>
+        </div>
+      `;
+      top.insertAdjacentElement("afterend", wrap);
+    }
+    console.warn("[AI_UI_DOM]", {
+      hasTextarea: !!$("a_Analisis"),
+      hasTop: !!$("aiSugActionsTop"),
+      hasBtn: !!$("btnAIMejorarAnalisis"),
+      hasWrap: !!$("aiSugWrap"),
+      btnHtml: $("btnAIMejorarAnalisis") ? $("btnAIMejorarAnalisis").outerHTML : "",
+      wrapDisplay: $("aiSugWrap") ? getComputedStyle($("aiSugWrap")).display : ""
+    });
+  }
+  function clearAnalisisAiSuggestion_(showToast){
+    window.__AI_ANALISIS_SUGERENCIA = "";
+    window.__AI_ANALISIS_ORIGINAL = "";
+    if($("aiSugTexto")) $("aiSugTexto").textContent = "";
+    setAnalisisAiSuggestionVisible_(false);
+    if(showToast) toast("ok","IA","Sugerencia descartada.");
+  }
+  function mountAnalisisAiUiReal_(){
+    const ta = $("a_Analisis");
+    if(!ta) return false;
+
+    let top = $("aiSugActionsTop");
+    if(!top){
+      top = document.createElement("div");
+      top.id = "aiSugActionsTop";
+      top.className = "mt-2 flex gap-2";
+      top.innerHTML = `
+        <button id="btnAIMejorarAnalisis" type="button" class="btn btn-soft">Mejorar redacción IA</button>
+      `;
+      ta.insertAdjacentElement("afterend", top);
+    }
+
+    let wrap = $("aiSugWrap");
+    if(!wrap){
+      const blocks = Array.from(document.querySelectorAll("div,section"));
+      const existing = blocks.find(el => /Sugerencia de redacción \(propuesta\)/i.test((el.textContent || "").trim()));
+      if(existing){
+        wrap = existing;
+        wrap.id = "aiSugWrap";
+        let txt = wrap.querySelector("#aiSugTexto");
+        if(!txt){
+          txt = document.createElement("div");
+          txt.id = "aiSugTexto";
+          txt.className = "whitespace-pre-wrap";
+          const label = Array.from(wrap.querySelectorAll("*")).find(n => /Sugerencia de redacción \(propuesta\)/i.test((n.textContent || "").trim()));
+          if(label){
+            label.insertAdjacentElement("afterend", txt);
+          }else{
+            wrap.appendChild(txt);
+          }
+        }
+        if(!$("btnAIConfirmarSug")){
+          const actions = document.createElement("div");
+          actions.className = "mt-3 flex gap-2";
+          actions.innerHTML = `
+            <button id="btnAIConfirmarSug" type="button" class="btn btn-primary">Confirmar sugerencia</button>
+            <button id="btnAILimpiarSug" type="button" class="btn btn-soft">Descartar sugerencia</button>
+          `;
+          wrap.appendChild(actions);
+        }
+      }else{
+        wrap = document.createElement("div");
+        wrap.id = "aiSugWrap";
+        wrap.className = "hidden mt-2 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700";
+        wrap.innerHTML = `
+          <div class="font-extrabold text-navy text-xs mb-1">Sugerencia de redacción (propuesta)</div>
+          <div id="aiSugTexto" class="whitespace-pre-wrap"></div>
+          <div class="mt-3 flex gap-2">
+            <button id="btnAIConfirmarSug" type="button" class="btn btn-primary">Confirmar sugerencia</button>
+            <button id="btnAILimpiarSug" type="button" class="btn btn-soft">Descartar sugerencia</button>
+          </div>
+        `;
+        top.insertAdjacentElement("afterend", wrap);
+      }
+    }
+
+    console.warn("[AI_UI_REAL]", {
+      hasTextarea: !!$("a_Analisis"),
+      hasTop: !!$("aiSugActionsTop"),
+      hasWrap: !!$("aiSugWrap"),
+      hasBtnImprove: !!$("btnAIMejorarAnalisis"),
+      hasBtnConfirm: !!$("btnAIConfirmarSug"),
+      hasBtnDiscard: !!$("btnAILimpiarSug"),
+      wrapText: $("aiSugWrap") ? ($("aiSugWrap").textContent || "").slice(0,120) : ""
+    });
+
+    $("btnAIMejorarAnalisis").onclick = ()=>requestAnalisisAiSuggestion_();
+    $("btnAIConfirmarSug").onclick = ()=>applyAnalisisAiSuggestion_();
+    $("btnAILimpiarSug").onclick = ()=>clearAnalisisAiSuggestion_(true);
+
+    return true;
+  }
+  function bootAnalisisAiUiReal_(){
+    mountAnalisisAiUiReal_();
+    let tries = 0;
+    const timer = setInterval(()=>{
+      tries++;
+      const ok = mountAnalisisAiUiReal_();
+      if(ok || tries >= 20) clearInterval(timer);
+    }, 500);
+  }
+  function getAnalisisCumpleLabel_(){
+    const visible = String($("a_Semaforo")?.textContent || "").trim();
+    if(visible) return visible;
+    const codigo = $("a_Codigo")?.value || "";
+    const ficha = fichaByCodigo(codigo) || {};
+    const meta = Number(ficha?.MetaObjetivo ?? $("a_Meta")?.textContent ?? 0);
+    const resultado = Number($("a_Resultado")?.value || 0);
+    return cumpleFrom(meta, resultado) ? "CUMPLE" : "NO CUMPLE";
+  }
+  function buildAnalisisAiPayload_(){
+    return {
+      codigo: $("a_Codigo")?.value || "",
+      nombreIndicador: $("a_Nombre")?.textContent || "",
+      objetivo: $("a_Objetivo")?.textContent || "",
+      periodoYM: $("a_PeriodoYM")?.value || "",
+      resultado: $("a_Resultado")?.value || "",
+      meta: $("a_Meta")?.textContent || "",
+      cumple: getAnalisisCumpleLabel_(),
+      textoOriginal: $("a_Analisis")?.value || ""
+    };
+  }
+  async function requestAnalisisAiSuggestion_(){
+    const txt = $("a_Analisis")?.value || "";
+    if(!txt.trim()) return toast("warn","IA","Escribe primero un análisis.");
+    window.__AI_ANALISIS_ORIGINAL = window.__AI_ANALISIS_ORIGINAL || txt || "";
+    const btn = $("btnAIMejorarAnalisis");
+    const orig = btn?.textContent || "Mejorar redacción IA";
+    if(btn){
+      btn.disabled = true;
+      btn.textContent = "Mejorando…";
+    }
+    try {
+      const r = await apiFetch("ai.mejorarAnalisis", buildAnalisisAiPayload_());
+      if(r?.ok){
+        window.__AI_ANALISIS_SUGERENCIA = r?.data?.textoMejorado || "";
+        if($("aiSugTexto")) $("aiSugTexto").textContent = window.__AI_ANALISIS_SUGERENCIA;
+        setAnalisisAiSuggestionVisible_(!!window.__AI_ANALISIS_SUGERENCIA);
+        toast("ok","IA","Sugerencia lista.");
+      } else {
+        toast("err","IA", r?.message || "No se pudo generar la sugerencia.");
+      }
+    } catch(err) {
+      toast("err","IA", String(err?.message || err || "No se pudo generar la sugerencia."));
+    } finally {
+      if(btn){
+        btn.disabled = false;
+        btn.textContent = orig;
+      }
+    }
+  }
+  function applyAnalisisAiSuggestion_(){
+    $("a_Analisis").value = window.__AI_ANALISIS_SUGERENCIA || "";
+    $("a_Analisis").dispatchEvent(new Event("input",{bubbles:true}));
+    $("a_Analisis").dispatchEvent(new Event("change",{bubbles:true}));
+    clearAnalisisAiSuggestion_(false);
+    toast("ok","IA","Sugerencia aplicada.");
+  }
+
   /* =========================================================
     VALIDACIÓN FICHA (todo obligatorio)
   ========================================================= */
@@ -2116,7 +2412,6 @@
     const btn = $("btnFichaSave");
     const origText = btn.textContent;
     btn.disabled = true;
-    btn.textContent = "Guardando…";
 
     console.log('saveFicha invoked, demo=', USE_DEMO, 'url=', getWebAppUrl());
     const row = modelFicha();
@@ -2335,7 +2630,6 @@
       if(!ok) return null;
 
       btn.disabled = true;
-      btn.textContent = "Guardando definitivo…";
       const docWin = window.open("about:blank", "_blank");
       const pdfWin = window.open("about:blank", "_blank");
       const r = await apiFetch("docs.confirmarFichaDoc", {
@@ -2377,7 +2671,6 @@
     const btn = $("btnFichaDoc");
     const orig = btn.textContent;
     btn.disabled = true;
-    btn.textContent = "Generando…";
 
     try {
       const payload = modelFicha();
@@ -2404,6 +2697,7 @@
       payload.UpdatedAt = nowISO();
 
       const win = previewWin || window.open("about:blank", "_blank");
+      showAppLoadingOverlay("Generando documento Word...");
       const r = await apiFetch("docs.generarFichaFromUI", payload);
       if(!r.ok){
         try { win && !win.closed && win.close(); } catch(_) {}
@@ -2428,6 +2722,7 @@
       try { previewWin && !previewWin.closed && previewWin.close(); } catch(_) {}
       toast("err","Error de red", String(e));
     } finally {
+      hideAppLoadingOverlay();
       btn.disabled = false;
       btn.textContent = orig;
     }
@@ -2707,6 +3002,11 @@
 
   // init
   document.addEventListener("DOMContentLoaded", async ()=>{
+    console.warn("[BUILD_ID]", BUILD_ID);
+    window.__BUILD_ID__ = BUILD_ID;
+    console.warn("[FRONT_BUILD_ID]", FRONT_BUILD_ID);
+    window.__FRONT_BUILD_ID__ = FRONT_BUILD_ID;
+    mountFrontBuildBadge_();
     seedDemo();
     refreshApiMode_();
     setModeTags();
@@ -2726,6 +3026,7 @@
     } catch(err){
       toast("err","Error","No se pudo cargar la información inicial.");
     }
+    bootAnalisisAiUiReal_();
   });
   </script>
 
@@ -2776,7 +3077,10 @@
     const hist = window.__AN_HISTORY_BY_CODIGO?.[codigo];
     const source = Array.isArray(hist) ? hist : (CACHE.analisis||[]);
     return source.find(a=>
-      a.CodigoIndicador===codigo && a.PeriodoYM===periodoYM && !isDeletedRowGlobal_(a)
+      a.CodigoIndicador===codigo &&
+      normalizePeriodoYMFront_(String(a?.PeriodoYM || "")) ===
+        normalizePeriodoYMFront_(String(periodoYM || "")) &&
+      !isDeletedRowGlobal_(a)
     ) || null;
   }
   function cumpleFrom(meta, resultado){
@@ -2923,9 +3227,18 @@
               <div class="md:col-span-2">
                 <label class="text-xs font-extrabold text-slate-600">Análisis e interpretación del resultado *</label>
                 <textarea id="a_Analisis" class="input mt-1" rows="5" placeholder="Redacta el análisis…"></textarea>
-                <div id="a_AnalisisSug" class="hidden mt-2 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+
+                <div class="mt-2 flex gap-2">
+                  <button id="btnAIMejorarAnalisis" type="button" class="btn btn-soft">Mejorar redacción IA</button>
+                </div>
+
+                <div id="aiSugWrap" class="hidden mt-2 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
                   <div class="font-extrabold text-navy text-xs mb-1">Sugerencia de redacción (propuesta)</div>
-                  <div id="a_AnalisisSugTxt"></div>
+                  <div id="aiSugTexto" class="whitespace-pre-wrap"></div>
+                  <div class="mt-3 flex gap-2">
+                    <button id="btnAIConfirmarSug" type="button" class="btn btn-primary">Confirmar sugerencia</button>
+                    <button id="btnAILimpiarSug" type="button" class="btn btn-soft">Descartar sugerencia</button>
+                  </div>
                 </div>
               </div>
 
@@ -3007,7 +3320,7 @@
               <button id="btnAIrFirmas" class="btn btn-soft hidden">Firmas</button>
               <button id="btnABorrador" class="btn btn-soft">Limpiar</button>
               <button id="btnASaveAnalisis" class="btn btn-primary">Guardar análisis/Guardar archivo</button>
-              <button id="btnAGuardar" class="btn btn-primary">Generar vista previa del Word-PDF</button>
+              <button id="btnAGuardar" class="btn btn-soft">Generar vista previa del Word-PDF</button>
             </div>
 
             <!-- PANEL DIAGNÓSTICO GRÁFICA (visible tras guardar) -->
@@ -3027,6 +3340,17 @@
     const aArea = $("a_Area");
     aArea.innerHTML = `<option value="">Selecciona...</option>` + AREAS_CATALOGO
       .map(o=>`<option value="${escapeHtml(o.Area)}">${escapeHtml(o.NombreArea)}</option>`).join("");
+
+    ensureAnalisisAiUi_();
+    requestAnimationFrame(()=>{
+      const btn = $("btnAIMejorarAnalisis");
+      if(btn){
+        btn.scrollIntoView({ block:"center", behavior:"instant" });
+        btn.style.display = "inline-flex";
+        btn.style.visibility = "visible";
+        btn.style.opacity = "1";
+      }
+    });
 
     // eventos
     $("btnAReset").addEventListener("click", ()=>{
@@ -3067,12 +3391,19 @@
       recalcResultadoAndUI();
     });
 
-    $("a_Analisis").addEventListener("input", ()=>{
+    $("a_Analisis").oninput = ()=>{
       // mantiene la gráfica visible mientras se redacta interpretación
       recalcResultadoAndUI();
-    });
-    $("a_Analisis").addEventListener("blur", ()=>suggestRedaction("a_Analisis","a_AnalisisSug","a_AnalisisSugTxt"));
+      if(window.__AI_ANALISIS_SUGERENCIA){
+        $("aiSugTexto").textContent = "";
+        $("aiSugWrap")?.classList.add("hidden");
+        window.__AI_ANALISIS_SUGERENCIA = "";
+      }
+    };
 
+    $("btnAIMejorarAnalisis").onclick = ()=>requestAnalisisAiSuggestion_();
+    $("btnAIConfirmarSug").onclick = ()=>applyAnalisisAiSuggestion_();
+    $("btnAILimpiarSug").onclick = ()=>clearAnalisisAiSuggestion_(true);
     $("btnPropAdd").addEventListener("click", ()=>addPropRow());
 
     $("a_Evidencias").addEventListener("change", (e)=>handleEvidenceFiles(e));
@@ -3159,7 +3490,10 @@
     $("a_Den").value = "";
     $("a_Resultado").value = "";
     $("a_Analisis").value = "";
-    $("a_AnalisisSug").classList.add("hidden");
+    if($("aiSugTexto")) $("aiSugTexto").textContent = "";
+    $("aiSugWrap").classList.add("hidden");
+    window.__AI_ANALISIS_SUGERENCIA = "";
+    window.__AI_ANALISIS_ORIGINAL = "";
 
     // props
     window.__PROP_ROWS = [];
@@ -3255,6 +3589,7 @@
     const preferPeriodo = String(opts.preferPeriodo || st.selectedPeriodo || "").trim();
     const latestPeriodo = getLatestPeriodoRegistradoByCodigo(codigo);
     const nextPeriodo = getNextPeriodoDisponible(codigo, ficha.PeriodicidadMedicion || "");
+    if(nextPeriodo && !st.selectedPeriodo) setSelectedPeriodo(nextPeriodo, "init");
     const hasPreferredExisting = !!(preferPeriodo && getAnalisisByCodigoPeriodo_(codigo, preferPeriodo));
     const periodoInicial = st.selectedPeriodo || preferPeriodo || latestPeriodo || nextPeriodo;
     if(periodoInicial){
@@ -3272,12 +3607,8 @@
     }
 
     updatePeriodosRegistrados();
-    if(hasPreferredExisting || (!preferPeriodo && latestPeriodo)){
-      setPeriodoValidationMessage("");
-      syncPeriodoLockState_(false);
-    } else {
-      checkDuplicadoPeriodo();
-    }
+    setPeriodoValidationMessage("");
+    syncPeriodoLockState_(false);
     recalcResultadoAndUI();
     // chart con históricos al cargar indicador
     const series = buildSeriesForCodigo(codigo);
@@ -3288,6 +3619,7 @@
       visible: series.length,
       periodo: $("a_PeriodoYM").value || ""
     });
+    bootAnalisisAiUiReal_();
   }
 
   async function ensureHistorialLoaded(codigo, opts){
@@ -3317,34 +3649,14 @@
       const raw = Array.isArray(input)
         ? input
         : (Array.isArray(input?.items) ? input.items : []);
-      const rows = raw
+      return dedupeAnalisisRowsFront_(raw
         .map(x=>({
           ...x,
           CodigoIndicador: x?.CodigoIndicador || x?.codigo || x?.codigoIndicador || "",
-          PeriodoYM: normalizePeriodoYMFront_(x?.PeriodoYM || x?.periodoYYYYMM || x?.periodo || ""),
+          PeriodoYM: x?.PeriodoYM || x?.PeriodoLabel || x?.Periodo || x?.periodoYYYYMM || x?.periodo || "",
           ResultadoObtenido: Number(x?.ResultadoObtenido ?? x?.Resultado ?? x?.resultado)
-        }))
-        .filter(x => String(x.CodigoIndicador||"").trim() === code)
-        .filter(x => !isDeletedRowGlobal_(x))
-        .filter(x => /^\d{4}-\d{2}$/.test(String(x.PeriodoYM || "")));
-
-      const tsOf = (row, fallbackIdx) => {
-        const cand = row?.UpdatedAt || row?.updatedAt || row?.Timestamp || row?.timestamp || row?.Fecha || row?.fecha || "";
-        const t = Date.parse(String(cand || ""));
-        return Number.isFinite(t) ? t : fallbackIdx;
-      };
-
-      const byPeriodo = new Map();
-      rows.forEach((row, idx)=>{
-        const key = String(row.PeriodoYM);
-        const point = { ...row, __ts: tsOf(row, idx) };
-        const prev = byPeriodo.get(key);
-        if(!prev || point.__ts >= prev.__ts) byPeriodo.set(key, point);
-      });
-
-        return Array.from(byPeriodo.values())
-        .map(({__ts, ...rest})=>rest)
-        .sort((a,b)=>String(a.PeriodoYM).localeCompare(String(b.PeriodoYM)));
+        })))
+        .filter(x => String(x.CodigoIndicador||"").trim() === code);
       };
 
       try {
@@ -3364,7 +3676,7 @@
         window.__AN_HISTORY_TS_BY_CODIGO[code] = Date.now();
 
         const others = (CACHE.analisis || []).filter(x => String(x?.CodigoIndicador || "") !== code);
-        CACHE.analisis = others.concat(rows);
+        CACHE.analisis = dedupeAnalisisRowsFront_(others.concat(rows));
         histDebug_("[HIST_LOAD_OK]", { code, source: rows.length ? "backend" : "fallback", count: rows.length });
         return rows;
       } catch(err){
@@ -3392,42 +3704,22 @@
 
   function getAnalisisByCodigoPeriodo_(codigo, periodoYM){
     const c = String(codigo || "").trim();
-    const p = String(periodoYM || "").trim();
+    const p = normalizePeriodoYMFront_(String(periodoYM || "").trim());
     if(!c || !p) return null;
-    return getAllRowsForCodigo_(c).find(x => String(x?.PeriodoYM || "") === p) || null;
+    return getAllRowsForCodigo_(c).find(x =>
+      normalizePeriodoYMFront_(String(x?.PeriodoYM || "")) === p
+    ) || null;
   }
 
   function getAllRowsForCodigo_(codigo){
     const code = String(codigo || "").trim().toUpperCase();
     if(!code) return [];
-
-    const normalizeOne = (x)=>({
-      ...x,
-      CodigoIndicador: String(x?.CodigoIndicador || x?.codigo || x?.codigoIndicador || "").trim(),
-      PeriodoYM: normalizePeriodoYMFront_(x?.PeriodoYM || x?.Periodo || x?.periodoYYYYMM || x?.periodo || "")
-    });
-
-    const fromHistory = getHistoryRowsForCodigo_(codigo).map(normalizeOne);
-    const fromCache = (CACHE.analisis || []).map(normalizeOne)
-      .filter(x => String(x.CodigoIndicador).toUpperCase() === code)
+    const fromHistory = getHistoryRowsForCodigo_(codigo);
+    const fromCache = (CACHE.analisis || [])
+      .filter(x => String(x?.CodigoIndicador || "").trim().toUpperCase() === code)
       .filter(x => !isDeletedRowGlobal_(x));
-
-    const merged = fromHistory.concat(fromCache)
-      .filter(x => /^\d{4}-\d{2}$/.test(String(x.PeriodoYM || "")));
-
-    const byPeriodo = new Map();
-    merged.forEach((row, idx)=>{
-      const key = String(row.PeriodoYM);
-      const candTs = Date.parse(String(row?.UpdatedAt || row?.updatedAt || row?.Timestamp || row?.timestamp || ""));
-      const curr = byPeriodo.get(key);
-      const rowTs = Number.isFinite(candTs) ? candTs : idx;
-      const currTs = curr ? (Number.isFinite(curr.__ts) ? curr.__ts : -1) : -1;
-      if(!curr || rowTs >= currTs) byPeriodo.set(key, { ...row, __ts: rowTs });
-    });
-
-    return Array.from(byPeriodo.values())
-      .map(({__ts, ...rest})=>rest)
-      .sort((a,b)=>String(a.PeriodoYM).localeCompare(String(b.PeriodoYM)));
+    return dedupeAnalisisRowsFront_(fromHistory.concat(fromCache))
+      .filter(x => String(x?.CodigoIndicador || "").trim().toUpperCase() === code);
   }
 
   function updatePeriodosRegistrados(){
@@ -3821,15 +4113,12 @@
     };
     if(btnSave){
       btnSave.disabled = true;
-      btnSave.textContent = "Guardando…";
     }
     if(btnPreview){
       btnPreview.disabled = true;
-      btnPreview.textContent = "Guardando…";
     }
     if(btnDoc){
       btnDoc.disabled = true;
-      btnDoc.textContent = "Guardando…";
     }
 
     const v = validateAnalisis();
@@ -4006,7 +4295,19 @@
     const draft = window.__AN_DOC_DRAFT;
     const hasCurrentDraft = !!(draft && draft.codigo === codigo && draft.periodo === perYM && draft.docId);
     if(!hasCurrentDraft){
-      toast("warn","Vista previa requerida","Primero genera la vista previa del Word-PDF para confirmar el guardado final.");
+      showAppLoadingOverlay("Guardando análisis...");
+      try {
+        const savedDirect = await guardarAnalisis("FINAL", {
+          silentSuccessToast: true,
+          silentSaveMsg: true
+        });
+        if(savedDirect){
+          await loadAll();
+          toast("ok", "Análisis guardado", "El análisis quedó registrado correctamente en el sistema.");
+        }
+      } finally {
+        hideAppLoadingOverlay();
+      }
       return;
     }
 
@@ -4211,8 +4512,8 @@
 
       btn.disabled = true;
       const origTxt = btn.textContent;
-      btn.textContent = "Generando borrador…";
       try {
+        showAppLoadingOverlay("Generando documento Word...");
         const rp = await apiFetch("docs.generarAnalisisFromUI", payloadPreview);
         if(!rp.ok){
           try { previewWin && !previewWin.closed && previewWin.close(); } catch(_) {}
@@ -4239,7 +4540,7 @@
           _gfPanel.style.cssText = 'margin-top:8px;padding:10px;background:#fefce8;border:2px solid #ca8a04;border-radius:8px;font-size:12px;font-family:monospace;white-space:pre-wrap;max-height:200px;overflow-y:auto;';
           btn.parentNode.insertBefore(_gfPanel, btn.nextSibling);
         }
-        _gfPanel.style.display = 'block';
+        _gfPanel.style.display = 'none';
         _gfPanel.innerHTML = '<b>Diagnóstico gráfico:</b><br>';
         const _gfLog = (msg, color) => {
           console.log('[GRAFICO]', msg);
@@ -4256,7 +4557,6 @@
           _gfLog('❌ ERROR: No se recibió docId del servidor.', '#991b1b');
         } else {
           try {
-            btn.textContent = 'Pegando gráfica…';
             _gfLog('⏳ Llamando docs.insertGrafico con docId=' + d.docId + ' dataLen=' + chartDataUrl.length, '#92400e');
             const gfRes = await apiFetch('docs.insertGrafico', { docId: d.docId, dataUrl: chartDataUrl });
             const gfMsg = (gfRes && gfRes.message) || JSON.stringify(gfRes);
@@ -4288,6 +4588,7 @@
         toast("err","Error de red", String(e));
         return false;
       } finally {
+        hideAppLoadingOverlay();
         btn.disabled = false;
         if(btn.textContent === "Generando borrador…") btn.textContent = origTxt;
       }
@@ -4300,7 +4601,6 @@
 
     const orig = btn.textContent;
     btn.disabled = true;
-    btn.textContent = "Confirmando…";
     const docWin = window.open("about:blank", "_blank");
     const pdfWin = window.open("about:blank", "_blank");
 
@@ -4914,6 +5214,7 @@
       }
       if(id==="secAnalisis"){
         renderAnalisis();
+        bootAnalisisAiUiReal_();
       }
       if(id==="secDashboard"){
         renderDashboard();
@@ -5230,13 +5531,7 @@
     const rowsRaw = (CACHE.explorer || []);
 
     const periodKey = (v)=>{
-      const raw = String(v || "").trim();
-      if(/^\d{4}-\d{2}$/.test(raw)) return raw;
-      const d = new Date(raw);
-      if(!Number.isNaN(d.getTime())) return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
-      const m = raw.match(/(\d{4})-(\d{2})/);
-      if(m) return `${m[1]}-${m[2]}`;
-      return raw;
+      return normalizePeriodoYMFront_(v);
     };
 
     const analysisPeriodSlugEs_ = (periodoRaw)=>{
@@ -6068,9 +6363,11 @@
     for(const a of (CACHE.analisis||[])){
       const key = a.CodigoIndicador;
       if(!key) continue;
+      const periodoNorm = normalizePeriodoYMFront_(a.PeriodoYM || a.PeriodoLabel || a.Periodo || "");
+      const entry = { ...a, PeriodoYM: periodoNorm };
       const cur = map.get(key);
-      if(!cur) map.set(key, a);
-      else if(String(a.PeriodoYM||"") > String(cur.PeriodoYM||"")) map.set(key, a);
+      if(!cur) map.set(key, entry);
+      else if(periodoNorm > String(cur.PeriodoYM||"")) map.set(key, entry);
     }
     return map;
   }
@@ -6081,12 +6378,16 @@
   }
 
   function getSegByCodigoPeriodo_(codigo, periodoYM){
-    const keyNew = `SEG-${codigo}-${periodoYM}`;
-    const keyLegacy = `SEG|${codigo}|${periodoYM}`;
+    const periodoNorm = normalizePeriodoYMFront_(periodoYM || "");
+    const keyNew = `SEG-${codigo}-${periodoNorm}`;
+    const keyLegacy = `SEG|${codigo}|${periodoNorm}`;
     return (CACHE.seg || []).find(x =>
       String(x?.Key || "") === keyNew ||
       String(x?.Key || "") === keyLegacy ||
-      (String(x?.CodigoIndicador || "") === String(codigo || "") && String(x?.PeriodoYM || "") === String(periodoYM || ""))
+      (
+        String(x?.CodigoIndicador || "") === String(codigo || "") &&
+        normalizePeriodoYMFront_(x?.PeriodoYM || "") === periodoNorm
+      )
     ) || null;
   }
 
@@ -6098,7 +6399,10 @@
     let arr = fromSnapshot;
     if(!arr.length && codigo && periodo){
       arr = (CACHE.prop || [])
-        .filter(x=>String(x?.CodigoIndicador || "") === codigo && String(x?.PeriodoYM || "") === periodo)
+        .filter(x=>
+          String(x?.CodigoIndicador || "") === codigo &&
+          normalizePeriodoYMFront_(x?.PeriodoYM || x?.Periodo || x?.periodo || "") === periodo
+        )
         .sort((a,b)=> Number(a?.Index || 0) - Number(b?.Index || 0));
     }
     return (Array.isArray(arr) ? arr : []).slice(0,5).map(x=>(
@@ -6170,17 +6474,20 @@
 
     for(const [codigo, a] of lastMap.entries()){
       if(isNoCumple_(a?.Cumple)){
+        const periodoYM = normalizePeriodoYMFront_(a?.PeriodoYM || a?.PeriodoLabel || a?.Periodo || "");
+        const periodoLabel = periodoYM ? periodoHuman(periodoYM) : "";
         const f = fichaByCodigo(codigo);
         const propuestas = getPropuestasFromAnalisisSnapshot_(a);
-        const seg = getSegByCodigoPeriodo_(codigo, a.PeriodoYM);
+        const seg = getSegByCodigoPeriodo_(codigo, periodoYM);
         const complete = isSeguimientoComplete_(seg, propuestas.length || 1);
         rows.push({
           Codigo: codigo,
           Nombre: f?.NombreIndicador || "",
           AreaLabel: getAreaLabel(a.AreaResponsable || f?.AreaResponsable || ""),
           Area: a.AreaResponsable || f?.AreaResponsable || "",
-          PeriodoYM: a.PeriodoYM,
-          PeriodoLabel: a.PeriodoLabel || periodoHuman(a.PeriodoYM),
+          PeriodoYM: periodoYM,
+          PeriodoLabel: periodoLabel,
+          Periodo: periodoLabel,
           Resultado: Number(a.ResultadoObtenido),
           Meta: Number(a.MetaObjetivo ?? f?.MetaObjetivo ?? null),
           Propuestas: propuestas.length || 0,
@@ -6201,13 +6508,13 @@
         <td class="p-2 font-extrabold text-navy">${escapeHtml(r.Codigo)}</td>
         <td class="p-2">${escapeHtml(r.Nombre)}</td>
         <td class="p-2">${escapeHtml(r.AreaLabel)}</td>
-        <td class="p-2">${escapeHtml(r.PeriodoLabel)}</td>
+        <td class="p-2">${escapeHtml(r.PeriodoLabel || "")}</td>
         <td class="p-2">${fmtNum(r.Resultado)}</td>
         <td class="p-2">${fmtNum(r.Meta)}</td>
         <td class="p-2">${r.Propuestas || 0}</td>
         <td class="p-2">${r.Complete ? '<span class="badge badge-ok">Completo</span>' : '<span class="badge badge-warn">Pendiente</span>'}</td>
         <td class="p-2">
-          <button class="btn btn-soft" data-seg-open="${escapeHtml(r.Codigo)}" data-seg-per="${escapeHtml(r.PeriodoYM)}">${r.Complete ? 'Ver / actualizar' : 'Completar seguimiento'}</button>
+          <button class="btn btn-soft" data-seg-open="${escapeHtml(r.Codigo)}" data-seg-per="${escapeHtml(normalizePeriodoYMFront_(r.PeriodoYM))}">${r.Complete ? 'Ver / actualizar' : 'Completar seguimiento'}</button>
         </td>
       </tr>
     `).join("");
@@ -6226,6 +6533,7 @@
   }
 
   function openSeguimientoForm(codigo, periodoYM){
+    periodoYM = normalizePeriodoYMFront_(String(periodoYM || ""));
     const f = fichaByCodigo(codigo);
     const key = segKey(codigo, periodoYM);
     const analisis = getAnalisisByCodigoPeriodo_(codigo, periodoYM) || {};
@@ -6374,12 +6682,15 @@
 
     const ctx = window.__SEG_CTX;
     if(!ctx) return false;
+    const periodoDocYM = normalizePeriodoYMFront_(
+      String(ctx?.periodoYM || "")
+    );
 
     const rec = {
       Key: ctx.key,
       CodigoIndicador: ctx.codigo,
-      PeriodoYM: ctx.periodoYM,
-      PeriodoLabel: periodoHuman(ctx.periodoYM),
+      PeriodoYM: periodoDocYM,
+      PeriodoLabel: periodoHuman(periodoDocYM),
       VerificadorAcciones: ($("s_Verificador").value||"").trim(),
       Items: (window.__SEG_ROWS||[]).slice(0,5).map((it)=>(
         {
@@ -6425,10 +6736,32 @@
   }
 
   function buildSeguimientoDocPayload_(ctx){
-    const codigo = String(ctx?.codigo || "");
-    const periodoYM = String(ctx?.periodoYM || "");
+    const codigo = String(ctx?.codigo || ctx?.CodigoIndicador || "").trim();
+    const periodoYM = normalizePeriodoYMFront_(
+      ctx?.periodoYM || ctx?.periodo || ctx?.PeriodoYM || ctx?.PeriodoLabel || ctx?.Periodo || ""
+    );
     const ficha = fichaByCodigo(codigo) || {};
-    const analisis = getAnalisisByCodigoPeriodo_(codigo, periodoYM) || {};
+    const analisisRows = (CACHE.analisis || []).filter(a =>
+      String(a?.CodigoIndicador || "").trim() === codigo
+    );
+    const analisis = analisisRows.find(a =>
+      normalizePeriodoYMFront_(a?.PeriodoYM || a?.PeriodoLabel || a?.Periodo || "") === periodoYM
+    ) ||
+      getUltimoAnalisisPorCodigo().get(codigo) ||
+      analisisRows
+        .slice()
+        .sort((a,b)=>
+          normalizePeriodoYMFront_(a?.PeriodoYM || a?.PeriodoLabel || a?.Periodo || "")
+            .localeCompare(normalizePeriodoYMFront_(b?.PeriodoYM || b?.PeriodoLabel || b?.Periodo || ""))
+        )
+        .pop() ||
+      {};
+    if(codigo && !analisisRows.length){
+      throw new Error("No se encontró el análisis base para generar el seguimiento");
+    }
+    const analisisPeriodoYM = normalizePeriodoYMFront_(
+      String(analisis?.PeriodoYM || periodoYM || "")
+    );
     const snapshot = analisis?.WEB_SNAPSHOT && typeof analisis.WEB_SNAPSHOT === "object"
       ? analisis.WEB_SNAPSHOT
       : safeJsonParse_(analisis?.WEB_SNAPSHOT, {}) || {};
@@ -6437,15 +6770,159 @@
       ? analisis.Evidencias
       : (Array.isArray(snapshot?.Evidencias) ? snapshot.Evidencias : []);
 
-    const propuestas = (Array.isArray(ctx?.propuestas) ? ctx.propuestas : [])
+    const snapshotPropuestas = safeJsonParse_(analisis?.WEB_SNAPSHOT, snapshot) || snapshot || {};
+    const analisisPropuestas = Array.isArray(analisis?.Propuestas)
+      ? analisis.Propuestas
+      : safeJsonParse_(analisis?.Propuestas, []);
+    const propuestas = (Array.isArray(snapshot?.Propuestas) && snapshot.Propuestas.length
+      ? snapshot.Propuestas
+      : Array.isArray(analisisPropuestas) && analisisPropuestas.length
+        ? analisisPropuestas
+        : Array.isArray(snapshotPropuestas?.Propuestas) && snapshotPropuestas.Propuestas.length
+          ? snapshotPropuestas.Propuestas
+          : Array.isArray(ctx?.propuestas) && ctx.propuestas.length
+            ? ctx.propuestas
+            : (CACHE.prop || []).filter(x =>
+          String(x?.CodigoIndicador||"") === codigo &&
+          normalizePeriodoYMFront_(x?.PeriodoYM || x?.Periodo || x?.periodo || "") === analisisPeriodoYM
+        )
+    )
       .slice(0,5)
       .map(x=>(
         {
-          Accion: String(x?.Accion || "").trim(),
-          Responsable: String(x?.Responsable || "").trim(),
-          FechaCompromiso: String(x?.FechaCompromiso || "").trim()
+          Accion: String(x?.Accion || x?.accion || x?.Descripcion || x?.descripcion || "").trim(),
+          Responsable: String(x?.Responsable || x?.responsable || "").trim(),
+          FechaCompromiso: String(x?.FechaCompromiso || x?.fechaCompromiso || x?.Fecha || x?.fecha || "").trim()
         }
-      ));
+      ))
+      .filter(x => x.Accion || x.Responsable || x.FechaCompromiso);
+
+    const snap = safeJsonParse_(analisis?.WEB_SNAPSHOT, {}) || {};
+    const takeGraphDataUrl_ = (...vals) => {
+      for(const val of vals){
+        const txt = String(val || "").trim();
+        if(/^data:image\//i.test(txt)) return txt;
+      }
+      return "";
+    };
+    let graphDataUrl = takeGraphDataUrl_(
+      snapshot?.GraficoDataUrl,
+      snapshot?.GraficaDataUrl,
+      snapshot?.Grafica,
+      snapshot?.Grafico,
+      analisis?.GraficoDataUrl,
+      analisis?.GraficaDataUrl,
+      analisis?.Grafica,
+      analisis?.Grafico,
+      snap?.GraficoDataUrl,
+      snap?.GraficaDataUrl,
+      snap?.Grafica,
+      snap?.Grafico
+    );
+    if(!graphDataUrl && codigo){
+      try {
+        const meta = Number(analisis?.MetaObjetivo ?? ficha?.MetaObjetivo ?? 0);
+        const series = buildSeriesForCodigo(codigo).slice();
+        const per = analisisPeriodoYM || periodoYM;
+        const resultadoBase = toNumLoose_(analisis?.ResultadoObtenido ?? analisis?.Resultado ?? snapshot?.ResultadoObtenido ?? snapshot?.Resultado);
+        if(per && Number.isFinite(resultadoBase)){
+          const idx = series.findIndex(x=>x.PeriodoYM===per);
+          const point = { PeriodoYM: per, PeriodoLabel: periodoHuman(per), Resultado: resultadoBase };
+          if(idx>=0) series[idx] = point; else series.push(point);
+          series.sort((a,b)=>(a.PeriodoYM||"").localeCompare(b.PeriodoYM||""));
+        }
+        const tempCanvas = document.createElement("canvas");
+        tempCanvas.width = 280;
+        tempCanvas.height = 220;
+        const ctx = tempCanvas.getContext("2d");
+        if(ctx){
+          const w = tempCanvas.width;
+          const h = tempCanvas.height;
+          ctx.clearRect(0,0,w,h);
+          ctx.fillStyle = "#ffffff";
+          ctx.fillRect(0,0,w,h);
+          const padL = 46, padR = 18, padT = 18, padB = 38;
+          const gw = w - padL - padR;
+          const gh = h - padT - padB;
+          const cleanSeries = (series || []).filter(s=>Number.isFinite(Number(s?.Resultado)));
+          if(!cleanSeries.length){
+            ctx.fillStyle = "#94a3b8";
+            ctx.font = "800 13px Inter, system-ui";
+            ctx.fillText("Sin datos para graficar (captura un resultado).", padL, padT + 24);
+            drawGrid(ctx, padL, padT, gw, gh);
+          } else {
+            const vals = cleanSeries.map(s=>Number(s.Resultado));
+            const metaNum = Number(meta);
+            const maxV = Math.max(Number.isFinite(metaNum) ? metaNum : 0, ...vals);
+            const minV = Math.min(0, ...vals);
+            let top = maxV * 1.15;
+            let bottom = minV;
+            if(!Number.isFinite(top) || !Number.isFinite(bottom) || top === bottom){
+              top = (Number.isFinite(maxV) ? maxV : 1) + 1;
+              bottom = Number.isFinite(minV) ? minV : 0;
+            }
+            drawGrid(ctx, padL, padT, gw, gh);
+            ctx.fillStyle = "#64748b";
+            ctx.font = "700 11px Inter, system-ui";
+            for(let i=0;i<=4;i++){
+              const yv = bottom + (top-bottom)*(1 - i/4);
+              const yy = padT + gh*(i/4);
+              ctx.fillText(fmtNum(yv), 6, yy+4);
+            }
+            const n = cleanSeries.length;
+            const gap = Math.max(8, gw * 0.02);
+            const barW = Math.max(18, (gw - gap*(n+1))/n);
+            for(let i=0;i<n;i++){
+              const x = padL + gap + i*(barW+gap);
+              const v = Number(cleanSeries[i].Resultado);
+              const y = valueToY(v, bottom, top, padT, gh);
+              const barH = (padT+gh) - y;
+              ctx.fillStyle = "rgba(11,42,74,.90)";
+              roundRect(ctx, x, y, barW, barH, 10, true, false);
+              ctx.fillStyle = "#0b2a4a";
+              ctx.font = "800 11px Inter, system-ui";
+              ctx.fillText(fmtNum(v), x, y-6);
+            }
+            if(Number.isFinite(metaNum)){
+              const yM = valueToY(metaNum, bottom, top, padT, gh);
+              ctx.strokeStyle = "rgba(59,169,230,.95)";
+              ctx.lineWidth = 2.5;
+              ctx.beginPath();
+              ctx.moveTo(padL, yM);
+              ctx.lineTo(padL+gw, yM);
+              ctx.stroke();
+              ctx.fillStyle = "rgba(59,169,230,.15)";
+              ctx.fillRect(padL, yM-10, gw, 20);
+              ctx.fillStyle = "rgba(59,169,230,.95)";
+              ctx.font = "900 11px Inter, system-ui";
+              ctx.fillText("META", padL+6, yM-6);
+            }
+            ctx.fillStyle = "#64748b";
+            ctx.font = "700 10px Inter, system-ui";
+            for(let i=0;i<n;i++){
+              const parts = String(cleanSeries[i].PeriodoLabel||"").split(" ");
+              const m = parts[0] || "";
+              const y = parts[1] || "";
+              const x = padL + gap + i*(barW+gap);
+              ctx.fillText(m, x, padT+gh+20);
+              ctx.fillText(y, x, padT+gh+32);
+            }
+          }
+          graphDataUrl = tempCanvas.toDataURL("image/png") || "";
+        }
+      } catch(_) {}
+    }
+    const payloadSnapshot = {
+      ...(snapshot && typeof snapshot === "object" ? snapshot : {}),
+      CodigoIndicador: codigo,
+      PeriodoYM: analisisPeriodoYM || periodoYM,
+      PeriodoLabel: periodoHuman(analisisPeriodoYM || periodoYM),
+      GraficoDataUrl: graphDataUrl,
+      GraficaDataUrl: graphDataUrl,
+      Grafica: graphDataUrl,
+      Grafico: graphDataUrl,
+      Propuestas: propuestas
+    };
 
     const seguimientoItems = (Array.isArray(window.__SEG_ROWS) ? window.__SEG_ROWS : [])
       .slice(0,5)
@@ -6472,9 +6949,9 @@
       NombreIndicador: String(ficha?.NombreIndicador || ""),
       TipoIndicador: String(ficha?.TipoIndicador || ""),
       Objetivo: String(ficha?.ObjetivoIndicador || ""),
-      PeriodoYM: periodoYM,
-      PeriodoLabel: String(analisis?.PeriodoLabel || periodoHuman(periodoYM)),
-      Periodo: String(analisis?.PeriodoLabel || periodoHuman(periodoYM)),
+      PeriodoYM: analisisPeriodoYM || normalizePeriodoYMFront_(periodoYM),
+      PeriodoLabel: periodoHuman(analisisPeriodoYM || normalizePeriodoYMFront_(periodoYM)),
+      Periodo: periodoHuman(analisisPeriodoYM || normalizePeriodoYMFront_(periodoYM)),
       NumValor: Number(analisis?.NumValor ?? snapshot?.NumValor ?? 0),
       DenValor: Number(analisis?.DenValor ?? snapshot?.DenValor ?? 0),
       ResultadoObtenido: Number(analisis?.ResultadoObtenido ?? snapshot?.ResultadoObtenido ?? snapshot?.Resultado ?? 0),
@@ -6483,7 +6960,10 @@
       Cumple: false,
       AnalisisPrincipal: String(snapshot?.AnalisisPrincipal || analisis?.AnalisisPrincipal || analisis?.AnalisisInterpretacion || "").trim(),
       AnalisisInterpretacion: String(snapshot?.AnalisisPrincipal || analisis?.AnalisisPrincipal || analisis?.AnalisisInterpretacion || "").trim(),
-      GraficoDataUrl: String(snapshot?.GraficoDataUrl || snapshot?.GraficaDataUrl || snapshot?.Grafica || snapshot?.Grafico || ""),
+      GraficoDataUrl: graphDataUrl,
+      GraficaDataUrl: graphDataUrl,
+      Grafica: graphDataUrl,
+      Grafico: graphDataUrl,
       Responsable: String(ficha?.ResponsableIndicador || snapshot?.Responsable || ""),
       FirmaResponsableDataUrl: String(snapshot?.FirmaResponsableDataUrl || analisis?.FirmaResponsableDataUrl || ""),
       Evidencias: evidencias,
@@ -6494,12 +6974,15 @@
       FillSeguimiento: true,
       LlenarSeguimiento: true,
       PreviewOnly: true,
-      WEB_SNAPSHOT: safeJsonStringify_(snapshot, ""),
+      WEB_SNAPSHOT: safeJsonStringify_(payloadSnapshot, ""),
       UpdatedAt: nowISO()
     };
   }
 
   async function generateSeguimientoPreviewDoc(){
+    alert("SEG_PREVIEW_HIT " + BUILD_ID);
+    console.warn("[SEG_PREVIEW_HIT]", BUILD_ID);
+    toast("ok","DEBUG BUILD", BUILD_ID);
     const v = validateSeguimiento();
     if(!v.ok) return toast("err","Faltan datos", v.message);
     const ctx = window.__SEG_CTX;
@@ -6512,7 +6995,6 @@
     try {
       if(btn){
         btn.disabled = true;
-        btn.textContent = "Generando…";
       }
 
       const saved = await saveSeguimiento({
@@ -6526,8 +7008,28 @@
         return;
       }
 
+      console.warn("[SEG_CTX]", {
+        codigo: ctx?.codigo || ctx?.CodigoIndicador || "",
+        periodo: ctx?.periodoYM || ctx?.PeriodoYM || ctx?.Periodo || ctx?.PeriodoLabel || ""
+      });
       const payload = buildSeguimientoDocPayload_(ctx);
+      console.warn("[SEG_PAYLOAD_GRAPH]", {
+        lenGraficoDataUrl: String(payload?.GraficoDataUrl || "").length,
+        lenGraficaDataUrl: String(payload?.GraficaDataUrl || "").length,
+        lenGrafica: String(payload?.Grafica || "").length,
+        lenGrafico: String(payload?.Grafico || "").length,
+        prefix: String(
+          payload?.GraficoDataUrl ||
+          payload?.GraficaDataUrl ||
+          payload?.Grafica ||
+          payload?.Grafico ||
+          ""
+        ).slice(0,40),
+        docAction: "docs.generarAnalisisFromUI"
+      });
+      showAppLoadingOverlay("Generando documento Word...");
       const r = await apiFetch("docs.generarAnalisisFromUI", payload);
+      console.warn("[SEG_DOC_RESPONSE]", r);
       if(!r.ok){
         try { preOpened && !preOpened.closed && preOpened.close(); } catch(_) {}
         toast("err","Error", r.message || "No se pudo generar la vista previa de seguimiento.");
@@ -6535,6 +7037,40 @@
       }
 
       const d = r.data || {};
+      let graphDataUrl = String(
+        payload?.GraficoDataUrl ||
+        payload?.GraficaDataUrl ||
+        payload?.Grafica ||
+        payload?.Grafico ||
+        ""
+      ).trim();
+      if(!graphDataUrl){
+        const resolved = buildSeguimientoDocPayload_(ctx);
+        graphDataUrl = String(
+          resolved?.GraficoDataUrl ||
+          resolved?.GraficaDataUrl ||
+          resolved?.Grafica ||
+          resolved?.Grafico ||
+          ""
+        ).trim();
+      }
+      console.warn("[SEG_INSERT_GRAFICO]", {
+        docId: d?.docId || "",
+        graphLen: String(graphDataUrl || "").length,
+        graphPrefix: String(graphDataUrl || "").slice(0,40),
+        isDataImage: /^data:image\//.test(String(graphDataUrl || ""))
+      });
+      if(d.docId && /^data:image\//.test(graphDataUrl)){
+        try {
+          const gfRes = await apiFetch("docs.insertGrafico", { docId: d.docId, dataUrl: graphDataUrl });
+          if(!gfRes?.ok){
+            throw new Error(gfRes?.message || "Error insertando gráfica");
+          }
+        } catch(err) {
+          console.error("[SEG_INSERT_GRAFICO_ERROR]", err);
+          toast("err","Gráfica", String(err?.message || err || "Error insertando gráfica"));
+        }
+      }
       const link = d.linkDocx || "";
       if(link){
         if(preOpened && !preOpened.closed) preOpened.location.href = link;
@@ -6548,6 +7084,7 @@
       try { preOpened && !preOpened.closed && preOpened.close(); } catch(_) {}
       toast("err","Error de red", String(e));
     } finally {
+      hideAppLoadingOverlay();
       if(btn){
         btn.disabled = false;
         btn.textContent = orig || "Generar vista previa del Word-PDF";
