@@ -90,7 +90,7 @@
       forzar un valor concreto o usar DEMO.
   =========================== */
   // principal: la URL del web‑app (se evalúa en runtime)
-  let SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbz0qufvpy2TiYQSsSW_WN7ZqLq0qfk4WE6EbBQxuBH9Ol5qlL-PgCp3xmXrzhOsO_szLg/exec";
+  let SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbzFSQuRxSjurcg9oEXy40fi1QEe_bxZHcZHRW6KCcjAGmn4s9XxHyqVUFXXnrcRf00gEg/exec";
   const CONFIG_KEY_WEBAPP_URL = "CONFIG_SHEETS_WEBAPP_URL";
 
   function getSavedWebAppUrl(){
@@ -2134,6 +2134,10 @@
   function ensureAnalisisAiUi_(){
     const ta = $("a_Analisis");
     if(!ta) return;
+    const dupBtns = Array.from(document.querySelectorAll("#btnAIMejorarAnalisis"));
+    if(dupBtns.length > 1){
+      dupBtns.slice(1).forEach(el => el.remove());
+    }
 
     let top = $("aiSugActionsTop");
     if(!top){
@@ -2187,6 +2191,10 @@
   function mountAnalisisAiUiReal_(){
     const ta = $("a_Analisis");
     if(!ta) return false;
+    const dupBtns = Array.from(document.querySelectorAll("#btnAIMejorarAnalisis"));
+    if(dupBtns.length > 1){
+      dupBtns.slice(1).forEach(el => el.remove());
+    }
 
     let top = $("aiSugActionsTop");
     if(!top){
