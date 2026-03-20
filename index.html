@@ -86,7 +86,7 @@
       forzar un valor concreto o usar DEMO.
   =========================== */
   // principal: la URL del web‑app (se evalúa en runtime)
-  let SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbwRVQTVMxHpH76OJAdJ7eIEMHzuWcxgNvFTSBIS-SbE7A5Sy9K6VxL4yLTHjc5RdR1ijQ/exec";
+  let SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbw93q2WGT2jcHpoDEE6j4Ivbtul2CltUJJqoKQGoGU_zoUAN2IkN_8E7cj0X3snwnTn9w/exec";
   const CONFIG_KEY_WEBAPP_URL = "CONFIG_SHEETS_WEBAPP_URL";
 
   function getSavedWebAppUrl(){
@@ -2924,6 +2924,69 @@
     return buildAssistantHelpReply_();
   }
 
+  function buildAssistantRemotePayload_(question){
+    const user = getCurrentUser() || {};
+    const section = getActiveSectionId_();
+
+    let context = {};
+    if(section === "secAnalisis"){
+      context = getAssistantAnalisisContext_();
+    } else if(section === "secFicha"){
+      context = getAssistantFichaContext_();
+    }
+
+    return {
+      question: String(question || "").trim(),
+      section: section,
+      user: {
+        name: String(user.name || "").trim(),
+        email: String(user.email || "").trim(),
+        area: String(user.area || "").trim(),
+        isCalidad: !!isCalidadUser()
+      },
+      context: context,
+      client: "assistant_widget",
+      version: "phase2-v1",
+      timestamp: new Date().toISOString()
+    };
+  }
+
+  async function askAssistantRemote_(question){
+    if(USE_DEMO) throw new Error("CHAT_REMOTE_UNAVAILABLE_IN_DEMO");
+
+    const payload = buildAssistantRemotePayload_(question);
+    const r = await apiFetch("chat.ask", payload);
+
+    if(!r?.ok) throw new Error(r?.message || "CHAT_REMOTE_FAIL");
+
+    const answer = String(r?.data?.answer || "").trim();
+    if(!answer) throw new Error("CHAT_REMOTE_EMPTY");
+
+    return {
+      answer: answer,
+      source: String(r?.data?.source || "remote")
+    };
+  }
+
+  async function resolveAssistantReply_(question){
+    try {
+      return await askAssistantRemote_(question);
+    } catch(err){
+      const answer = buildAssistantReply_(question);
+      debugLog_("[ASSISTANT_REMOTE_FALLBACK]", {
+        reason: String(err && (err.message || err)),
+        question,
+        answer,
+        section: getActiveSectionId_(),
+        user: getCurrentUser()
+      });
+      return {
+        answer: answer,
+        source: "local"
+      };
+    }
+  }
+
   function appendAssistantMessage_(role, text){
     const history = $("assistantHistory");
     if(!history) return;
@@ -2979,15 +3042,27 @@
       $("assistantPanel")?.classList.add("hidden");
       $("assistantToggle")?.classList.remove("hidden");
     });
-    $("assistantSend")?.addEventListener("click", ()=>{
+    $("assistantSend")?.addEventListener("click", async ()=>{
       const input = $("assistantInput");
+      const btn = $("assistantSend");
       const question = String(input?.value || "").trim();
       if(!question) return;
       appendAssistantMessage_("user", question);
       input.value = "";
-      const answer = buildAssistantReply_(question);
-      appendAssistantMessage_("assistant", answer);
-      debugLog_("[ASSISTANT]", { question, answer, section: getActiveSectionId_(), user: getCurrentUser() });
+      if(btn) btn.disabled = true;
+      try {
+        const out = await resolveAssistantReply_(question);
+        appendAssistantMessage_("assistant", out.answer);
+        debugLog_("[ASSISTANT]", {
+          question,
+          answer: out.answer,
+          source: out.source,
+          section: getActiveSectionId_(),
+          user: getCurrentUser()
+        });
+      } finally {
+        if(btn) btn.disabled = false;
+      }
     });
     $("assistantInput")?.addEventListener("keydown", (e)=>{
       if(e.key === "Enter"){
