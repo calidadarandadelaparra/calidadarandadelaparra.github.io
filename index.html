@@ -86,7 +86,7 @@
       forzar un valor concreto o usar DEMO.
   =========================== */
   // principal: la URL del web‑app (se evalúa en runtime)
-  let SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbw93q2WGT2jcHpoDEE6j4Ivbtul2CltUJJqoKQGoGU_zoUAN2IkN_8E7cj0X3snwnTn9w/exec";
+  let SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbzFSQuRxSjurcg9oEXy40fi1QEe_bxZHcZHRW6KCcjAGmn4s9XxHyqVUFXXnrcRf00gEg/exec";
   const CONFIG_KEY_WEBAPP_URL = "CONFIG_SHEETS_WEBAPP_URL";
 
   function getSavedWebAppUrl(){
@@ -7135,34 +7135,52 @@
 
   function buildNoCumplenTable(){
     const tb = $("s_Table");
-    const lastMap = getUltimoAnalisisPorCodigo();
-    const rows = [];
+    const byCodigoPeriodo = new Map();
+    (CACHE.analisis || []).forEach((raw, idx)=>{
+      const a = normalizeAnalisisRowFront_(raw);
+      const codigo = String(a?.CodigoIndicador || raw?.CodigoIndicador || raw?.Codigo || "").trim();
+      const periodoYM = normalizePeriodoYMFront_(a?.PeriodoYM || a?.PeriodoLabel || a?.Periodo || raw?.PeriodoYM || raw?.Periodo || "");
+      if(!codigo || !periodoYM) return;
+      if(!isNoCumple_(a?.Cumple)) return;
+      const key = `${codigo}|${periodoYM}`;
+      const point = {
+        ...a,
+        CodigoIndicador: codigo,
+        PeriodoYM: periodoYM,
+        __ts: analisisUpdatedAtTsFront_(a, idx)
+      };
+      const prev = byCodigoPeriodo.get(key);
+      if(!prev || point.__ts >= prev.__ts) byCodigoPeriodo.set(key, point);
+    });
 
-    for(const [codigo, a] of lastMap.entries()){
-      if(isNoCumple_(a?.Cumple)){
-        const periodoYM = normalizePeriodoYMFront_(a?.PeriodoYM || a?.PeriodoLabel || a?.Periodo || "");
-        const periodoLabel = periodoYM ? periodoHuman(periodoYM) : "";
-        const f = fichaByCodigo(codigo);
-        const propuestas = getPropuestasFromAnalisisSnapshot_(a);
-        const seg = getSegByCodigoPeriodo_(codigo, periodoYM);
-        const complete = isSeguimientoComplete_(seg, propuestas.length || 1);
-        rows.push({
-          Codigo: codigo,
-          Nombre: f?.NombreIndicador || "",
-          AreaLabel: getAreaLabel(a.AreaResponsable || f?.AreaResponsable || ""),
-          Area: a.AreaResponsable || f?.AreaResponsable || "",
-          PeriodoYM: periodoYM,
-          PeriodoLabel: periodoLabel,
-          Periodo: periodoLabel,
-          Resultado: Number(a.ResultadoObtenido),
-          Meta: Number(a.MetaObjetivo ?? f?.MetaObjetivo ?? null),
-          Propuestas: propuestas.length || 0,
-          Complete: complete
-        });
-      }
-    }
+    const rows = Array.from(byCodigoPeriodo.values()).map(({__ts, ...a})=>{
+      const codigo = String(a?.CodigoIndicador || "").trim();
+      const periodoYM = normalizePeriodoYMFront_(a?.PeriodoYM || a?.PeriodoLabel || a?.Periodo || "");
+      const periodoLabel = periodoYM ? periodoHuman(periodoYM) : "";
+      const f = fichaByCodigo(codigo);
+      const propuestas = getPropuestasFromAnalisisSnapshot_(a);
+      const seg = getSegByCodigoPeriodo_(codigo, periodoYM);
+      const complete = isSeguimientoComplete_(seg, propuestas.length || 1);
+      return {
+        Codigo: codigo,
+        Nombre: f?.NombreIndicador || "",
+        AreaLabel: getAreaLabel(a.AreaResponsable || f?.AreaResponsable || ""),
+        Area: a.AreaResponsable || f?.AreaResponsable || "",
+        PeriodoYM: periodoYM,
+        PeriodoLabel: periodoLabel,
+        Periodo: periodoLabel,
+        Resultado: Number(a.ResultadoObtenido),
+        Meta: Number(a.MetaObjetivo ?? f?.MetaObjetivo ?? null),
+        Propuestas: propuestas.length || 0,
+        Complete: complete
+      };
+    });
 
-    rows.sort((x,y)=>(x.AreaLabel||"").localeCompare(y.AreaLabel||"") || (x.Codigo||"").localeCompare(y.Codigo||""));
+    rows.sort((x,y)=>
+      (x.AreaLabel||"").localeCompare(y.AreaLabel||"") ||
+      (x.Codigo||"").localeCompare(y.Codigo||"") ||
+      String(y.PeriodoYM||"").localeCompare(String(x.PeriodoYM||""))
+    );
 
     if(!rows.length){
       tb.innerHTML = `<tr><td class="p-3 text-slate-400" colspan="9">No hay indicadores en NO CUMPLE.</td></tr>`;
