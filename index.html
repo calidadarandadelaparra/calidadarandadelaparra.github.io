@@ -2295,9 +2295,11 @@
       return v;
     };
 
+    if($("f_Area")) $("f_Area").value = String($("f_Area").value || "").trim();
+    if($("f_AreaResponsable")) $("f_AreaResponsable").value = String($("f_AreaResponsable").value || "").trim();
     const area = getFichaAreaValue_();
     if(!area){
-      const a = $("f_AreaResponsable");
+      const a = $("f_Area") || $("f_AreaResponsable");
       if(a) a.classList.add("err");
       ok = false;
     }
@@ -2335,7 +2337,7 @@
       toast("err","Faltan campos","Completa todos los obligatorios (listas incluidas).");
     }
 
-    return ok;
+    return { ok };
   }
 
   function clearFichaForm(){
@@ -2356,12 +2358,15 @@
   ========================================================= */
   async function saveFicha(opts){
     opts = opts || {};
-    if(!validateFicha()) return;
+    const v = validateFicha();
+    if(!v.ok) return;
 
     // show loading indicator
     const btn = $("btnFichaSave");
     const origText = btn.textContent;
     btn.disabled = true;
+    showAppLoadingOverlay("Guardando ficha técnica...");
+    await new Promise(r => requestAnimationFrame(() => r()));
 
     console.log('saveFicha invoked, demo=', USE_DEMO, 'url=', getWebAppUrl());
     const row = modelFicha();
@@ -2425,23 +2430,18 @@
 
     let r;
     console.log('payload', payload);
-    showAppLoadingOverlay("Guardando ficha técnica...");
     try {
       try {
-      r = await apiFetch("fichas.upsert", payload);
-      console.log('apiFetch result', r);
-    } catch(e) {
-      console.error('fetch threw', e);
-      toast("err","Error de red", String(e));
-      return;
-    } finally {
-      // restore button
-      btn.disabled = false;
-      btn.textContent = origText;
-    }
-    if(!r.ok){
+        r = await apiFetch("fichas.upsert", payload);
+        console.log('apiFetch result', r);
+      } catch(e) {
+        console.error('fetch threw', e);
+        toast("err","Error de red", String(e));
+        return;
+      }
+      if(!r.ok){
       toast("err","No se guardó", r.message || "Error");
-      return false;
+        return false;
     }
 
     // actualizar cache local para evitar recargar toda la app y resetear selects del formulario
@@ -2480,12 +2480,14 @@
     }
       return true;
     } finally {
+      btn.disabled = false;
+      btn.textContent = origText;
       hideAppLoadingOverlay();
     }
   }
 
   async function saveFichaAndFile(){
-    if(!validateFicha()) return;
+    if(!validateFicha().ok) return;
 
     const codigo = ($("f_CodigoIndicador").value||"").trim();
     const periodo = nowYM();
@@ -2520,7 +2522,7 @@
     - MVP: estructura lista (luego link a Word/Drive)
   ========================================================= */
   function openFichaPreviewPDF(){
-    if(!validateFicha()) return;
+    if(!validateFicha().ok) return;
     setPdfGenerateAction_(false);
 
     const codigo = $("f_CodigoIndicador").value;
@@ -2567,7 +2569,7 @@
   // ------------------------------------------------
   async function generateFichaDoc(opts){
     opts = opts || {};
-    if(!validateFicha()) return toast("err","Faltan datos","Revisa la ficha");
+    if(!validateFicha().ok) return toast("err","Faltan datos","Revisa la ficha");
 
     const btn = $("btnFichaSave");
     const orig = btn.textContent;
@@ -2618,7 +2620,7 @@
   }
 
   async function generateFichaPreviewDoc(previewWin){
-    if(!validateFicha()){
+    if(!validateFicha().ok){
       try { previewWin && !previewWin.closed && previewWin.close(); } catch(_) {}
       return toast("err","Faltan datos","Revisa la ficha");
     }
@@ -6530,8 +6532,12 @@
     renderFichaForm();
 
     // populate fields
-    $("f_AreaResponsable").value = f.AreaResponsable || "";
-    updateCodigoFromArea();
+    const areaEl = $("f_Area") || $("f_AreaResponsable");
+    if(areaEl){
+      areaEl.value = f.AreaResponsable || "";
+      areaEl.dispatchEvent(new Event("change",{bubbles:true}));
+      areaEl.dispatchEvent(new Event("input",{bubbles:true}));
+    }
     $("f_CodigoIndicador").value = f.CodigoIndicador || "";
     $("f_NombreIndicador").value = f.NombreIndicador || "";
     $("f_TipoIndicador").value = f.TipoIndicador || "";
@@ -6559,6 +6565,10 @@
     renderNumbered("f_FuentesList");
     renderNumbered("f_TerminosList");
     renderNumbered("f_ObservacionesList", false, true);
+    ["f_Area","f_AreaResponsable","f_Codigo","f_CodigoIndicador","f_ResponsableIndicador","f_NombreIndicador","f_ObjetivoIndicador","f_Objetivo","f_MetaObjetivo","f_Meta","f_EtiquetaPresentacion","f_FormulaTipo","f_TextoEtiqueta","f_FormulaEtiqueta"].forEach(id=>{
+      const el = $(id);
+      if(el) el.classList.remove("err");
+    });
   }
 
   async function openAnalisisView(key){
