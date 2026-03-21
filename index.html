@@ -1741,7 +1741,9 @@
     const opts = AREAS_CATALOGO.map(o=>`<option value="${escapeHtml(o.Area)}">${escapeHtml(o.NombreArea)}</option>`).join("");
     // Ficha
     const fa = $("f_AreaResponsable");
+    const currentRaw = String(fa?.dataset?.currentArea || fa?.value || "").trim();
     if(fa) fa.innerHTML = `<option value="">Selecciona...</option>${opts}`;
+    if(fa && currentRaw) applyFichaAreaResolved_(currentRaw, { trigger:false });
 
     // (Análisis/Dashboard/Explorador se llenan dinámicamente)
   }
@@ -1783,22 +1785,25 @@
     return String(sel.value || opt?.value || "").trim();
   }
 
-  function applyFichaAreaResolved_(raw){
+  function applyFichaAreaResolved_(raw, opts){
+    opts = opts || {};
     const sel = $("f_AreaResponsable");
     const val = String(raw || "").trim();
     if(!sel || !val) return false;
 
-    const opts = Array.from(sel.options || []);
-    let hit = opts.find(o => String(o.value || "").trim() === val);
-    if(!hit) hit = opts.find(o => String(o.textContent || "").trim() === val);
-    if(!hit) hit = opts.find(o => String(o.text || o.label || o.textContent || "").trim().toLowerCase() === val.toLowerCase());
+    const areaOptions = Array.from(sel.options || []);
+    let hit = areaOptions.find(o => String(o.value || "").trim() === val);
+    if(!hit) hit = areaOptions.find(o => String(o.textContent || "").trim() === val);
+    if(!hit) hit = areaOptions.find(o => String(o.text || o.label || o.textContent || "").trim().toLowerCase() === val.toLowerCase());
     if(!hit) return false;
 
     sel.value = hit.value;
     sel.dataset.currentArea = val;
     sel.classList.remove("err");
-    sel.dispatchEvent(new Event("change",{bubbles:true}));
-    sel.dispatchEvent(new Event("input",{bubbles:true}));
+    if(opts.trigger !== false){
+      sel.dispatchEvent(new Event("change",{bubbles:true}));
+      sel.dispatchEvent(new Event("input",{bubbles:true}));
+    }
     return true;
   }
 
@@ -2333,7 +2338,7 @@
 
     const areaSel = $("f_AreaResponsable");
     if(areaSel && !String(areaSel.value || "").trim()){
-      applyFichaAreaResolved_(areaSel.dataset.currentArea || "");
+      applyFichaAreaResolved_(areaSel.dataset.currentArea || "", { trigger:false });
     }
     if($("f_AreaResponsable")) $("f_AreaResponsable").value = String($("f_AreaResponsable").value || "").trim();
     const area = getFichaAreaValue_();
@@ -2495,13 +2500,15 @@
       Formula: $("f_FormulaPreview").textContent || "",
       WEB_SNAPSHOT: safeJsonParse_(row.WEB_SNAPSHOT, row.WEB_SNAPSHOT || null)
     };
-    const idx = (CACHE.fichas || []).findIndex(x => String(x?.CodigoIndicador || "") === String(row.CodigoIndicador || ""));
-    if(idx >= 0) CACHE.fichas[idx] = { ...(CACHE.fichas[idx] || {}), ...fichaLocal };
-    else CACHE.fichas.push(fichaLocal);
+      const idx = (CACHE.fichas || []).findIndex(x => String(x?.CodigoIndicador || "") === String(row.CodigoIndicador || ""));
+      if(idx >= 0) CACHE.fichas[idx] = { ...(CACHE.fichas[idx] || {}), ...fichaLocal };
+      else CACHE.fichas.push(fichaLocal);
 
-    await loadAll();
+      const currentAreaRaw = String($("f_AreaResponsable")?.dataset?.currentArea || $("f_AreaResponsable")?.value || row.AreaResponsable || "").trim();
+      await loadAll();
+      if(currentAreaRaw) applyFichaAreaResolved_(currentAreaRaw, { trigger:false });
 
-    if(!opts.silent){
+      if(!opts.silent){
       $("f_SaveMsg").classList.remove("hidden");
       scrollTopSmooth();
       toast(
@@ -2976,12 +2983,47 @@
   function buildAssistantRemotePayload_(question){
     const user = getCurrentUser() || {};
     const section = getActiveSectionId_();
+    const missingFields = getAssistantMissingFields_();
+    const draft = window.__FT_DOC_DRAFT || null;
+    const sectionLabelMap = {
+      secInicio: "Inicio",
+      secFicha: "Ficha Técnica",
+      secAnalisis: "Análisis",
+      secDashboard: "Dashboard",
+      secExplorador: "Explorador",
+      secSeguimiento: "Seguimiento"
+    };
 
-    let context = {};
+    let context = {
+      sectionLabel: sectionLabelMap[section] || section || "Sin sección",
+      missingFields: missingFields,
+      missingCount: missingFields.length,
+      hasMissingFields: missingFields.length > 0
+    };
     if(section === "secAnalisis"){
-      context = getAssistantAnalisisContext_();
+      context = {
+        ...context,
+        ...getAssistantAnalisisContext_(),
+        areaValue: String($("a_Area")?.value || "").trim(),
+        codigoValue: String($("a_Codigo")?.value || "").trim(),
+        periodoValue: String($("a_PeriodoYM")?.value || "").trim(),
+        hasFirmaResponsable: !!String(window.__FIRMAS?.ResponsableDataUrl || "").trim(),
+        isIncomplete: missingFields.length > 0,
+        analysisLength: String($("a_Analisis")?.value || "").trim().length
+      };
     } else if(section === "secFicha"){
-      context = getAssistantFichaContext_();
+      context = {
+        ...context,
+        ...getAssistantFichaContext_(),
+        areaValue: String($("f_AreaResponsable")?.value || "").trim(),
+        areaCurrent: String($("f_AreaResponsable")?.dataset?.currentArea || "").trim(),
+        tipoIndicador: String($("f_TipoIndicador")?.value || "").trim(),
+        formula: String($("f_FormulaPreview")?.textContent || "").trim(),
+        hasDraftDoc: !!(draft && draft.docId),
+        draftCodigo: String(draft?.codigo || "").trim(),
+        draftPeriodo: String(draft?.periodo || "").trim(),
+        isIncomplete: missingFields.length > 0
+      };
     }
 
     return {
@@ -2993,9 +3035,17 @@
         area: String(user.area || "").trim(),
         isCalidad: !!isCalidadUser()
       },
+      ui: {
+        activeSection: section,
+        sectionLabel: sectionLabelMap[section] || section || "Sin sección",
+        canAccessCalidad: !!isQuality(),
+        isCalidadUser: !!isCalidadUser(),
+        missingFields: missingFields,
+        hasMissingFields: missingFields.length > 0
+      },
       context: context,
       client: "assistant_widget",
-      version: "phase2-v1",
+      version: "phase2-v2-hap",
       timestamp: new Date().toISOString()
     };
   }
