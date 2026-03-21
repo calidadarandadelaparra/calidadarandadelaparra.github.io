@@ -1798,6 +1798,14 @@
     hit = opts.find(o => String(o.text || o.label || o.textContent || "").trim().toLowerCase() === val.toLowerCase());
     if(hit) return hit.value;
 
+    console.warn("[FICHA_AREA_RESOLVE]", {
+      raw: raw,
+      selectId: ( $("f_Area") || $("f_AreaResponsable") )?.id || "",
+      options: Array.from(( $("f_Area") || $("f_AreaResponsable") )?.options || []).map(o => ({
+        value: String(o.value || "").trim(),
+        text: String(o.textContent || "").trim()
+      }))
+    });
     return "";
   }
 
@@ -2326,6 +2334,10 @@
     if($("f_AreaResponsable")) $("f_AreaResponsable").value = String($("f_AreaResponsable").value || "").trim();
     const area = getFichaAreaValue_();
     if(!area){
+      console.warn("[FICHA_AREA_VALIDATE]", {
+        currentValue: areaSel?.value || "",
+        currentArea: areaSel?.dataset?.currentArea || ""
+      });
       const a = $("f_Area") || $("f_AreaResponsable");
       if(a) a.classList.add("err");
       ok = false;
@@ -6562,6 +6574,10 @@
     const areaEl = $("f_Area") || $("f_AreaResponsable");
     if(areaEl){
       const areaResolved = resolveFichaAreaValue_(f.AreaResponsable || f.Area || f.NombreArea || "");
+      console.warn("[FICHA_AREA_OPEN]", {
+        raw: f.AreaResponsable || f.Area || f.NombreArea || "",
+        resolved: areaResolved
+      });
       areaEl.value = areaResolved;
       areaEl.dataset.currentArea = f.AreaResponsable || f.Area || f.NombreArea || "";
       areaEl.classList.remove("err");
