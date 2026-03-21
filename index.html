@@ -1783,30 +1783,40 @@
     return String(sel.value || opt?.value || "").trim();
   }
 
-  function resolveFichaAreaValue_(raw){
+  function applyFichaAreaResolved_(raw){
+    const sel = $("f_AreaResponsable");
     const val = String(raw || "").trim();
-    const sel = $("f_Area") || $("f_AreaResponsable");
-    if(!sel || !val) return "";
+    if(!sel || !val) return false;
+
     const opts = Array.from(sel.options || []);
-
     let hit = opts.find(o => String(o.value || "").trim() === val);
-    if(hit) return hit.value;
+    if(!hit) hit = opts.find(o => String(o.textContent || "").trim() === val);
+    if(!hit) hit = opts.find(o => String(o.text || o.label || o.textContent || "").trim().toLowerCase() === val.toLowerCase());
+    if(!hit) return false;
 
-    hit = opts.find(o => String(o.textContent || "").trim() === val);
-    if(hit) return hit.value;
+    sel.value = hit.value;
+    sel.dataset.currentArea = val;
+    sel.classList.remove("err");
+    sel.dispatchEvent(new Event("change",{bubbles:true}));
+    sel.dispatchEvent(new Event("input",{bubbles:true}));
+    return true;
+  }
 
-    hit = opts.find(o => String(o.text || o.label || o.textContent || "").trim().toLowerCase() === val.toLowerCase());
-    if(hit) return hit.value;
+  function applyFichaAreaWithRetry_(raw){
+    const val = String(raw || "").trim();
+    const sel = $("f_AreaResponsable");
+    if(!sel || !val) return;
 
-    console.warn("[FICHA_AREA_RESOLVE]", {
-      raw: raw,
-      selectId: ( $("f_Area") || $("f_AreaResponsable") )?.id || "",
-      options: Array.from(( $("f_Area") || $("f_AreaResponsable") )?.options || []).map(o => ({
-        value: String(o.value || "").trim(),
-        text: String(o.textContent || "").trim()
-      }))
-    });
-    return "";
+    sel.dataset.currentArea = val;
+
+    let tries = 0;
+    const timer = setInterval(()=>{
+      tries++;
+      const ok = applyFichaAreaResolved_(val);
+      if(ok || tries >= 20){
+        clearInterval(timer);
+      }
+    }, 150);
   }
 
   /* =========================================================
@@ -2321,24 +2331,14 @@
       return v;
     };
 
-    if($("f_Area")) $("f_Area").value = String($("f_Area").value || "").trim();
-    const areaSel = $("f_Area") || $("f_AreaResponsable");
-    if(areaSel && !areaSel.value){
-      const areaResolved = resolveFichaAreaValue_(
-        areaSel.dataset.currentArea ||
-        areaSel.getAttribute("data-current-area") ||
-        ""
-      );
-      if(areaResolved) areaSel.value = areaResolved;
+    const areaSel = $("f_AreaResponsable");
+    if(areaSel && !String(areaSel.value || "").trim()){
+      applyFichaAreaResolved_(areaSel.dataset.currentArea || "");
     }
     if($("f_AreaResponsable")) $("f_AreaResponsable").value = String($("f_AreaResponsable").value || "").trim();
     const area = getFichaAreaValue_();
     if(!area){
-      console.warn("[FICHA_AREA_VALIDATE]", {
-        currentValue: areaSel?.value || "",
-        currentArea: areaSel?.dataset?.currentArea || ""
-      });
-      const a = $("f_Area") || $("f_AreaResponsable");
+      const a = $("f_AreaResponsable");
       if(a) a.classList.add("err");
       ok = false;
     }
@@ -6571,19 +6571,8 @@
     renderFichaForm();
 
     // populate fields
-    const areaEl = $("f_Area") || $("f_AreaResponsable");
-    if(areaEl){
-      const areaResolved = resolveFichaAreaValue_(f.AreaResponsable || f.Area || f.NombreArea || "");
-      console.warn("[FICHA_AREA_OPEN]", {
-        raw: f.AreaResponsable || f.Area || f.NombreArea || "",
-        resolved: areaResolved
-      });
-      areaEl.value = areaResolved;
-      areaEl.dataset.currentArea = f.AreaResponsable || f.Area || f.NombreArea || "";
-      areaEl.classList.remove("err");
-      areaEl.dispatchEvent(new Event("change",{bubbles:true}));
-      areaEl.dispatchEvent(new Event("input",{bubbles:true}));
-    }
+    const areaRaw = f.AreaResponsable || f.Area || f.NombreArea || "";
+    applyFichaAreaWithRetry_(areaRaw);
     $("f_CodigoIndicador").value = f.CodigoIndicador || "";
     $("f_NombreIndicador").value = f.NombreIndicador || "";
     $("f_TipoIndicador").value = f.TipoIndicador || "";
@@ -6611,7 +6600,7 @@
     renderNumbered("f_FuentesList");
     renderNumbered("f_TerminosList");
     renderNumbered("f_ObservacionesList", false, true);
-    ["f_Area","f_AreaResponsable","f_Codigo","f_CodigoIndicador","f_ResponsableIndicador","f_NombreIndicador","f_ObjetivoIndicador","f_Objetivo","f_MetaObjetivo","f_Meta","f_EtiquetaPresentacion","f_FormulaTipo","f_TextoEtiqueta","f_FormulaEtiqueta"].forEach(id=>{
+    ["f_AreaResponsable","f_Codigo","f_CodigoIndicador","f_ResponsableIndicador","f_NombreIndicador","f_ObjetivoIndicador","f_Objetivo","f_MetaObjetivo","f_Meta","f_EtiquetaPresentacion","f_FormulaTipo","f_TextoEtiqueta","f_FormulaEtiqueta"].forEach(id=>{
       const el = $(id);
       if(el) el.classList.remove("err");
     });
