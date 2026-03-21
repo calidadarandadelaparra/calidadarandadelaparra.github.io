@@ -1783,6 +1783,24 @@
     return String(sel.value || opt?.value || "").trim();
   }
 
+  function resolveFichaAreaValue_(raw){
+    const val = String(raw || "").trim();
+    const sel = $("f_Area") || $("f_AreaResponsable");
+    if(!sel || !val) return "";
+    const opts = Array.from(sel.options || []);
+
+    let hit = opts.find(o => String(o.value || "").trim() === val);
+    if(hit) return hit.value;
+
+    hit = opts.find(o => String(o.textContent || "").trim() === val);
+    if(hit) return hit.value;
+
+    hit = opts.find(o => String(o.text || o.label || o.textContent || "").trim().toLowerCase() === val.toLowerCase());
+    if(hit) return hit.value;
+
+    return "";
+  }
+
   /* =========================================================
     FICHA TÉCNICA UI (COMPLETA)
   ========================================================= */
@@ -2296,6 +2314,15 @@
     };
 
     if($("f_Area")) $("f_Area").value = String($("f_Area").value || "").trim();
+    const areaSel = $("f_Area") || $("f_AreaResponsable");
+    if(areaSel && !areaSel.value){
+      const areaResolved = resolveFichaAreaValue_(
+        areaSel.dataset.currentArea ||
+        areaSel.getAttribute("data-current-area") ||
+        ""
+      );
+      if(areaResolved) areaSel.value = areaResolved;
+    }
     if($("f_AreaResponsable")) $("f_AreaResponsable").value = String($("f_AreaResponsable").value || "").trim();
     const area = getFichaAreaValue_();
     if(!area){
@@ -6534,7 +6561,10 @@
     // populate fields
     const areaEl = $("f_Area") || $("f_AreaResponsable");
     if(areaEl){
-      areaEl.value = f.AreaResponsable || "";
+      const areaResolved = resolveFichaAreaValue_(f.AreaResponsable || f.Area || f.NombreArea || "");
+      areaEl.value = areaResolved;
+      areaEl.dataset.currentArea = f.AreaResponsable || f.Area || f.NombreArea || "";
+      areaEl.classList.remove("err");
       areaEl.dispatchEvent(new Event("change",{bubbles:true}));
       areaEl.dispatchEvent(new Event("input",{bubbles:true}));
     }
