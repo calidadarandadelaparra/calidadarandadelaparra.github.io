@@ -2302,6 +2302,9 @@
       ok = false;
     }
     const cod = must("f_CodigoIndicador");
+    if($("f_ResponsableIndicador")){
+      $("f_ResponsableIndicador").value = String($("f_ResponsableIndicador").value || "").trim();
+    }
     const resp = must("f_ResponsableIndicador");
     const nom = must("f_NombreIndicador");
     const tipo = must("f_TipoIndicador");
@@ -2422,7 +2425,9 @@
 
     let r;
     console.log('payload', payload);
+    showAppLoadingOverlay("Guardando ficha técnica...");
     try {
+      try {
       r = await apiFetch("fichas.upsert", payload);
       console.log('apiFetch result', r);
     } catch(e) {
@@ -2473,7 +2478,10 @@
         }, 1800);
       }
     }
-    return true;
+      return true;
+    } finally {
+      hideAppLoadingOverlay();
+    }
   }
 
   async function saveFichaAndFile(){
@@ -6542,6 +6550,9 @@
       updateFormulaPreview();
     }
     $("f_ResponsableIndicador").value = f.ResponsableIndicador || "";
+    $("f_ResponsableIndicador").dispatchEvent(new Event("input",{bubbles:true}));
+    $("f_ResponsableIndicador").dispatchEvent(new Event("change",{bubbles:true}));
+    $("f_ResponsableIndicador").classList.remove("err");
     setListState("f_FuentesList", f.FuentesRecoleccion || []);
     setListState("f_TerminosList", f.Terminos || []);
     setListState("f_ObservacionesList", f.Observaciones || []);
