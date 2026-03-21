@@ -2790,6 +2790,34 @@
     };
   }
 
+  function getAssistantFichaMissingFields_(){
+    if(!$("f_NombreIndicador")) return [];
+    const missing = [];
+    if(!String($("f_AreaResponsable")?.value || "").trim()) missing.push("Área responsable");
+    if(!String($("f_ResponsableIndicador")?.value || "").trim()) missing.push("Responsable del indicador");
+    if(!String($("f_NombreIndicador")?.value || "").trim()) missing.push("Nombre del indicador");
+    if(!String($("f_TipoIndicador")?.value || "").trim()) missing.push("Tipo de indicador");
+    if(!String($("f_Periodicidad")?.value || "").trim()) missing.push("Periodicidad");
+    if(!String($("f_Objetivo")?.value || "").trim()) missing.push("Objetivo");
+    if(!String($("f_Meta")?.value || "").trim()) missing.push("Meta");
+    if(!String($("f_NumTxt")?.value || "").trim()) missing.push("Numerador");
+    if(!String($("f_DenTxt")?.value || "").trim()) missing.push("Denominador");
+    return missing;
+  }
+
+  function getAssistantAnalisisMissingFields_(){
+    if(!$("a_Analisis")) return [];
+    const missing = [];
+    if(!String($("a_Area")?.value || "").trim()) missing.push("Área");
+    if(!String($("a_Codigo")?.value || "").trim()) missing.push("Código");
+    if(!String($("a_PeriodoYM")?.value || "").trim()) missing.push("Periodo");
+    if(!String($("a_Num")?.value || "").trim()) missing.push("Numerador");
+    if(!String($("a_Den")?.value || "").trim()) missing.push("Denominador");
+    if(!String($("a_Analisis")?.value || "").trim()) missing.push("Análisis");
+    if(!String(window.__FIRMAS?.ResponsableDataUrl || "").trim()) missing.push("Firma del responsable");
+    return missing;
+  }
+
   function getAssistantMissingFields_(){
     const section = getActiveSectionId_();
     if(section === "secFicha" && $("f_NombreIndicador")){
@@ -2819,6 +2847,91 @@
     }
 
     return [];
+  }
+
+  function getAssistantFichaMissingFields_(){
+    if(!$("f_NombreIndicador")) return [];
+    const missing = [];
+    if(!String($("f_AreaResponsable")?.value || "").trim()) missing.push("Área responsable");
+    if(!String($("f_ResponsableIndicador")?.value || "").trim()) missing.push("Responsable del indicador");
+    if(!String($("f_NombreIndicador")?.value || "").trim()) missing.push("Nombre del indicador");
+    if(!String($("f_TipoIndicador")?.value || "").trim()) missing.push("Tipo de indicador");
+    if(!String($("f_Periodicidad")?.value || "").trim()) missing.push("Periodicidad");
+    if(!String($("f_Objetivo")?.value || "").trim()) missing.push("Objetivo");
+    if(!String($("f_Meta")?.value || "").trim()) missing.push("Meta");
+    if(!String($("f_NumTxt")?.value || "").trim()) missing.push("Numerador");
+    if(!String($("f_DenTxt")?.value || "").trim()) missing.push("Denominador");
+    return missing;
+  }
+
+  function getAssistantAnalisisMissingFields_(){
+    if(!$("a_Analisis")) return [];
+    const missing = [];
+    if(!String($("a_Area")?.value || "").trim()) missing.push("Área");
+    if(!String($("a_Codigo")?.value || "").trim()) missing.push("Código");
+    if(!String($("a_PeriodoYM")?.value || "").trim()) missing.push("Periodo");
+    if(!String($("a_Num")?.value || "").trim()) missing.push("Numerador");
+    if(!String($("a_Den")?.value || "").trim()) missing.push("Denominador");
+    if(!String($("a_Analisis")?.value || "").trim()) missing.push("Análisis");
+    if(!String(window.__FIRMAS?.ResponsableDataUrl || "").trim()) missing.push("Firma del responsable");
+    return missing;
+  }
+
+  function getAssistantMissingFields_(){
+    const section = getActiveSectionId_();
+    if(section === "secFicha") return getAssistantFichaMissingFields_();
+    if(section === "secAnalisis") return getAssistantAnalisisMissingFields_();
+    return [];
+  }
+
+  function getAssistantIntentHint_(question){
+    const norm = normalizeComparableText_(question);
+    if(!norm) return "ayuda_general";
+    if(norm.includes("falta") || norm.includes("faltan") || norm.includes("pendiente") || norm.includes("completar") || norm.includes("valid")) return "faltantes";
+    if(norm.includes("interpret") || norm.includes("resultado") || norm.includes("meta") || norm.includes("cumple") || norm.includes("cumplimiento") || norm.includes("semaforo")) return "interpretacion";
+    if(norm.includes("propuesta") || norm.includes("propuestas") || norm.includes("accion") || norm.includes("acciones") || norm.includes("mejora")) return "propuestas";
+    if(norm.includes("redact") || norm.includes("parrafo") || norm.includes("texto") || norm.includes("escribe")) return "redaccion";
+    return "ayuda_general";
+  }
+
+  function getAssistantProposalSnapshot_(){
+    return (window.__PROP_ROWS || [])
+      .filter(r => String(r?.Accion || "").trim() || String(r?.Responsable || "").trim() || String(r?.FechaCompromiso || "").trim())
+      .slice(0, 3)
+      .map(r => ({
+        accion: String(r?.Accion || "").trim(),
+        responsable: String(r?.Responsable || "").trim(),
+        fechaCompromiso: String(r?.FechaCompromiso || "").trim()
+      }));
+  }
+
+  function getAssistantObservacionesSnapshot_(){
+    if(typeof getListState !== "function") return [];
+    return (getListState("f_ObservacionesList") || [])
+      .map(x => String(x || "").trim())
+      .filter(Boolean)
+      .slice(0, 3);
+  }
+
+  function normalizeAssistantRemoteAnswer_(value){
+    const txt = String(value || "").trim();
+    if(!txt) return "";
+    try {
+      const parsed = JSON.parse(txt);
+      if(!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return txt;
+      const faltantes = Array.isArray(parsed.faltantes) ? parsed.faltantes.map(x => String(x || "").trim()).filter(Boolean) : [];
+      const propuestas = Array.isArray(parsed.propuestas) ? parsed.propuestas.map(x => String(x || "").trim()).filter(Boolean) : [];
+      const blocks = [];
+      if(parsed.tipo_respuesta) blocks.push("Tipo respuesta: " + String(parsed.tipo_respuesta).trim());
+      if(parsed.resumen) blocks.push("Resumen: " + String(parsed.resumen).trim());
+      if(faltantes.length) blocks.push("Faltantes:\n- " + faltantes.join("\n- "));
+      if(parsed.interpretacion) blocks.push("Interpretación: " + String(parsed.interpretacion).trim());
+      if(propuestas.length) blocks.push("Propuestas:\n- " + propuestas.join("\n- "));
+      if(parsed.redaccion_sugerida) blocks.push("Redacción sugerida: " + String(parsed.redaccion_sugerida).trim());
+      return blocks.filter(Boolean).join("\n\n") || txt;
+    } catch(_) {
+      return txt;
+    }
   }
 
   function getAssistantProposalSeeds_(ctx){
@@ -3059,6 +3172,139 @@
     if(!r?.ok) throw new Error(r?.message || "CHAT_REMOTE_FAIL");
 
     const answer = String(r?.data?.answer || "").trim();
+    if(!answer) throw new Error("CHAT_REMOTE_EMPTY");
+
+    return {
+      answer: answer,
+      source: String(r?.data?.source || "remote")
+    };
+  }
+
+  function buildAssistantRemotePayload_(question){
+    const payloadQuestion = String(question || "").trim();
+    const user = getCurrentUser() || {};
+    const section = getActiveSectionId_();
+    const sectionLabelMap = {
+      secInicio: "Inicio",
+      secFicha: "Ficha Técnica",
+      secAnalisis: "Análisis",
+      secDashboard: "Dashboard",
+      secExplorador: "Explorador",
+      secSeguimiento: "Seguimiento"
+    };
+    const currentSection = sectionLabelMap[section] || section || "Sin sección";
+    const intentHint = getAssistantIntentHint_(payloadQuestion);
+    const fichaCtx = getAssistantFichaContext_();
+    const analisisCtx = getAssistantAnalisisContext_();
+    const faltantesFicha = getAssistantFichaMissingFields_();
+    const faltantesAnalisis = getAssistantAnalisisMissingFields_();
+    const missingFields = section === "secFicha" ? faltantesFicha : (section === "secAnalisis" ? faltantesAnalisis : []);
+    const propuestas = getAssistantProposalSnapshot_();
+    const observaciones = getAssistantObservacionesSnapshot_();
+    const draft = window.__FT_DOC_DRAFT || null;
+    const indicador = {
+      codigo: String(analisisCtx.codigo || fichaCtx.codigo || "").trim(),
+      nombre: String(analisisCtx.nombre || fichaCtx.nombre || "").trim()
+    };
+    const semaforo = (section === "secAnalisis" && String($("a_Codigo")?.value || "").trim())
+      ? String(getAnalisisCumpleLabel_() || "").trim()
+      : "";
+    const fichaCompleta = faltantesFicha.length === 0;
+    const analisisCompleto = faltantesAnalisis.length === 0;
+
+    let context = {
+      sectionLabel: currentSection,
+      intentHint: intentHint,
+      missingFields: missingFields,
+      missingCount: missingFields.length,
+      hasMissingFields: missingFields.length > 0,
+      fichaCompleta: fichaCompleta,
+      analisisCompleto: analisisCompleto
+    };
+
+    if(section === "secAnalisis"){
+      context = {
+        ...context,
+        ...analisisCtx,
+        areaValue: String($("a_Area")?.value || "").trim(),
+        codigoValue: String($("a_Codigo")?.value || "").trim(),
+        periodoValue: String($("a_PeriodoYM")?.value || "").trim(),
+        hasFirmaResponsable: !!String(window.__FIRMAS?.ResponsableDataUrl || "").trim(),
+        isIncomplete: missingFields.length > 0,
+        analysisLength: String($("a_Analisis")?.value || "").trim().length,
+        propuestas: propuestas,
+        textoAnalisisActual: String($("a_Analisis")?.value || "").trim(),
+        semaforo: semaforo
+      };
+    } else if(section === "secFicha"){
+      context = {
+        ...context,
+        ...fichaCtx,
+        areaValue: String($("f_AreaResponsable")?.value || "").trim(),
+        areaCurrent: String($("f_AreaResponsable")?.dataset?.currentArea || "").trim(),
+        tipoIndicador: String($("f_TipoIndicador")?.value || "").trim(),
+        formula: String($("f_FormulaPreview")?.textContent || "").trim(),
+        hasDraftDoc: !!(draft && draft.docId),
+        draftCodigo: String(draft?.codigo || "").trim(),
+        draftPeriodo: String(draft?.periodo || "").trim(),
+        isIncomplete: missingFields.length > 0,
+        observaciones: observaciones
+      };
+    }
+
+    return {
+      question: payloadQuestion,
+      section: section,
+      currentSection: currentSection,
+      intentHint: intentHint,
+      session: {
+        user: String(user.name || user.email || "").trim(),
+        area: String(user.area || "").trim()
+      },
+      isCalidad: !!isCalidadUser(),
+      indicador: indicador,
+      periodo: String(analisisCtx.periodo || draft?.periodo || "").trim(),
+      meta: analisisCtx.meta != null ? analisisCtx.meta : String(fichaCtx.meta || "").trim(),
+      resultado: analisisCtx.resultado != null ? analisisCtx.resultado : "",
+      cumplimiento: analisisCtx.cumple,
+      semaforo: semaforo,
+      fichaCompleta: fichaCompleta,
+      analisisCompleto: analisisCompleto,
+      faltantesFicha: faltantesFicha,
+      faltantesAnalisis: faltantesAnalisis,
+      propuestaActual: propuestas,
+      observaciones: observaciones,
+      textoAnalisisActual: String(analisisCtx.analisis || "").trim(),
+      user: {
+        name: String(user.name || "").trim(),
+        email: String(user.email || "").trim(),
+        area: String(user.area || "").trim(),
+        isCalidad: !!isCalidadUser()
+      },
+      ui: {
+        activeSection: section,
+        sectionLabel: currentSection,
+        canAccessCalidad: !!isQuality(),
+        isCalidadUser: !!isCalidadUser(),
+        missingFields: missingFields,
+        hasMissingFields: missingFields.length > 0
+      },
+      context: context,
+      client: "assistant_widget",
+      version: "phase2-v3-hap",
+      timestamp: new Date().toISOString()
+    };
+  }
+
+  async function askAssistantRemote_(question){
+    if(USE_DEMO) throw new Error("CHAT_REMOTE_UNAVAILABLE_IN_DEMO");
+
+    const payload = buildAssistantRemotePayload_(question);
+    const r = await apiFetch("chat.ask", payload);
+
+    if(!r?.ok) throw new Error(r?.message || "CHAT_REMOTE_FAIL");
+
+    const answer = normalizeAssistantRemoteAnswer_(r?.data?.answer || "");
     if(!answer) throw new Error("CHAT_REMOTE_EMPTY");
 
     return {
