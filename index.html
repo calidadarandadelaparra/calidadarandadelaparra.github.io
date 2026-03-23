@@ -825,10 +825,19 @@
       }
     };
 
-    const payloadJson = JSON.stringify(payload || {});
+    const requestPayload = (payload && typeof payload === "object" && !Array.isArray(payload))
+      ? Object.assign({}, payload)
+      : {};
+    const authToken = getSessionAuthToken_();
+    const attachAuthToken = !!(authToken && isSensitiveBackendAction_(action) && !/^auth\./i.test(String(action || "")));
+    if(attachAuthToken){
+      requestPayload.__authToken = authToken;
+    }
+
+    const payloadJson = JSON.stringify(requestPayload || {});
     const isHeavyAction = /^docs\./i.test(String(action||"")) || /^seg\./i.test(String(action||""));
     const timeoutMs = isHeavyAction ? 90000 : 35000;
-    const allowGetFallback = payloadJson.length <= 1800;
+    const allowGetFallback = !attachAuthToken && payloadJson.length <= 1800;
 
     // first try the preferred POST (text/plain avoids preflight)
     try {
@@ -836,7 +845,7 @@
         method:"POST",
         headers: { "Content-Type":"text/plain" },
         cache: "no-store",
-        body: JSON.stringify({ action, payload })
+        body: JSON.stringify({ action, payload: requestPayload })
       }, timeoutMs);
       return await parseJsonSafe_(res);
     } catch(err) {
@@ -988,7 +997,9 @@
         Email: user.Email,
         Nombre: user.Nombre,
         Area: user.Area,
-        Verificado: true
+        Verificado: true,
+        AuthToken: "DEMO-" + Date.now(),
+        SessionExpiresAt: new Date(Date.now() + SESSION_HOURS*3600*1000).toISOString()
       }, "LOGIN_OK");
     }
     if(action==="ai.mejorarAnalisis"){
@@ -1281,6 +1292,27 @@
   }
   function setSession(obj){ localStorage.setItem(LS_KEYS.SESSION, JSON.stringify(obj)); }
   function clearSession(){ localStorage.removeItem(LS_KEYS.SESSION); }
+  function getSessionAuthToken_(){
+    const s = getSession();
+    if(!s) return "";
+    const token = String(s.authToken || "").trim();
+    const exp = new Date(s.expiresAt || 0).getTime();
+    if(!token || !(exp > Date.now())) return "";
+    return token;
+  }
+  function isSensitiveBackendAction_(action){
+    const a = String(action || "").trim();
+    return [
+      "explorer.deleteRegistro",
+      "explorer.deleteArchivo",
+      "deleteRecord",
+      "renameDriveFile",
+      "borrarArchivoDrivePorId",
+      "system.cleanupAllOnce",
+      "explorer.diagnoseAtorados",
+      "chat.ask"
+    ].includes(a);
+  }
   function normalizeComparableText_(value){
     return String(value || "")
       .normalize("NFD")
@@ -1359,8 +1391,9 @@
   function isQuality(){
     const s = getSession();
     if(!s) return false;
+    const token = getSessionAuthToken_();
     const exp = new Date(s.expiresAt).getTime();
-    return !!(s.email && Date.now() < exp && isCalidadUser());
+    return !!(token && s.email && Date.now() < exp && isCalidadUser());
   }
   let pendingTarget = null;
   let authModalMode = "quality";
@@ -3559,7 +3592,8 @@
           name: me.Nombre || name || "",
           email: me.Email || u,
           area: userArea,
-          expiresAt: new Date(Date.now()+SESSION_HOURS*3600*1000).toISOString()
+          authToken: me.AuthToken || "",
+          expiresAt: me.SessionExpiresAt || new Date(Date.now()+SESSION_HOURS*3600*1000).toISOString()
         });
         setUiLocked_(false);
         $("loginModal").classList.add("hidden");
@@ -3713,7 +3747,7 @@
     syncCalidadAccessUi_();
     showSection("secInicio");
     const s = getSession();
-    const active = !!(s && s.expiresAt && Date.now() < new Date(s.expiresAt).getTime());
+    const active = !!(s && s.email && getSessionAuthToken_());
     if(!active){
       clearSession();
       openAuthModal_("entry");
