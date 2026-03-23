@@ -86,7 +86,7 @@
       forzar un valor concreto o usar DEMO.
   =========================== */
   // principal: la URL del web‑app (se evalúa en runtime)
-  let SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbzFSQuRxSjurcg9oEXy40fi1QEe_bxZHcZHRW6KCcjAGmn4s9XxHyqVUFXXnrcRf00gEg/exec";
+  let SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbw93q2WGT2jcHpoDEE6j4Ivbtul2CltUJJqoKQGoGU_zoUAN2IkN_8E7cj0X3snwnTn9w/exec";
   const CONFIG_KEY_WEBAPP_URL = "CONFIG_SHEETS_WEBAPP_URL";
 
   function getSavedWebAppUrl(){
@@ -643,8 +643,8 @@
     <section class="rounded-2xl bg-navy text-white shadow-sm overflow-hidden">
       <div class="px-6 py-5 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
         <div>
-          <div class="text-lg font-extrabold">Dashboard corporativo · Semáforo</div>
-          <div class="text-sm text-white/80">Sheets · Fórmula live · Evidencias (Figuras) · Seguimiento (Calidad)</div>
+          <div class="text-lg font-extrabold">Dashboard corporativo · Semáforo estilo macro</div>
+          <div class="text-sm text-white/80">DEMO/Sheets · Fórmula live · Evidencias (Figuras) · Seguimiento (Calidad)</div>
         </div>
         <div class="flex items-center gap-2">
           <span class="badge badge-gray bg-white/10 text-white border border-white/20">
@@ -3180,8 +3180,35 @@
     };
   }
 
+  function clipAssistantText_(value, maxLen=180){
+    const lim = Math.max(1, Number(maxLen || 180));
+    return String(value || "")
+      .replace(/[\u0000-\u001F\u007F]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, lim);
+  }
+
+  function sanitizeAssistantList_(items, maxItems=5, maxLen=120){
+    return (Array.isArray(items) ? items : [])
+      .slice(0, maxItems)
+      .map(x => clipAssistantText_(x, maxLen))
+      .filter(Boolean);
+  }
+
+  function sanitizeAssistantProposalRows_(rows){
+    return (Array.isArray(rows) ? rows : [])
+      .slice(0, 3)
+      .map(r => ({
+        accion: clipAssistantText_(r?.accion || r?.Accion || "", 220),
+        responsable: clipAssistantText_(r?.responsable || r?.Responsable || "", 120),
+        fechaCompromiso: clipAssistantText_(r?.fechaCompromiso || r?.FechaCompromiso || "", 20)
+      }))
+      .filter(r => r.accion || r.responsable || r.fechaCompromiso);
+  }
+
   function buildAssistantRemotePayload_(question){
-    const payloadQuestion = String(question || "").trim();
+    const payloadQuestion = clipAssistantText_(question, 700);
     const user = getCurrentUser() || {};
     const section = getActiveSectionId_();
     const sectionLabelMap = {
@@ -3199,12 +3226,12 @@
     const faltantesFicha = getAssistantFichaMissingFields_();
     const faltantesAnalisis = getAssistantAnalisisMissingFields_();
     const missingFields = section === "secFicha" ? faltantesFicha : (section === "secAnalisis" ? faltantesAnalisis : []);
-    const propuestas = getAssistantProposalSnapshot_();
-    const observaciones = getAssistantObservacionesSnapshot_();
+    const propuestas = sanitizeAssistantProposalRows_(getAssistantProposalSnapshot_());
+    const observaciones = sanitizeAssistantList_(getAssistantObservacionesSnapshot_(), 5, 200);
     const draft = window.__FT_DOC_DRAFT || null;
     const indicador = {
       codigo: String(analisisCtx.codigo || fichaCtx.codigo || "").trim(),
-      nombre: String(analisisCtx.nombre || fichaCtx.nombre || "").trim()
+      nombre: clipAssistantText_(analisisCtx.nombre || fichaCtx.nombre || "", 180)
     };
     const semaforo = (section === "secAnalisis" && String($("a_Codigo")?.value || "").trim())
       ? String(getAnalisisCumpleLabel_() || "").trim()
@@ -3226,27 +3253,27 @@
       context = {
         ...context,
         ...analisisCtx,
-        areaValue: String($("a_Area")?.value || "").trim(),
-        codigoValue: String($("a_Codigo")?.value || "").trim(),
-        periodoValue: String($("a_PeriodoYM")?.value || "").trim(),
+        areaValue: clipAssistantText_($("a_Area")?.value || "", 120),
+        codigoValue: clipAssistantText_($("a_Codigo")?.value || "", 80),
+        periodoValue: clipAssistantText_($("a_PeriodoYM")?.value || "", 20),
         hasFirmaResponsable: !!String(window.__FIRMAS?.ResponsableDataUrl || "").trim(),
         isIncomplete: missingFields.length > 0,
         analysisLength: String($("a_Analisis")?.value || "").trim().length,
         propuestas: propuestas,
-        textoAnalisisActual: String($("a_Analisis")?.value || "").trim(),
+        textoAnalisisActual: clipAssistantText_($("a_Analisis")?.value || "", 1200),
         semaforo: semaforo
       };
     } else if(section === "secFicha"){
       context = {
         ...context,
         ...fichaCtx,
-        areaValue: String($("f_AreaResponsable")?.value || "").trim(),
-        areaCurrent: String($("f_AreaResponsable")?.dataset?.currentArea || "").trim(),
-        tipoIndicador: String($("f_TipoIndicador")?.value || "").trim(),
-        formula: String($("f_FormulaPreview")?.textContent || "").trim(),
+        areaValue: clipAssistantText_($("f_AreaResponsable")?.value || "", 120),
+        areaCurrent: clipAssistantText_($("f_AreaResponsable")?.dataset?.currentArea || "", 120),
+        tipoIndicador: clipAssistantText_($("f_TipoIndicador")?.value || "", 60),
+        formula: clipAssistantText_($("f_FormulaPreview")?.textContent || "", 200),
         hasDraftDoc: !!(draft && draft.docId),
-        draftCodigo: String(draft?.codigo || "").trim(),
-        draftPeriodo: String(draft?.periodo || "").trim(),
+        draftCodigo: clipAssistantText_(draft?.codigo || "", 80),
+        draftPeriodo: clipAssistantText_(draft?.periodo || "", 20),
         isIncomplete: missingFields.length > 0,
         observaciones: observaciones
       };
@@ -3258,27 +3285,27 @@
       currentSection: currentSection,
       intentHint: intentHint,
       session: {
-        user: String(user.name || user.email || "").trim(),
-        area: String(user.area || "").trim()
+        user: clipAssistantText_(user.name || user.email || "", 120),
+        area: clipAssistantText_(user.area || "", 120)
       },
       isCalidad: !!isCalidadUser(),
       indicador: indicador,
-      periodo: String(analisisCtx.periodo || draft?.periodo || "").trim(),
-      meta: analisisCtx.meta != null ? analisisCtx.meta : String(fichaCtx.meta || "").trim(),
+      periodo: clipAssistantText_(analisisCtx.periodo || draft?.periodo || "", 20),
+      meta: analisisCtx.meta != null ? analisisCtx.meta : clipAssistantText_(fichaCtx.meta || "", 40),
       resultado: analisisCtx.resultado != null ? analisisCtx.resultado : "",
       cumplimiento: analisisCtx.cumple,
-      semaforo: semaforo,
+      semaforo: clipAssistantText_(semaforo, 40),
       fichaCompleta: fichaCompleta,
       analisisCompleto: analisisCompleto,
-      faltantesFicha: faltantesFicha,
-      faltantesAnalisis: faltantesAnalisis,
+      faltantesFicha: sanitizeAssistantList_(faltantesFicha, 10, 80),
+      faltantesAnalisis: sanitizeAssistantList_(faltantesAnalisis, 10, 80),
       propuestaActual: propuestas,
       observaciones: observaciones,
-      textoAnalisisActual: String(analisisCtx.analisis || "").trim(),
+      textoAnalisisActual: clipAssistantText_(analisisCtx.analisis || "", 1200),
       user: {
-        name: String(user.name || "").trim(),
-        email: String(user.email || "").trim(),
-        area: String(user.area || "").trim(),
+        name: clipAssistantText_(user.name || "", 120),
+        email: clipAssistantText_(user.email || "", 120),
+        area: clipAssistantText_(user.area || "", 120),
         isCalidad: !!isCalidadUser()
       },
       ui: {
