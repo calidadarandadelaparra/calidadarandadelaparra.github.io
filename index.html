@@ -515,6 +515,21 @@
     return String(ficha?.PeriodicidadMedicion || "").trim();
   }
   function scrollTopSmooth(){ window.scrollTo({top:0, behavior:"smooth"}); }
+  function applyHospitalBranding_(){
+    try { document.title = "Sistema de Indicadores · Hospital Aranda de la Parra"; } catch(_) {}
+    const host = document.querySelector("#appHeader .text-xs.text-slate-500");
+    const modeTag = $("modeTag");
+    const buildBadge = host ? host.querySelector(".ml-2") : null;
+    if(host){
+      host.textContent = "";
+      host.append("Hospital Aranda de la Parra · ");
+      if(modeTag) host.appendChild(modeTag);
+      if(buildBadge){
+        host.append(" ");
+        host.appendChild(buildBadge);
+      }
+    }
+  }
   </script>
 
   </head>
@@ -525,8 +540,9 @@
   <header id="appHeader" class="hidden sticky top-0 z-50 bg-white/80 backdrop-blur border-b border-slate-200 no-print">
     <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
       <div class="flex items-center gap-3">
-        <div class="w-10 h-10 rounded-2xl bg-navy text-white flex items-center justify-center shadow-sm">
-          <span class="font-extrabold">IQ</span>
+        <div class="rounded-2xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
+          <div class="text-[10px] font-extrabold tracking-[0.24em] text-navy/70">HOSPITAL</div>
+          <div class="text-sm font-extrabold leading-tight text-navy">Aranda de la Parra</div>
         </div>
         <div>
           <div class="font-extrabold text-navy leading-tight">Sistema de Indicadores</div>
@@ -3738,6 +3754,7 @@
     window.__BUILD_ID__ = BUILD_ID;
     console.warn("[FRONT_BUILD_ID]", FRONT_BUILD_ID);
     window.__FRONT_BUILD_ID__ = FRONT_BUILD_ID;
+    applyHospitalBranding_();
     mountFrontBuildBadge_();
     mountAssistantWidget_();
     seedDemo();
@@ -6164,6 +6181,52 @@
       </div>
     `;
 
+    const explorerHeader = sec.querySelector(".card > .card-h");
+    if(explorerHeader){
+      const titleText = explorerHeader.querySelector(".font-extrabold.text-navy.text-lg")?.textContent || "Explorador (Calidad)";
+      const descText = explorerHeader.querySelector(".text-sm.text-slate-500")?.textContent || "Búsqueda por tabs: lógicos y archivos Word/PDF.";
+      explorerHeader.innerHTML = `
+        <div class="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <div class="font-extrabold text-navy text-lg">${escapeHtml(titleText)}</div>
+            <div class="text-sm text-slate-500">${escapeHtml(descText)}</div>
+          </div>
+          <button id="btnExplorerCleanupAll" class="btn btn-danger">Eliminar todo (temporal)</button>
+        </div>
+      `;
+    }
+
+    const explorerBody = sec.querySelector(".card > .card-b.space-y-5");
+    if(explorerBody && !$("cleanupAllModal")){
+      explorerBody.insertAdjacentHTML("beforeend", `
+        <div id="cleanupAllModal" class="hidden fixed inset-0 z-[9998] bg-slate-900/50 p-4">
+          <div class="mx-auto mt-20 w-full max-w-2xl rounded-2xl border border-red-200 bg-white shadow-xl">
+            <div class="px-5 py-4 border-b border-red-100">
+              <div class="font-extrabold text-red-700">Eliminar todo (temporal)</div>
+              <div class="text-sm text-slate-600 mt-1">Esta accion eliminara registros operativos del Explorador, documentos asociados en BD y archivos Word/PDF en Drive.</div>
+            </div>
+            <div class="px-5 py-4 space-y-4">
+              <div class="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+                Solo usuarios autorizados de Calidad deben ejecutar esta limpieza. No elimina hojas, columnas ni encabezados.
+              </div>
+              <div>
+                <div class="text-xs font-extrabold text-slate-600">Resumen previo</div>
+                <pre id="cleanupAllSummary" class="mt-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-700 whitespace-pre-wrap">Validando alcance...</pre>
+              </div>
+              <div>
+                <label class="text-xs font-extrabold text-slate-600">Escribe exactamente ELIMINAR TODO</label>
+                <input id="cleanupAllConfirmWord" class="input mt-2" placeholder="ELIMINAR TODO"/>
+              </div>
+            </div>
+            <div class="px-5 py-4 border-t border-slate-100 flex items-center justify-end gap-2">
+              <button id="btnCleanupAllCancel" class="btn btn-soft">Cancelar</button>
+              <button id="btnCleanupAllConfirm" class="btn btn-danger">Eliminar todo</button>
+            </div>
+          </div>
+        </div>
+      `);
+    }
+
     // fill area
     $("e_Area").innerHTML =
       `<option value="">Todas</option>` +
@@ -6191,6 +6254,15 @@
     });
 
     $("btnEClose").addEventListener("click", ()=>$("e_Editor").classList.add("hidden"));
+    $("btnExplorerCleanupAll")?.addEventListener("click", openCleanupAllModal_);
+    $("btnCleanupAllCancel")?.addEventListener("click", closeCleanupAllModal_);
+    $("btnCleanupAllConfirm")?.addEventListener("click", executeCleanupAll_);
+    $("cleanupAllConfirmWord")?.addEventListener("keydown", (ev)=>{
+      if(ev.key === "Enter"){
+        ev.preventDefault();
+        executeCleanupAll_();
+      }
+    });
 
     refreshExplorador();
     setExplorerTab_(window.__EX_TAB);
@@ -6446,6 +6518,87 @@
   async function recargarExplorador(){
     await loadAll();
     refreshExplorador();
+  }
+
+  function closeCleanupAllModal_(){
+    $("cleanupAllModal")?.classList.add("hidden");
+  }
+
+  function formatCleanupSummary_(summary){
+    const s = summary || {};
+    const c = s.clasificacion || {};
+    return [
+      `Documentos activos: ${Number(s.docsActivos || 0)}`,
+      `Fichas activas: ${Number(s.fichasActivas || 0)}`,
+      `Análisis activos: ${Number(s.analisisActivos || 0)}`,
+      `Propuestas activas: ${Number(s.propuestasActivas || 0)}`,
+      `Seguimiento activo: ${Number(s.seguimientoActivo || 0)}`,
+      ``,
+      `Clasificación previa:`,
+      `- Válidos: ${Number(c.validos || 0)}`,
+      `- Duplicados: ${Number(c.duplicados || 0)}`,
+      `- Huérfanos: ${Number(c.huerfanos || 0)}`,
+      `- Corruptos: ${Number(c.corruptos || 0)}`,
+      `- Inconsistentes: ${Number(c.inconsistentes || 0)}`
+    ].join("\n");
+  }
+
+  async function openCleanupAllModal_(){
+    if(!isQuality()) return toast("err","Acceso restringido","Solo Calidad puede ejecutar esta limpieza.");
+    const modal = $("cleanupAllModal");
+    const summary = $("cleanupAllSummary");
+    const input = $("cleanupAllConfirmWord");
+    if(!modal || !summary || !input) return;
+
+    input.value = "";
+    summary.textContent = "Validando alcance...";
+    modal.classList.remove("hidden");
+    showAppLoadingOverlay("Validando alcance de la limpieza...");
+    try{
+      const r = await runCleanupAudit_();
+      if(!r?.ok){
+        closeCleanupAllModal_();
+        toast("err","No disponible", r?.message || "No se pudo validar la limpieza.");
+        return;
+      }
+      summary.textContent = formatCleanupSummary_(r.summary || {});
+      setTimeout(()=>input.focus(), 30);
+    }catch(err){
+      closeCleanupAllModal_();
+      toast("err","Error", String(err?.message || err || "No se pudo validar la limpieza."));
+    }finally{
+      hideAppLoadingOverlay();
+    }
+  }
+
+  async function executeCleanupAll_(){
+    if(!isQuality()) return toast("err","Acceso restringido","Solo Calidad puede ejecutar esta limpieza.");
+    const input = $("cleanupAllConfirmWord");
+    const typed = String(input?.value || "").trim().toUpperCase();
+    if(typed !== "ELIMINAR TODO"){
+      return toast("err","Confirmación requerida","Escribe exactamente ELIMINAR TODO para continuar.");
+    }
+
+    showAppLoadingOverlay("Eliminando registros y archivos operativos...");
+    try{
+      const r = await runCleanupTotalOneTime_("ELIMINAR TODO", false);
+      if(!r?.ok){
+        toast("err","No se ejecutó", r?.message || "No se pudo ejecutar la limpieza total.");
+        return;
+      }
+      closeCleanupAllModal_();
+      await recargarExplorador();
+      const u = r.updated || {};
+      toast(
+        "ok",
+        "Limpieza total ejecutada",
+        `BD docs: ${Number(u.docsUpdated || 0)} · Word: ${Number(u.driveWordTrashed || 0)} · PDF: ${Number(u.drivePdfTrashed || 0)}`
+      );
+    }catch(err){
+      toast("err","Error", String(err?.message || err || "No se pudo ejecutar la limpieza total."));
+    }finally{
+      hideAppLoadingOverlay();
+    }
   }
 
   function applyDeleteResultToCaches_(ref){
